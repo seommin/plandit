@@ -71,8 +71,11 @@ button {
 }
 
 .mobile-brand-script {
+  display: inline-block;
   font-family: "Satisfy", "Segoe Script", "Brush Script MT", cursive !important;
   font-weight: 400;
+  line-height: 1.12 !important;
+  padding-top: 4px;
 }
 
 @media (min-width: 1024px) {
