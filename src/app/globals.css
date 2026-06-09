@@ -97,10 +97,11 @@ button {
 }
 
 .day-cell {
+  --day-cell-padding: 10px;
   min-height: 116px;
   border-right: 1px solid var(--line);
   border-bottom: 1px solid var(--line);
-  padding: 10px;
+  padding: var(--day-cell-padding);
 }
 
 .day-cell:nth-child(7n) {
@@ -108,6 +109,8 @@ button {
 }
 
 .event-pill {
+  position: relative;
+  z-index: 1;
   width: 100%;
   overflow: hidden;
   border-radius: 6px;
@@ -120,9 +123,27 @@ button {
   white-space: nowrap;
 }
 
+.event-pill-start {
+  margin-right: calc(var(--day-cell-padding) * -1 - 1px);
+  border-bottom-right-radius: 0;
+  border-top-right-radius: 0;
+}
+
+.event-pill-middle {
+  margin-left: calc(var(--day-cell-padding) * -1);
+  margin-right: calc(var(--day-cell-padding) * -1 - 1px);
+  border-radius: 0;
+}
+
+.event-pill-end {
+  margin-left: calc(var(--day-cell-padding) * -1);
+  border-bottom-left-radius: 0;
+  border-top-left-radius: 0;
+}
+
 @media (max-width: 900px) {
   .day-cell {
+    --day-cell-padding: 8px;
     min-height: 88px;
-    padding: 8px;
   }
 }

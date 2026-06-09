@@ -131,6 +131,43 @@ function buildMonthDays(month: Date, events: CalendarAppEvent[]) {
   });
 }
 
+function getEventSegment(event: CalendarAppEvent, date: Date) {
+  const dateStart = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  const dateEnd = new Date(dateStart);
+  dateEnd.setDate(dateEnd.getDate() + 1);
+
+  const startsAt = new Date(event.startsAt);
+  const endsAt = new Date(event.endsAt);
+  const startsToday = startsAt >= dateStart && startsAt < dateEnd;
+  const endsToday = endsAt > dateStart && endsAt <= dateEnd;
+
+  if (startsToday && endsToday) {
+    return "single";
+  }
+
+  if (startsToday) {
+    return "start";
+  }
+
+  if (endsToday) {
+    return "end";
+  }
+
+  return "middle";
+}
+
+function getEventPillClass(event: CalendarAppEvent, date: Date) {
+  const segment = getEventSegment(event, date);
+  const segmentClass = {
+    single: "",
+    start: "event-pill-start",
+    middle: "event-pill-middle",
+    end: "event-pill-end",
+  }[segment];
+
+  return ["event-pill block text-left", segmentClass].filter(Boolean).join(" ");
+}
+
 export default function CalendarApp({ calendars, events, user }: CalendarAppProps) {
   const [activeScope, setActiveScope] = useState<CalendarScope>("ALL");
   const [month, setMonth] = useState(() => new Date(2026, 5, 1));
@@ -407,12 +444,15 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
                       <span
                         className={[
                           "flex size-7 items-center justify-center rounded-full text-sm font-semibold",
-                          day.muted ? "text-[#a2a59b]" : "text-[#30322d]",
-                          !day.muted && (day.isSunday || day.isHoliday)
-                            ? "text-[#d64f68]"
-                            : "",
-                          !day.muted && day.isSaturday ? "text-[#2f6bff]" : "",
-                          day.today ? "bg-[var(--ink)] text-white" : "",
+                          day.today
+                            ? "bg-[var(--ink)] text-white"
+                            : day.muted
+                              ? "text-[#a2a59b]"
+                              : day.isSunday || day.isHoliday
+                                ? "text-[#d64f68]"
+                                : day.isSaturday
+                                  ? "text-[#2f6bff]"
+                                  : "text-[#30322d]",
                         ].join(" ")}
                       >
                         {day.label}
@@ -422,7 +462,7 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
                       {day.events.map((event) => (
                         <span
                           key={`${event.id}-${day.key}`}
-                          className="event-pill block text-left"
+                          className={getEventPillClass(event, day.date)}
                           style={{ backgroundColor: event.color }}
                           onClick={(clickEvent) => {
                             clickEvent.stopPropagation();
