@@ -60,6 +60,11 @@ type CalendarAppProps = {
   };
 };
 
+type CalendarDayEvent = {
+  event: CalendarAppEvent;
+  lane: number;
+};
+
 const weekDays = [
   { label: "일", tone: "text-[#d64f68]" },
   { label: "월", tone: "text-[var(--muted)]" },
@@ -113,23 +118,62 @@ function toInputValue(date: Date) {
   return `${year}-${month}-${day}T${hour}:${minute}`;
 }
 
+function startOfDay(date: Date) {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+}
+
+function endOfDay(date: Date) {
+  const end = startOfDay(date);
+  end.setDate(end.getDate() + 1);
+  return end;
+}
+
+function eventOverlapsRange(event: CalendarAppEvent, rangeStart: Date, rangeEnd: Date) {
+  const startsAt = new Date(event.startsAt);
+  const endsAt = new Date(event.endsAt);
+
+  return startsAt < rangeEnd && endsAt > rangeStart;
+}
+
+function eventOverlapsDay(event: CalendarAppEvent, date: Date) {
+  return eventOverlapsRange(event, startOfDay(date), endOfDay(date));
+}
+
+function getEventWeekSpan(event: CalendarAppEvent, week: Array<{ date: Date }>) {
+  const startsAt = new Date(event.startsAt);
+  const endsAt = new Date(event.endsAt);
+
+  const startIndex = week.findIndex((day) => startsAt < endOfDay(day.date));
+  let endIndex = -1;
+
+  for (let index = week.length - 1; index >= 0; index -= 1) {
+    if (endsAt > startOfDay(week[index].date)) {
+      endIndex = index;
+      break;
+    }
+  }
+
+  return {
+    endIndex: Math.max(endIndex, 0),
+    startIndex: Math.max(startIndex, 0),
+  };
+}
+
 function buildMonthDays(month: Date, events: CalendarAppEvent[]) {
   const first = new Date(month.getFullYear(), month.getMonth(), 1);
   const startOffset = first.getDay();
   const daysInMonth = new Date(month.getFullYear(), month.getMonth() + 1, 0).getDate();
   const cells = Math.ceil((startOffset + daysInMonth) / 7) * 7;
 
-  return Array.from({ length: cells }, (_, index) => {
+  const days = Array.from({ length: cells }, (_, index) => {
     const day = index - startOffset + 1;
     const date = new Date(month.getFullYear(), month.getMonth(), day);
-    const dateStart = new Date(date.getFullYear(), date.getMonth(), date.getDate());
-    const dateEnd = new Date(dateStart);
-    dateEnd.setDate(dateEnd.getDate() + 1);
     const dayOfWeek = index % 7;
 
     return {
       key: date.toISOString(),
       date,
+      events: [] as CalendarDayEvent[],
       label: date.getDate(),
       muted: day < 1 || day > daysInMonth,
       isSunday: dayOfWeek === 0,
@@ -138,14 +182,54 @@ function buildMonthDays(month: Date, events: CalendarAppEvent[]) {
         month.getFullYear() === 2026 && month.getMonth() === 5 && day === 6,
       today:
         date.toDateString() === new Date().toDateString(),
-      events: events.filter((event) => {
-        const startsAt = new Date(event.startsAt);
-        const endsAt = new Date(event.endsAt);
-
-        return startsAt < dateEnd && endsAt > dateStart;
-      }),
     };
   });
+
+  for (let weekStartIndex = 0; weekStartIndex < days.length; weekStartIndex += 7) {
+    const week = days.slice(weekStartIndex, weekStartIndex + 7);
+    const weekStart = startOfDay(week[0].date);
+    const weekEnd = endOfDay(week[week.length - 1].date);
+    const lanes: boolean[][] = [];
+    const weekEvents = events
+      .filter((event) => eventOverlapsRange(event, weekStart, weekEnd))
+      .sort((a, b) => {
+        const startsAtDelta = new Date(a.startsAt).getTime() - new Date(b.startsAt).getTime();
+
+        if (startsAtDelta !== 0) {
+          return startsAtDelta;
+        }
+
+        return new Date(b.endsAt).getTime() - new Date(a.endsAt).getTime();
+      });
+
+    weekEvents.forEach((event) => {
+      const { startIndex, endIndex } = getEventWeekSpan(event, week);
+      let lane = lanes.findIndex((items) =>
+        items.slice(startIndex, endIndex + 1).every((occupied) => !occupied),
+      );
+
+      if (lane === -1) {
+        lane = lanes.length;
+        lanes.push(Array(7).fill(false));
+      }
+
+      for (let index = startIndex; index <= endIndex; index += 1) {
+        lanes[lane][index] = true;
+      }
+
+      week.forEach((day) => {
+        if (eventOverlapsDay(event, day.date)) {
+          day.events.push({ event, lane });
+        }
+      });
+    });
+
+    week.forEach((day) => {
+      day.events.sort((a, b) => a.lane - b.lane);
+    });
+  }
+
+  return days;
 }
 
 function getEventSegment(event: CalendarAppEvent, date: Date) {
@@ -475,12 +559,15 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
                         {day.label}
                       </span>
                     </div>
-                    <div className="space-y-1.5">
-                      {day.events.map((event) => (
+                    <div className="event-stack">
+                      {day.events.map(({ event, lane }) => (
                         <span
                           key={`${event.id}-${day.key}`}
                           className={getEventPillClass(event, day.date)}
-                          style={{ backgroundColor: event.color }}
+                          style={{
+                            backgroundColor: event.color,
+                            gridRowStart: lane + 1,
+                          }}
                           onClick={(clickEvent) => {
                             clickEvent.stopPropagation();
                             setSelectedEventId(event.id);

@@ -108,6 +108,12 @@ button {
   border-right: 0;
 }
 
+.event-stack {
+  display: grid;
+  grid-auto-rows: 27px;
+  row-gap: 6px;
+}
+
 .event-pill {
   position: relative;
   z-index: 1;
@@ -124,18 +130,21 @@ button {
 }
 
 .event-pill-start {
+  width: calc(100% + var(--day-cell-padding) + 1px);
   margin-right: calc(var(--day-cell-padding) * -1 - 1px);
   border-bottom-right-radius: 0;
   border-top-right-radius: 0;
 }
 
 .event-pill-middle {
+  width: calc(100% + var(--day-cell-padding) * 2 + 1px);
   margin-left: calc(var(--day-cell-padding) * -1);
   margin-right: calc(var(--day-cell-padding) * -1 - 1px);
   border-radius: 0;
 }
 
 .event-pill-end {
+  width: calc(100% + var(--day-cell-padding));
   margin-left: calc(var(--day-cell-padding) * -1);
   border-bottom-left-radius: 0;
   border-top-left-radius: 0;
