@@ -23,11 +23,14 @@ import {
 type CalendarScope = "ALL" | "PRIVATE" | "SHARED";
 
 type DemoEvent = {
+  id: string;
   title: string;
   color: string;
   scope: Exclude<CalendarScope, "ALL">;
   meta: string;
   time?: string;
+  description: string;
+  location?: string;
 };
 
 const weekDays = [
@@ -45,18 +48,23 @@ const eventByDay = new Map<number, DemoEvent[]>([
     9,
     [
       {
+        id: "brand-launch",
         title: "브랜드 런칭 플랜",
         color: "var(--blue)",
         scope: "SHARED",
         meta: "Plandit Team",
         time: "09:30",
+        description: "브랜드 런칭 전까지 제품 메시지, 공유 권한, 공개 일정 링크를 정리합니다.",
+        location: "Plandit HQ",
       },
       {
+        id: "private-workout",
         title: "개인 운동",
         color: "var(--green)",
         scope: "PRIVATE",
         meta: "나만 보기",
         time: "19:30",
+        description: "공유 캘린더에는 노출되지 않는 개인 일정입니다.",
       },
     ],
   ],
@@ -64,11 +72,13 @@ const eventByDay = new Map<number, DemoEvent[]>([
     10,
     [
       {
+        id: "google-sync",
         title: "Google Calendar sync",
         color: "var(--green)",
         scope: "PRIVATE",
         meta: "개인 연동",
         time: "14:20",
+        description: "Google Calendar API 연동 범위와 동기화 토큰 저장 방식을 점검합니다.",
       },
     ],
   ],
@@ -76,11 +86,13 @@ const eventByDay = new Map<number, DemoEvent[]>([
     12,
     [
       {
+        id: "permission-qa",
         title: "공유 권한 QA",
         color: "var(--violet)",
         scope: "SHARED",
         meta: "초대 4명",
         time: "11:00",
+        description: "공유 캘린더의 owner/admin/editor/viewer 권한 흐름을 확인합니다.",
       },
     ],
   ],
@@ -88,11 +100,13 @@ const eventByDay = new Map<number, DemoEvent[]>([
     16,
     [
       {
+        id: "widget-prototype",
         title: "위젯 프로토타입",
         color: "var(--amber)",
         scope: "SHARED",
         meta: "Launch",
         time: "16:00",
+        description: "홈/잠금화면 위젯에 표시할 오늘 일정 요약을 설계합니다.",
       },
     ],
   ],
@@ -126,7 +140,7 @@ const collaborators = ["YU", "MK", "HN", "JL"];
 const quickShareActions = [
   { label: "KakaoTalk", icon: MessageCircle },
   { label: "Copy link", icon: Link2 },
-];
+] as const;
 
 const navItems = [
   ["오늘", CalendarDays],
@@ -144,6 +158,8 @@ const calendarItems = [
 
 export default function Home() {
   const [activeScope, setActiveScope] = useState<CalendarScope>("ALL");
+  const [selectedEventId, setSelectedEventId] = useState("brand-launch");
+  const [shareStatus, setShareStatus] = useState<string | null>(null);
 
   const filteredMonthDays = useMemo(
     () =>
@@ -165,6 +181,29 @@ export default function Home() {
         .slice(0, 4),
     [filteredMonthDays],
   );
+
+  const selectedEvent = useMemo(() => {
+    const events = monthDays.flatMap((day) => day.events);
+
+    return (
+      events.find((event) => event.id === selectedEventId) ??
+      events.find((event) => activeScope === "ALL" || event.scope === activeScope) ??
+      events[0]
+    );
+  }, [activeScope, selectedEventId]);
+
+  async function handleShare(channel: "KakaoTalk" | "Copy link") {
+    const shareUrl = `${window.location.origin}/s/demo-${selectedEvent.id}`;
+
+    if (channel === "Copy link") {
+      await navigator.clipboard.writeText(shareUrl);
+      setShareStatus("링크를 복사했습니다.");
+      return;
+    }
+
+    await navigator.clipboard.writeText(shareUrl);
+    setShareStatus("카톡 공유용 링크를 복사했습니다.");
+  }
 
   return (
     <main className="app-shell">
@@ -311,13 +350,17 @@ export default function Home() {
                     </div>
                     <div className="space-y-1.5">
                       {day.events.map((event) => (
-                        <div
+                        <button
                           key={event.title}
-                          className="event-pill"
+                          className="event-pill text-left"
                           style={{ backgroundColor: event.color }}
+                          onClick={() => {
+                            setSelectedEventId(event.id);
+                            setShareStatus(null);
+                          }}
                         >
                           {event.title}
-                        </div>
+                        </button>
                       ))}
                     </div>
                   </div>
@@ -333,9 +376,18 @@ export default function Home() {
                 </div>
                 <div className="space-y-3">
                   {agenda.map((item) => (
-                    <div
+                    <button
                       key={item.title}
-                      className="flex gap-3 rounded-lg border border-[var(--line)] bg-white p-3"
+                      className={[
+                        "flex w-full gap-3 rounded-lg border bg-white p-3 text-left",
+                        selectedEvent.id === item.id
+                          ? "border-[#9fa598]"
+                          : "border-[var(--line)]",
+                      ].join(" ")}
+                      onClick={() => {
+                        setSelectedEventId(item.id);
+                        setShareStatus(null);
+                      }}
                     >
                       <div
                         className="mt-1 size-2.5 rounded-full"
@@ -348,8 +400,38 @@ export default function Home() {
                         <p className="truncate text-sm font-semibold">{item.title}</p>
                         <p className="text-xs text-[var(--muted)]">{item.meta}</p>
                       </div>
-                    </div>
+                    </button>
                   ))}
+                </div>
+              </section>
+
+              <section className="panel p-4">
+                <div className="mb-4 flex items-center justify-between">
+                  <h2 className="text-base font-semibold">일정 상세</h2>
+                  <span
+                    className={[
+                      "rounded-full px-2 py-1 text-xs font-semibold",
+                      selectedEvent.scope === "PRIVATE"
+                        ? "bg-[#e8f4ee] text-[#11623b]"
+                        : "bg-[#eef1ff] text-[#2f4fb8]",
+                    ].join(" ")}
+                  >
+                    {selectedEvent.scope === "PRIVATE" ? "Private" : "Shared"}
+                  </span>
+                </div>
+                <div className="rounded-lg border border-[var(--line)] bg-white p-3">
+                  <p className="text-sm font-semibold">{selectedEvent.title}</p>
+                  <p className="mt-1 text-xs font-semibold text-[var(--muted)]">
+                    {selectedEvent.time} · {selectedEvent.meta}
+                  </p>
+                  <p className="mt-3 text-sm leading-6 text-[#34362f]">
+                    {selectedEvent.description}
+                  </p>
+                  {selectedEvent.location ? (
+                    <p className="mt-3 text-xs font-semibold text-[var(--muted)]">
+                      {selectedEvent.location}
+                    </p>
+                  ) : null}
                 </div>
               </section>
 
@@ -386,6 +468,7 @@ export default function Home() {
                     <button
                       key={label}
                       className="flex h-10 items-center justify-center gap-2 rounded-lg border border-[var(--line)] bg-white text-sm font-semibold"
+                      onClick={() => handleShare(label)}
                     >
                       <Icon size={16} />
                       {label}
@@ -395,6 +478,11 @@ export default function Home() {
                 <p className="mt-3 text-xs leading-5 text-[var(--muted)]">
                   Share one event without exposing your private calendar.
                 </p>
+                {shareStatus ? (
+                  <p className="mt-2 text-xs font-semibold text-[#11623b]">
+                    {shareStatus}
+                  </p>
+                ) : null}
               </section>
 
               <section className="panel p-4">
