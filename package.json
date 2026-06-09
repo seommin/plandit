@@ -20,6 +20,7 @@
   },
   "dependencies": {
     "@auth/prisma-adapter": "2.9.1",
+    "@fontsource/pretendard": "5.2.5",
     "@fontsource/satisfy": "5.2.7",
     "@prisma/adapter-pg": "7.4.0",
     "@prisma/client": "7.4.0",

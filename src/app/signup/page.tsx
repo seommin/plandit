@@ -6,7 +6,8 @@ import { signIn } from "next-auth/react";
 
 import SocialLoginButtons from "@/components/social-login-buttons";
 
-export default function LoginPage() {
+export default function SignupPage() {
+  const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [status, setStatus] = useState<string | null>(null);
@@ -18,6 +19,19 @@ export default function LoginPage() {
     setStatus(null);
 
     try {
+      const response = await fetch("/api/auth/register", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ name, email, password }),
+      });
+
+      if (!response.ok) {
+        const result = await response.json();
+        throw new Error(result.error ?? "회원가입에 실패했습니다.");
+      }
+
       const result = await signIn("credentials", {
         email,
         password,
@@ -25,7 +39,7 @@ export default function LoginPage() {
       });
 
       if (result?.error) {
-        throw new Error("이메일 또는 비밀번호를 확인해주세요.");
+        throw new Error("가입은 완료됐지만 로그인에 실패했습니다.");
       }
 
       window.location.href = "/";
@@ -44,6 +58,15 @@ export default function LoginPage() {
         </div>
 
         <form className="space-y-3" onSubmit={handleSubmit}>
+          <input
+            className="h-11 w-full rounded-lg border border-[var(--line)] bg-white px-3 outline-none focus:border-[#aeb3a6]"
+            name="name"
+            onChange={(event) => setName(event.target.value)}
+            placeholder="이름"
+            required
+            type="text"
+            value={name}
+          />
           <input
             className="h-11 w-full rounded-lg border border-[var(--line)] bg-white px-3 outline-none focus:border-[#aeb3a6]"
             name="email"
@@ -68,7 +91,7 @@ export default function LoginPage() {
             disabled={isSubmitting}
             type="submit"
           >
-            {isSubmitting ? "처리 중" : "로그인"}
+            {isSubmitting ? "처리 중" : "회원가입"}
           </button>
         </form>
 
@@ -86,13 +109,9 @@ export default function LoginPage() {
 
         <SocialLoginButtons />
 
-        <div className="mt-5 flex items-center justify-center gap-3 text-sm font-semibold text-[var(--muted)]">
-          <Link className="hover:text-[var(--ink)]" href="/forgot-password">
-            비밀번호 찾기
-          </Link>
-          <span className="h-3 w-px bg-[var(--line)]" />
-          <Link className="hover:text-[var(--ink)]" href="/signup">
-            회원가입
+        <div className="mt-5 text-center text-sm font-semibold text-[var(--muted)]">
+          <Link className="hover:text-[var(--ink)]" href="/login">
+            이미 계정이 있나요?
           </Link>
         </div>
       </section>
