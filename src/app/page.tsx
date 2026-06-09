@@ -7,15 +7,12 @@ import {
   ChevronLeft,
   ChevronRight,
   Clock3,
-  Link2,
-  Lock,
-  MessageCircle,
-  MonitorSmartphone,
   Plus,
   Search,
   Settings2,
   Share2,
-  Sparkles,
+  SquareStack,
+  User,
   UserPlus,
   Users,
 } from "lucide-react";
@@ -72,13 +69,13 @@ const eventByDay = new Map<number, DemoEvent[]>([
     10,
     [
       {
-        id: "google-sync",
-        title: "Google Calendar sync",
+        id: "personal-planning",
+        title: "개인 일정 정리",
         color: "var(--green)",
         scope: "PRIVATE",
-        meta: "개인 연동",
+        meta: "나만 보기",
         time: "14:20",
-        description: "Google Calendar API 연동 범위와 동기화 토큰 저장 방식을 점검합니다.",
+        description: "이번 주 개인 일정과 해야 할 일을 조용히 정리합니다.",
       },
     ],
   ],
@@ -100,13 +97,13 @@ const eventByDay = new Map<number, DemoEvent[]>([
     16,
     [
       {
-        id: "widget-prototype",
-        title: "위젯 프로토타입",
+        id: "launch-meeting",
+        title: "런칭 회의",
         color: "var(--amber)",
         scope: "SHARED",
         meta: "Launch",
         time: "16:00",
-        description: "홈/잠금화면 위젯에 표시할 오늘 일정 요약을 설계합니다.",
+        description: "런칭 전 팀 일정과 공유 범위를 최종 점검합니다.",
       },
     ],
   ],
@@ -130,24 +127,17 @@ const monthDays = Array.from({ length: 35 }, (_, index) => {
 });
 
 const filterOptions: Array<{ label: string; value: CalendarScope }> = [
-  { label: "All", value: "ALL" },
-  { label: "Private", value: "PRIVATE" },
-  { label: "Shared", value: "SHARED" },
+  { label: "전체", value: "ALL" },
+  { label: "개인", value: "PRIVATE" },
+  { label: "공유", value: "SHARED" },
 ];
 
 const collaborators = ["YU", "MK", "HN", "JL"];
-
-const quickShareActions = [
-  { label: "KakaoTalk", icon: MessageCircle },
-  { label: "Copy link", icon: Link2 },
-] as const;
 
 const navItems = [
   ["오늘", CalendarDays],
   ["공유 캘린더", Share2],
   ["초대", Users],
-  ["연동", Link2],
-  ["위젯", MonitorSmartphone],
 ] as const;
 
 const calendarItems = [
@@ -159,7 +149,6 @@ const calendarItems = [
 export default function Home() {
   const [activeScope, setActiveScope] = useState<CalendarScope>("ALL");
   const [selectedEventId, setSelectedEventId] = useState("brand-launch");
-  const [shareStatus, setShareStatus] = useState<string | null>(null);
 
   const filteredMonthDays = useMemo(
     () =>
@@ -192,18 +181,11 @@ export default function Home() {
     );
   }, [activeScope, selectedEventId]);
 
-  async function handleShare(channel: "KakaoTalk" | "Copy link") {
-    const shareUrl = `${window.location.origin}/s/demo-${selectedEvent.id}`;
-
-    if (channel === "Copy link") {
-      await navigator.clipboard.writeText(shareUrl);
-      setShareStatus("링크를 복사했습니다.");
-      return;
-    }
-
-    await navigator.clipboard.writeText(shareUrl);
-    setShareStatus("카톡 공유용 링크를 복사했습니다.");
-  }
+  const filterIcons = {
+    ALL: SquareStack,
+    PRIVATE: User,
+    SHARED: Users,
+  } satisfies Record<CalendarScope, typeof SquareStack>;
 
   return (
     <main className="app-shell">
@@ -212,7 +194,7 @@ export default function Home() {
       </div>
 
       <div className="mx-auto flex min-h-screen w-full max-w-[1480px] gap-4 px-4 pb-24 pt-[72px] md:pb-4 md:pt-4 lg:px-6">
-        <aside className="hidden w-[272px] shrink-0 flex-col justify-between rounded-lg border border-[var(--line)] bg-[#fdfcf9] p-4 lg:flex">
+        <aside className="hidden w-[272px] shrink-0 flex-col rounded-lg border border-[var(--line)] bg-[#fdfcf9] p-4 lg:flex">
           <div>
             <div className="mb-7 flex h-10 items-center justify-center">
               <p className="mobile-brand-script text-[30px] leading-none">Plandit</p>
@@ -259,16 +241,6 @@ export default function Home() {
               </div>
             </div>
           </div>
-
-          <div className="rounded-lg border border-[var(--line)] bg-[var(--panel-soft)] p-3">
-            <div className="mb-3 flex items-center gap-2 text-sm font-semibold">
-              <Sparkles size={16} />
-              Modern stack
-            </div>
-            <p className="text-xs leading-5 text-[var(--muted)]">
-              Next.js 16, Prisma 7, PostgreSQL 18, Auth.js 5 beta.
-            </p>
-          </div>
         </aside>
 
         <section className="flex min-w-0 flex-1 flex-col">
@@ -287,20 +259,26 @@ export default function Home() {
 
             <div className="flex flex-wrap items-center gap-2">
               <div className="flex rounded-lg border border-[var(--line)] bg-white p-1">
-                {filterOptions.map((option) => (
-                  <button
-                    key={option.value}
-                    className={[
-                      "h-8 rounded-md px-3 text-xs font-semibold",
-                      activeScope === option.value
-                        ? "bg-[var(--ink)] text-white"
-                        : "text-[#34362f] hover:bg-[#efeee9]",
-                    ].join(" ")}
-                    onClick={() => setActiveScope(option.value)}
-                  >
-                    {option.label}
-                  </button>
-                ))}
+                {filterOptions.map((option) => {
+                  const Icon = filterIcons[option.value];
+
+                  return (
+                    <button
+                      key={option.value}
+                      aria-label={option.label}
+                      className={[
+                        "flex size-8 items-center justify-center rounded-md",
+                        activeScope === option.value
+                          ? "bg-[var(--ink)] text-white"
+                          : "text-[#34362f] hover:bg-[#efeee9]",
+                      ].join(" ")}
+                      onClick={() => setActiveScope(option.value)}
+                      title={option.label}
+                    >
+                      <Icon size={16} />
+                    </button>
+                  );
+                })}
               </div>
               <div className="hidden h-10 items-center gap-2 rounded-lg border border-[var(--line)] bg-white px-3 md:flex">
                 <Search size={16} className="text-[var(--muted)]" />
@@ -354,10 +332,7 @@ export default function Home() {
                           key={event.title}
                           className="event-pill text-left"
                           style={{ backgroundColor: event.color }}
-                          onClick={() => {
-                            setSelectedEventId(event.id);
-                            setShareStatus(null);
-                          }}
+                          onClick={() => setSelectedEventId(event.id)}
                         >
                           {event.title}
                         </button>
@@ -386,7 +361,6 @@ export default function Home() {
                       ].join(" ")}
                       onClick={() => {
                         setSelectedEventId(item.id);
-                        setShareStatus(null);
                       }}
                     >
                       <div
@@ -458,69 +432,6 @@ export default function Home() {
                 </div>
               </section>
 
-              <section className="panel p-4">
-                <div className="mb-4 flex items-center justify-between">
-                  <h2 className="text-base font-semibold">Quick share</h2>
-                  <Link2 size={18} className="text-[var(--muted)]" />
-                </div>
-                <div className="grid grid-cols-2 gap-2">
-                  {quickShareActions.map(({ label, icon: Icon }) => (
-                    <button
-                      key={label}
-                      className="flex h-10 items-center justify-center gap-2 rounded-lg border border-[var(--line)] bg-white text-sm font-semibold"
-                      onClick={() => handleShare(label)}
-                    >
-                      <Icon size={16} />
-                      {label}
-                    </button>
-                  ))}
-                </div>
-                <p className="mt-3 text-xs leading-5 text-[var(--muted)]">
-                  Share one event without exposing your private calendar.
-                </p>
-                {shareStatus ? (
-                  <p className="mt-2 text-xs font-semibold text-[#11623b]">
-                    {shareStatus}
-                  </p>
-                ) : null}
-              </section>
-
-              <section className="panel p-4">
-                <div className="mb-4 flex items-center justify-between">
-                  <h2 className="text-base font-semibold">연동</h2>
-                  <Link2 size={18} className="text-[var(--muted)]" />
-                </div>
-                <div className="rounded-lg border border-[var(--line)] bg-white p-3">
-                  <div className="mb-2 flex items-center justify-between">
-                    <p className="text-sm font-semibold">Google Calendar</p>
-                    <span className="rounded-full bg-[#e8f4ee] px-2 py-1 text-xs font-semibold text-[#11623b]">
-                      Ready
-                    </span>
-                  </div>
-                  <p className="text-xs leading-5 text-[var(--muted)]">
-                    OAuth 계정과 캘린더 동기화 토큰 모델이 준비되었습니다.
-                  </p>
-                </div>
-              </section>
-
-              <section className="panel p-4">
-                <div className="mb-4 flex items-center justify-between">
-                  <h2 className="text-base font-semibold">위젯</h2>
-                  <MonitorSmartphone size={18} className="text-[var(--muted)]" />
-                </div>
-                <div className="rounded-[26px] border border-[#24251f] bg-[#1f211c] p-3 text-white">
-                  <div className="rounded-[20px] bg-[#30332c] p-4">
-                    <div className="mb-5 flex items-center justify-between">
-                      <p className="text-sm font-semibold">Today</p>
-                      <Lock size={15} />
-                    </div>
-                    <p className="text-2xl font-semibold">09:30</p>
-                    <p className="mt-1 text-sm text-[#c8ccc0]">
-                      브랜드 런칭 플랜
-                    </p>
-                  </div>
-                </div>
-              </section>
             </aside>
           </div>
         </section>
