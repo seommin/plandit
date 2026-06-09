@@ -82,6 +82,23 @@ const navItems = [
   ["초대", Users],
 ] as const;
 
+const dateTimeFormatter = new Intl.DateTimeFormat("ko-KR", {
+  dateStyle: "medium",
+  timeStyle: "short",
+  timeZone: "Asia/Seoul",
+});
+
+const dateFormatter = new Intl.DateTimeFormat("ko-KR", {
+  dateStyle: "medium",
+  timeZone: "Asia/Seoul",
+});
+
+const timeFormatter = new Intl.DateTimeFormat("ko-KR", {
+  hour: "2-digit",
+  minute: "2-digit",
+  timeZone: "Asia/Seoul",
+});
+
 function formatMonthLabel(month: Date) {
   return `${month.getFullYear()}. ${String(month.getMonth() + 1).padStart(2, "0")}`;
 }
@@ -503,10 +520,7 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
                         />
                         <div className="min-w-0">
                           <p className="text-xs font-semibold text-[var(--muted)]">
-                            {new Intl.DateTimeFormat("ko-KR", {
-                              hour: "2-digit",
-                              minute: "2-digit",
-                            }).format(new Date(item.startsAt))}
+                            {timeFormatter.format(new Date(item.startsAt))}
                           </p>
                           <p className="truncate text-sm font-semibold">{item.title}</p>
                           <p className="text-xs text-[var(--muted)]">{item.calendar.name}</p>
@@ -541,10 +555,9 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
                   <div className="rounded-lg border border-[var(--line)] bg-white p-3">
                     <p className="text-sm font-semibold">{selectedEvent.title}</p>
                     <p className="mt-1 text-xs font-semibold text-[var(--muted)]">
-                      {new Intl.DateTimeFormat("ko-KR", {
-                        dateStyle: "medium",
-                        timeStyle: selectedEvent.allDay ? undefined : "short",
-                      }).format(new Date(selectedEvent.startsAt))}
+                      {(selectedEvent.allDay ? dateFormatter : dateTimeFormatter).format(
+                        new Date(selectedEvent.startsAt),
+                      )}
                     </p>
                     {selectedEvent.description ? (
                       <p className="mt-3 text-sm leading-6 text-[#34362f]">
