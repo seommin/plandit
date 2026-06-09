@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useMemo, useState } from "react";
+import { type CSSProperties, FormEvent, useMemo, useState } from "react";
 import { signOut } from "next-auth/react";
 import {
   Bell,
@@ -182,6 +182,7 @@ function buildMonthDays(month: Date, events: CalendarAppEvent[]) {
         month.getFullYear() === 2026 && month.getMonth() === 5 && day === 6,
       today:
         date.toDateString() === new Date().toDateString(),
+      weekLaneCount: 0,
     };
   });
 
@@ -226,6 +227,7 @@ function buildMonthDays(month: Date, events: CalendarAppEvent[]) {
 
     week.forEach((day) => {
       day.events.sort((a, b) => a.lane - b.lane);
+      day.weekLaneCount = lanes.length;
     });
   }
 
@@ -267,6 +269,12 @@ function getEventPillClass(event: CalendarAppEvent, date: Date) {
   }[segment];
 
   return ["event-pill block text-left", segmentClass].filter(Boolean).join(" ");
+}
+
+function shouldShowEventTitle(event: CalendarAppEvent, date: Date) {
+  const segment = getEventSegment(event, date);
+
+  return segment === "single" || segment === "start";
 }
 
 export default function CalendarApp({ calendars, events, user }: CalendarAppProps) {
@@ -540,6 +548,11 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
                     key={day.key}
                     className="day-cell bg-white/70 text-left"
                     onDoubleClick={() => setIsCreateOpen(true)}
+                    style={
+                      {
+                        "--week-lane-count": day.weekLaneCount,
+                      } as CSSProperties
+                    }
                   >
                     <div className="mb-2 flex items-center justify-between">
                       <span
@@ -573,7 +586,7 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
                             setSelectedEventId(event.id);
                           }}
                         >
-                          {event.title}
+                          {shouldShowEventTitle(event, day.date) ? event.title : null}
                         </span>
                       ))}
                     </div>

@@ -98,7 +98,8 @@ button {
 
 .day-cell {
   --day-cell-padding: 10px;
-  min-height: 116px;
+  --week-lane-count: 0;
+  min-height: max(116px, calc(58px + var(--week-lane-count) * 33px));
   border-right: 1px solid var(--line);
   border-bottom: 1px solid var(--line);
   padding: var(--day-cell-padding);
@@ -153,6 +154,6 @@ button {
 @media (max-width: 900px) {
   .day-cell {
     --day-cell-padding: 8px;
-    min-height: 88px;
+    min-height: max(88px, calc(52px + var(--week-lane-count) * 33px));
   }
 }
