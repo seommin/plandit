@@ -11,6 +11,9 @@ importers:
       '@auth/prisma-adapter':
         specifier: 2.9.1
         version: 2.9.1(@prisma/client@7.4.0(prisma@7.4.0(@types/react@19.2.7)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(typescript@6.0.3))(typescript@6.0.3))
+      '@fontsource/pretendard':
+        specifier: 5.2.5
+        version: 5.2.5
       '@fontsource/satisfy':
         specifier: 5.2.7
         version: 5.2.7
@@ -140,6 +143,9 @@ packages:
 
   '@emnapi/runtime@1.11.0':
     resolution: {integrity: sha512-55coeOFKHv1ywEcUXJtWU5f+Jr/W5tZDvZig8DLKSwUN1JpROQ4rk/SNOQiFWmaR/VKF4zuFyW1B8JduOSv6Pg==}
+
+  '@fontsource/pretendard@5.2.5':
+    resolution: {integrity: sha512-UAj3l+Exfx6Sq5hySbhTQhNzkZnhzBxQdHySmjo2lifXyXpMAHv7GD7hAQTLgZfBd1WixJJkmynfJbOp+TAckg==}
 
   '@fontsource/satisfy@5.2.7':
     resolution: {integrity: sha512-nCryyRwgppe04BV6WcaaL9x52AsF3VrJ06rBW6wOz+7xqwqJRaw6fy69bW86kmL/NanEfraFDciMm9IDUGoqEg==}
@@ -1155,6 +1161,8 @@ snapshots:
     dependencies:
       tslib: 2.8.1
     optional: true
+
+  '@fontsource/pretendard@5.2.5': {}
 
   '@fontsource/satisfy@5.2.7': {}
 

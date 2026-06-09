@@ -11,6 +11,7 @@ services:
       AUTH_SECRET: local-development-secret-change-me
       DATABASE_URL: postgresql://plandit:plandit@postgres:5432/plandit
       DIRECT_URL: postgresql://plandit:plandit@postgres:5432/plandit
+      CI: "true"
     ports:
       - "3000:3000"
     volumes:

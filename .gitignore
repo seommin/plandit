@@ -2,6 +2,7 @@
 .env*.local
 .next/
 node_modules/
+.pnpm-store/
 src/generated/
 coverage/
 dist/

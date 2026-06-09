@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import "@fontsource/pretendard";
 import "@fontsource/satisfy";
 import "./globals.css";
 
