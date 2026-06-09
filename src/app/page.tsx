@@ -1,3 +1,6 @@
+"use client";
+
+import { useMemo, useState } from "react";
 import {
   Bell,
   CalendarDays,
@@ -17,6 +20,16 @@ import {
   Users,
 } from "lucide-react";
 
+type CalendarScope = "ALL" | "PRIVATE" | "SHARED";
+
+type DemoEvent = {
+  title: string;
+  color: string;
+  scope: Exclude<CalendarScope, "ALL">;
+  meta: string;
+  time?: string;
+};
+
 const weekDays = [
   { label: "일", tone: "text-[#d64f68]" },
   { label: "월", tone: "text-[var(--muted)]" },
@@ -27,55 +40,85 @@ const weekDays = [
   { label: "토", tone: "text-[#2f6bff]" },
 ];
 
+const eventByDay = new Map<number, DemoEvent[]>([
+  [
+    9,
+    [
+      {
+        title: "브랜드 런칭 플랜",
+        color: "var(--blue)",
+        scope: "SHARED",
+        meta: "Plandit Team",
+        time: "09:30",
+      },
+      {
+        title: "개인 운동",
+        color: "var(--green)",
+        scope: "PRIVATE",
+        meta: "나만 보기",
+        time: "19:30",
+      },
+    ],
+  ],
+  [
+    10,
+    [
+      {
+        title: "Google Calendar sync",
+        color: "var(--green)",
+        scope: "PRIVATE",
+        meta: "개인 연동",
+        time: "14:20",
+      },
+    ],
+  ],
+  [
+    12,
+    [
+      {
+        title: "공유 권한 QA",
+        color: "var(--violet)",
+        scope: "SHARED",
+        meta: "초대 4명",
+        time: "11:00",
+      },
+    ],
+  ],
+  [
+    16,
+    [
+      {
+        title: "위젯 프로토타입",
+        color: "var(--amber)",
+        scope: "SHARED",
+        meta: "Launch",
+        time: "16:00",
+      },
+    ],
+  ],
+]);
+
 const monthDays = Array.from({ length: 35 }, (_, index) => {
   const day = index - 1;
   const dayOfWeek = index % 7;
-  const isSunday = dayOfWeek === 0;
-  const isSaturday = dayOfWeek === 6;
-  const isHoliday = day === 6;
 
   return {
+    key: `${day}-${index}`,
     label: day < 1 ? 27 + index : day > 30 ? day - 30 : day,
+    day,
     muted: day < 1 || day > 30,
-    isSunday,
-    isSaturday,
-    isHoliday,
+    isSunday: dayOfWeek === 0,
+    isSaturday: dayOfWeek === 6,
+    isHoliday: day === 6,
     today: day === 9,
-    events:
-      day === 9
-        ? [
-            { title: "브랜드 런칭 플랜", color: "var(--blue)" },
-            { title: "디자인 리뷰", color: "var(--rose)" },
-          ]
-        : day === 10
-          ? [{ title: "Google Calendar sync", color: "var(--green)" }]
-          : day === 12
-            ? [{ title: "공유 권한 QA", color: "var(--violet)" }]
-            : day === 16
-              ? [{ title: "위젯 프로토타입", color: "var(--amber)" }]
-              : [],
+    events: eventByDay.get(day) ?? [],
   };
 });
 
-const agenda = [
-  {
-    time: "09:30",
-    title: "브랜드 런칭 플랜",
-    meta: "Plandit Team",
-    color: "bg-[#2f6bff]",
-  },
-  {
-    time: "11:00",
-    title: "디자인 리뷰",
-    meta: "초대 4명",
-    color: "bg-[#d64f68]",
-  },
-  {
-    time: "14:20",
-    title: "구글 캘린더 연동",
-    meta: "OAuth scope",
-    color: "bg-[#198754]",
-  },
+const filterOptions: Array<{ label: string; value: CalendarScope }> = [
+  { label: "All", value: "ALL" },
+  { label: "Private", value: "PRIVATE" },
+  { label: "Shared", value: "SHARED" },
 ];
 
 const collaborators = ["YU", "MK", "HN", "JL"];
@@ -85,7 +128,44 @@ const quickShareActions = [
   { label: "Copy link", icon: Link2 },
 ];
 
+const navItems = [
+  ["오늘", CalendarDays],
+  ["공유 캘린더", Share2],
+  ["초대", Users],
+  ["연동", Link2],
+  ["위젯", MonitorSmartphone],
+] as const;
+
+const calendarItems = [
+  { label: "Private", color: "var(--green)", scope: "PRIVATE" },
+  { label: "Plandit Team", color: "var(--blue)", scope: "SHARED" },
+  { label: "Launch", color: "var(--rose)", scope: "SHARED" },
+] as const;
+
 export default function Home() {
+  const [activeScope, setActiveScope] = useState<CalendarScope>("ALL");
+
+  const filteredMonthDays = useMemo(
+    () =>
+      monthDays.map((day) => ({
+        ...day,
+        events:
+          activeScope === "ALL"
+            ? day.events
+            : day.events.filter((event) => event.scope === activeScope),
+      })),
+    [activeScope],
+  );
+
+  const agenda = useMemo(
+    () =>
+      filteredMonthDays
+        .flatMap((day) => day.events)
+        .filter((event) => event.time)
+        .slice(0, 4),
+    [filteredMonthDays],
+  );
+
   return (
     <main className="app-shell">
       <div className="fixed inset-x-0 top-0 z-30 flex h-14 items-center justify-center bg-[var(--ink)] text-white md:hidden">
@@ -105,19 +185,13 @@ export default function Home() {
             </button>
 
             <nav className="space-y-1 text-sm font-medium">
-              {[
-                ["오늘", CalendarDays],
-                ["공유 캘린더", Share2],
-                ["초대", Users],
-                ["연동", Link2],
-                ["위젯", MonitorSmartphone],
-              ].map(([label, Icon]) => (
+              {navItems.map(([label, Icon]) => (
                 <button
-                  key={label as string}
+                  key={label}
                   className="flex h-10 w-full items-center gap-3 rounded-lg px-3 text-left text-[#34362f] hover:bg-[#efeee9]"
                 >
                   <Icon size={17} />
-                  {label as string}
+                  {label}
                 </button>
               ))}
             </nav>
@@ -127,18 +201,21 @@ export default function Home() {
                 Calendars
               </p>
               <div className="space-y-2">
-                {[
-                  ["Plandit Team", "var(--blue)"],
-                  ["Personal", "var(--green)"],
-                  ["Launch", "var(--rose)"],
-                ].map(([label, color]) => (
-                  <div key={label} className="flex items-center gap-3 rounded-lg px-3 py-2">
+                {calendarItems.map((item) => (
+                  <button
+                    key={item.label}
+                    className={[
+                      "flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left",
+                      activeScope === item.scope ? "bg-[#efeee9]" : "",
+                    ].join(" ")}
+                    onClick={() => setActiveScope(item.scope)}
+                  >
                     <span
                       className="size-2.5 rounded-full"
-                      style={{ backgroundColor: color }}
+                      style={{ backgroundColor: item.color }}
                     />
-                    <span className="text-sm text-[#34362f]">{label}</span>
-                  </div>
+                    <span className="text-sm text-[#34362f]">{item.label}</span>
+                  </button>
                 ))}
               </div>
             </div>
@@ -167,12 +244,25 @@ export default function Home() {
               <button className="icon-button" aria-label="Next month" title="Next month">
                 <ChevronRight size={18} />
               </button>
-              <button className="icon-button hidden md:inline-flex" aria-label="Open calendar" title="Open calendar">
-                <CalendarDays size={18} />
-              </button>
             </div>
 
-            <div className="hidden items-center gap-2 md:flex">
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="flex rounded-lg border border-[var(--line)] bg-white p-1">
+                {filterOptions.map((option) => (
+                  <button
+                    key={option.value}
+                    className={[
+                      "h-8 rounded-md px-3 text-xs font-semibold",
+                      activeScope === option.value
+                        ? "bg-[var(--ink)] text-white"
+                        : "text-[#34362f] hover:bg-[#efeee9]",
+                    ].join(" ")}
+                    onClick={() => setActiveScope(option.value)}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
               <div className="hidden h-10 items-center gap-2 rounded-lg border border-[var(--line)] bg-white px-3 md:flex">
                 <Search size={16} className="text-[var(--muted)]" />
                 <input
@@ -180,10 +270,10 @@ export default function Home() {
                   placeholder="일정 검색"
                 />
               </div>
-              <button className="icon-button" aria-label="Notifications" title="Notifications">
+              <button className="icon-button hidden md:inline-flex" aria-label="Notifications" title="Notifications">
                 <Bell size={18} />
               </button>
-              <button className="icon-button" aria-label="Settings" title="Settings">
+              <button className="icon-button hidden md:inline-flex" aria-label="Settings" title="Settings">
                 <Settings2 size={18} />
               </button>
             </div>
@@ -202,14 +292,16 @@ export default function Home() {
                 ))}
               </div>
               <div className="calendar-grid">
-                {monthDays.map((day, index) => (
-                  <div key={`${day.label}-${index}`} className="day-cell bg-white/70">
+                {filteredMonthDays.map((day) => (
+                  <div key={day.key} className="day-cell bg-white/70">
                     <div className="mb-2 flex items-center justify-between">
                       <span
                         className={[
                           "flex size-7 items-center justify-center rounded-full text-sm font-semibold",
                           day.muted ? "text-[#a2a59b]" : "text-[#30322d]",
-                          !day.muted && (day.isSunday || day.isHoliday) ? "text-[#d64f68]" : "",
+                          !day.muted && (day.isSunday || day.isHoliday)
+                            ? "text-[#d64f68]"
+                            : "",
                           !day.muted && day.isSaturday ? "text-[#2f6bff]" : "",
                           day.today ? "bg-[var(--ink)] text-white" : "",
                         ].join(" ")}
@@ -241,10 +333,18 @@ export default function Home() {
                 </div>
                 <div className="space-y-3">
                   {agenda.map((item) => (
-                    <div key={item.title} className="flex gap-3 rounded-lg border border-[var(--line)] bg-white p-3">
-                      <div className={`mt-1 size-2.5 rounded-full ${item.color}`} />
+                    <div
+                      key={item.title}
+                      className="flex gap-3 rounded-lg border border-[var(--line)] bg-white p-3"
+                    >
+                      <div
+                        className="mt-1 size-2.5 rounded-full"
+                        style={{ backgroundColor: item.color }}
+                      />
                       <div className="min-w-0">
-                        <p className="text-xs font-semibold text-[var(--muted)]">{item.time}</p>
+                        <p className="text-xs font-semibold text-[var(--muted)]">
+                          {item.time}
+                        </p>
                         <p className="truncate text-sm font-semibold">{item.title}</p>
                         <p className="text-xs text-[var(--muted)]">{item.meta}</p>
                       </div>
@@ -327,7 +427,9 @@ export default function Home() {
                       <Lock size={15} />
                     </div>
                     <p className="text-2xl font-semibold">09:30</p>
-                    <p className="mt-1 text-sm text-[#c8ccc0]">브랜드 런칭 플랜</p>
+                    <p className="mt-1 text-sm text-[#c8ccc0]">
+                      브랜드 런칭 플랜
+                    </p>
                   </div>
                 </div>
               </section>
@@ -335,6 +437,7 @@ export default function Home() {
           </div>
         </section>
       </div>
+
       <footer className="fixed inset-x-0 bottom-0 z-20 border-t border-[var(--line)] bg-[#fdfcf9]/95 px-3 py-2 shadow-[0_-12px_40px_rgba(31,33,29,0.08)] backdrop-blur md:hidden">
         <nav className="mx-auto grid max-w-[520px] grid-cols-5 gap-1">
           {[
