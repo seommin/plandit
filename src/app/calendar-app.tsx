@@ -380,7 +380,7 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
         color: result.event.color ?? calendar?.color ?? "var(--blue)",
         calendar: {
           id: calendar?.id ?? result.event.calendarId,
-          name: calendar?.name ?? "Calendar",
+          name: calendar?.name ?? "내 캘린더",
           type: calendar?.type ?? "PERSONAL",
           color: calendar?.color ?? "var(--blue)",
         },
@@ -434,7 +434,7 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
 
             <div className="mt-8">
               <p className="mb-3 px-3 text-xs font-semibold uppercase text-[var(--muted)]">
-                Calendars
+                캘린더 목록
               </p>
               <div className="space-y-2">
                 {calendars.map((calendar) => (
