@@ -3,13 +3,13 @@ import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { proxyInternalApi } from "@/lib/api-client";
 
-type ShareRouteContext = {
+type EventShareRouteContext = {
   params: Promise<{
     eventId: string;
   }>;
 };
 
-export async function POST(request: Request, context: ShareRouteContext) {
+export async function POST(request: Request, context: EventShareRouteContext) {
   const session = await auth();
 
   if (!session?.user?.id) {

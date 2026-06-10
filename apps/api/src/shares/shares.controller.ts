@@ -14,6 +14,7 @@ import { z } from "zod";
 
 import { prisma } from "@plandit/database/prisma";
 
+import { getWritableEvent } from "../events/event-permissions";
 import { getUserId, type RequestWithUser } from "../request-user";
 
 const createShareSchema = z.object({
@@ -39,26 +40,7 @@ export class SharesController {
       throw new BadRequestException("Invalid share payload.");
     }
 
-    const event = await prisma.event.findFirst({
-      where: {
-        id: eventId,
-        OR: [
-          { createdById: userId },
-          {
-            calendar: {
-              members: {
-                some: {
-                  userId,
-                  role: {
-                    in: ["OWNER", "ADMIN", "EDITOR"],
-                  },
-                },
-              },
-            },
-          },
-        ],
-      },
-    });
+    const event = await getWritableEvent(eventId, userId);
 
     if (!event) {
       throw new NotFoundException("Event not found.");

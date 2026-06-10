@@ -633,7 +633,7 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
     setFormError(null);
 
     try {
-      const response = await fetch(`/api/events/${selectedEvent.id}/shares`, {
+      const response = await fetch(`/api/event-shares/${selectedEvent.id}`, {
         method: "POST",
         headers: {
           "content-type": "application/json",
@@ -647,6 +647,10 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
       const result = (await response.json()) as { error?: string; url?: string };
 
       if (!response.ok || !result.url) {
+        if (response.status === 404 || response.status === 403) {
+          throw new Error("이 일정을 공유할 권한이 없습니다.");
+        }
+
         throw new Error(result.error ?? "공유 링크를 생성하지 못했습니다.");
       }
 
