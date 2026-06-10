@@ -96,12 +96,25 @@ button {
   grid-template-columns: repeat(7, minmax(0, 1fr));
 }
 
+.calendar-body {
+  display: flex;
+  flex-direction: column;
+}
+
+.calendar-week {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+}
+
 .day-cell {
   --day-cell-padding: 10px;
   --week-lane-count: 0;
-  min-height: max(116px, calc(58px + var(--week-lane-count) * 33px));
+  height: max(116px, calc(58px + var(--week-lane-count) * 33px));
+  min-height: 0;
   border-right: 1px solid var(--line);
   border-bottom: 1px solid var(--line);
+  display: grid;
+  grid-template-rows: 34px minmax(0, 1fr);
   padding: var(--day-cell-padding);
 }
 
@@ -109,9 +122,18 @@ button {
   border-right: 0;
 }
 
+.day-number-row {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
 .event-stack {
   display: grid;
   grid-auto-rows: 27px;
+  grid-row: 2;
   row-gap: 6px;
 }
 
@@ -154,6 +176,6 @@ button {
 @media (max-width: 900px) {
   .day-cell {
     --day-cell-padding: 8px;
-    min-height: max(88px, calc(52px + var(--week-lane-count) * 33px));
+    height: max(88px, calc(52px + var(--week-lane-count) * 33px));
   }
 }

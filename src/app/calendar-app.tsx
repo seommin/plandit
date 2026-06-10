@@ -310,6 +310,13 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
     () => buildMonthDays(month, visibleEvents),
     [month, visibleEvents],
   );
+  const monthWeeks = useMemo(
+    () =>
+      Array.from({ length: Math.ceil(monthDays.length / 7) }, (_, index) =>
+        monthDays.slice(index * 7, index * 7 + 7),
+      ),
+    [monthDays],
+  );
 
   const selectedEvent = useMemo(() => {
     return (
@@ -542,55 +549,59 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
                   </div>
                 ))}
               </div>
-              <div className="calendar-grid">
-                {monthDays.map((day) => (
-                  <button
-                    key={day.key}
-                    className="day-cell bg-white/70 text-left"
-                    onDoubleClick={() => setIsCreateOpen(true)}
-                    style={
-                      {
-                        "--week-lane-count": day.weekLaneCount,
-                      } as CSSProperties
-                    }
-                  >
-                    <div className="mb-2 flex items-center justify-between">
-                      <span
-                        className={[
-                          "flex size-7 items-center justify-center rounded-full text-sm font-semibold",
-                          day.today
-                            ? "bg-[var(--ink)] text-white"
-                            : day.muted
-                              ? "text-[#a2a59b]"
-                              : day.isSunday || day.isHoliday
-                                ? "text-[#d64f68]"
-                                : day.isSaturday
-                                  ? "text-[#2f6bff]"
-                                  : "text-[#30322d]",
-                        ].join(" ")}
+              <div className="calendar-body">
+                {monthWeeks.map((week, weekIndex) => (
+                  <div className="calendar-week" key={`${month.toISOString()}-${weekIndex}`}>
+                    {week.map((day) => (
+                      <button
+                        key={day.key}
+                        className="day-cell bg-white/70 text-left"
+                        onDoubleClick={() => setIsCreateOpen(true)}
+                        style={
+                          {
+                            "--week-lane-count": day.weekLaneCount,
+                          } as CSSProperties
+                        }
                       >
-                        {day.label}
-                      </span>
-                    </div>
-                    <div className="event-stack">
-                      {day.events.map(({ event, lane }) => (
-                        <span
-                          key={`${event.id}-${day.key}`}
-                          className={getEventPillClass(event, day.date)}
-                          style={{
-                            backgroundColor: event.color,
-                            gridRowStart: lane + 1,
-                          }}
-                          onClick={(clickEvent) => {
-                            clickEvent.stopPropagation();
-                            setSelectedEventId(event.id);
-                          }}
-                        >
-                          {shouldShowEventTitle(event, day.date) ? event.title : null}
-                        </span>
-                      ))}
-                    </div>
-                  </button>
+                        <div className="day-number-row">
+                          <span
+                            className={[
+                              "flex size-7 items-center justify-center rounded-full text-sm font-semibold",
+                              day.today
+                                ? "bg-[var(--ink)] text-white"
+                                : day.muted
+                                  ? "text-[#a2a59b]"
+                                  : day.isSunday || day.isHoliday
+                                    ? "text-[#d64f68]"
+                                    : day.isSaturday
+                                      ? "text-[#2f6bff]"
+                                      : "text-[#30322d]",
+                            ].join(" ")}
+                          >
+                            {day.label}
+                          </span>
+                        </div>
+                        <div className="event-stack">
+                          {day.events.map(({ event, lane }) => (
+                            <span
+                              key={`${event.id}-${day.key}`}
+                              className={getEventPillClass(event, day.date)}
+                              style={{
+                                backgroundColor: event.color,
+                                gridRowStart: lane + 1,
+                              }}
+                              onClick={(clickEvent) => {
+                                clickEvent.stopPropagation();
+                                setSelectedEventId(event.id);
+                              }}
+                            >
+                              {shouldShowEventTitle(event, day.date) ? event.title : null}
+                            </span>
+                          ))}
+                        </div>
+                      </button>
+                    ))}
+                  </div>
                 ))}
               </div>
             </div>
