@@ -1,4 +1,8 @@
 import { prisma } from "@/lib/prisma";
+import {
+  DEFAULT_PERSONAL_CALENDAR_NAME,
+  LEGACY_DEFAULT_PERSONAL_CALENDAR_NAMES,
+} from "@/lib/calendar-defaults";
 
 const writableRoles = ["OWNER", "ADMIN", "EDITOR"] as const;
 
@@ -33,12 +37,23 @@ export async function getDefaultPersonalCalendar(userId: string) {
   });
 
   if (existingCalendar) {
+    if (LEGACY_DEFAULT_PERSONAL_CALENDAR_NAMES.includes(existingCalendar.name)) {
+      return prisma.calendar.update({
+        where: {
+          id: existingCalendar.id,
+        },
+        data: {
+          name: DEFAULT_PERSONAL_CALENDAR_NAME,
+        },
+      });
+    }
+
     return existingCalendar;
   }
 
   return prisma.calendar.create({
     data: {
-      name: "Private",
+      name: DEFAULT_PERSONAL_CALENDAR_NAME,
       type: "PERSONAL",
       isDefault: true,
       members: {

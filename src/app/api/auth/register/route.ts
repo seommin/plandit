@@ -2,6 +2,7 @@ import { hash } from "bcryptjs";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
+import { DEFAULT_PERSONAL_CALENDAR_NAME } from "@/lib/calendar-defaults";
 import { prisma } from "@/lib/prisma";
 
 const registerSchema = z.object({
@@ -43,7 +44,7 @@ export async function POST(request: Request) {
           role: "OWNER",
           calendar: {
             create: {
-              name: "My Calendar",
+              name: DEFAULT_PERSONAL_CALENDAR_NAME,
               type: "PERSONAL",
               isDefault: true,
             },
