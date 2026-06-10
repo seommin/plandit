@@ -336,6 +336,9 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
   const writableCalendars = calendars.filter((calendar) =>
     ["OWNER", "ADMIN", "EDITOR"].includes(calendar.role),
   );
+  const isAllCalendarsSelected =
+    calendars.length > 0 && selectedCalendarIds.length === calendars.length;
+  const calendarSelectionActionLabel = isAllCalendarsSelected ? "전체 해제" : "전체 선택";
 
   function toggleCalendar(calendarId: string) {
     setSelectedCalendarIds((current) =>
@@ -345,8 +348,12 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
     );
   }
 
-  function selectAllCalendars() {
-    setSelectedCalendarIds(calendars.map((calendar) => calendar.id));
+  function toggleAllCalendars() {
+    setSelectedCalendarIds((current) =>
+      current.length === calendars.length
+        ? []
+        : calendars.map((calendar) => calendar.id),
+    );
   }
 
   function toggleImportantEvent(eventId: string) {
@@ -591,11 +598,11 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
                   캘린더 목록
                 </p>
                 <button
-                  className="text-xs font-semibold uppercase text-[var(--muted)] hover:text-[var(--ink)]"
-                  onClick={selectAllCalendars}
+                  className="text-[11px] font-semibold text-[var(--muted)] hover:text-[var(--ink)]"
+                  onClick={toggleAllCalendars}
                   type="button"
                 >
-                  전체 선택
+                  {calendarSelectionActionLabel}
                 </button>
               </div>
               <div className="space-y-2">
@@ -870,11 +877,11 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
                   캘린더 목록
                 </p>
                 <button
-                  className="text-xs font-semibold uppercase text-[var(--muted)] hover:text-[var(--ink)]"
-                  onClick={selectAllCalendars}
+                  className="text-[11px] font-semibold text-[var(--muted)] hover:text-[var(--ink)]"
+                  onClick={toggleAllCalendars}
                   type="button"
                 >
-                  전체 선택
+                  {calendarSelectionActionLabel}
                 </button>
               </div>
               <div className="space-y-2">
