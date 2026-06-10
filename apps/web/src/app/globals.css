@@ -78,6 +78,16 @@ button {
   padding-top: 4px;
 }
 
+.brand-logo-button {
+  color: inherit;
+  font-size: 38px;
+}
+
+.brand-logo-button-mobile {
+  color: inherit;
+  font-size: 36px;
+}
+
 .calendar-selection-action {
   color: var(--muted);
   font-size: 12px;
