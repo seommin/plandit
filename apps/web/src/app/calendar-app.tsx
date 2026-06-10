@@ -43,6 +43,7 @@ export type CalendarAppEvent = {
   allDay: boolean;
   color: string;
   visibility: "PRIVATE" | "CALENDAR" | "PUBLIC_LINK";
+  isImportant: boolean;
   calendar: {
     id: string;
     name: string;
@@ -296,7 +297,6 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isNotificationOpen, setIsNotificationOpen] = useState(false);
-  const [importantEventIds, setImportantEventIds] = useState<string[]>([]);
   const [isSaving, setIsSaving] = useState(false);
   const [isSharing, setIsSharing] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
@@ -360,9 +360,9 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
   const importantEvents = useMemo(
     () =>
       eventItems
-        .filter((event) => importantEventIds.includes(event.id))
+        .filter((event) => event.isImportant)
         .sort((a, b) => new Date(a.startsAt).getTime() - new Date(b.startsAt).getTime()),
-    [eventItems, importantEventIds],
+    [eventItems],
   );
 
   const writableCalendars = calendarItems.filter((calendar) =>
@@ -385,14 +385,6 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
       current.length === calendarItems.length
         ? []
         : calendarItems.map((calendar) => calendar.id),
-    );
-  }
-
-  function toggleImportantEvent(eventId: string) {
-    setImportantEventIds((current) =>
-      current.includes(eventId)
-        ? current.filter((id) => id !== eventId)
-        : [...current, eventId],
     );
   }
 
@@ -423,6 +415,38 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
     setIsDetailOpen(true);
   }
 
+  async function handleToggleImportantEvent() {
+    if (!selectedEvent) {
+      return;
+    }
+
+    setFormError(null);
+
+    try {
+      const response = await fetch(`/api/event-important/${selectedEvent.id}`, {
+        method: "PATCH",
+      });
+      const result = (await response.json()) as {
+        error?: string;
+        isImportant?: boolean;
+      };
+
+      if (!response.ok || typeof result.isImportant !== "boolean") {
+        throw new Error(result.error ?? "중요 일정을 변경하지 못했습니다.");
+      }
+
+      const isImportant = result.isImportant;
+
+      setEventItems((current) =>
+        current.map((item) =>
+          item.id === selectedEvent.id ? { ...item, isImportant } : item,
+        ),
+      );
+    } catch (error) {
+      setFormError(error instanceof Error ? error.message : "다시 시도해주세요.");
+    }
+  }
+
   function openEditModal() {
     setFormError(null);
     setIsDetailOpen(false);
@@ -435,6 +459,7 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
     return {
       ...event,
       color: event.color ?? calendar?.color ?? "var(--blue)",
+      isImportant: event.isImportant ?? false,
       calendar: {
         id: calendar?.id ?? calendarId,
         name: calendar?.name ?? "내 캘린더",
@@ -613,7 +638,6 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
         setSelectedEventId(nextItems[0]?.id ?? "");
         return nextItems;
       });
-      setImportantEventIds((current) => current.filter((id) => id !== selectedEvent.id));
       setIsEditOpen(false);
       setIsDetailOpen(false);
     } catch (error) {
@@ -1318,19 +1342,17 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
                 <button
                   className={[
                     "icon-button",
-                    importantEventIds.includes(selectedEvent.id)
+                    selectedEvent.isImportant
                       ? "border-[#f2d28c] bg-[#fff7e0] text-[#b47818]"
                       : "",
                   ].join(" ")}
                   aria-label="중요 일정"
-                  onClick={() => toggleImportantEvent(selectedEvent.id)}
+                  onClick={handleToggleImportantEvent}
                   type="button"
                 >
                   <Star
                     size={17}
-                    className={
-                      importantEventIds.includes(selectedEvent.id) ? "fill-[#f2b84b]" : ""
-                    }
+                    className={selectedEvent.isImportant ? "fill-[#f2b84b]" : ""}
                   />
                 </button>
                 <button

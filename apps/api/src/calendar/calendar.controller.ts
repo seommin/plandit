@@ -121,6 +121,14 @@ export class CalendarController {
             color: true,
           },
         },
+        favorites: {
+          where: {
+            userId,
+          },
+          select: {
+            id: true,
+          },
+        },
       },
       orderBy: [{ startsAt: "asc" }, { createdAt: "asc" }],
     });
@@ -140,6 +148,7 @@ export class CalendarController {
         allDay: event.allDay,
         color: event.color ?? event.calendar.color,
         visibility: event.visibility,
+        isImportant: event.favorites.length > 0,
         calendar: event.calendar,
       })),
     };

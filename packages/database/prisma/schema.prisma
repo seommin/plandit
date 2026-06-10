@@ -77,6 +77,7 @@ model User {
   attendees     EventAttendee[]
   invitesSent   CalendarInvite[] @relation("InviteSender")
   eventSharesCreated EventShare[] @relation("EventShareCreator")
+  eventFavorites EventFavorite[]
   widgets       WidgetPreference[]
 }
 
@@ -188,6 +189,7 @@ model Event {
   creator   User            @relation("EventCreator", fields: [createdById], references: [id])
   attendees EventAttendee[]
   shares    EventShare[]
+  favorites EventFavorite[]
 
   @@index([calendarId, startsAt])
   @@index([createdById])
@@ -216,6 +218,20 @@ model EventShare {
   @@index([eventId])
   @@index([createdById])
   @@index([channel])
+}
+
+model EventFavorite {
+  id        String   @id @default(cuid())
+  eventId   String
+  userId    String
+  createdAt DateTime @default(now())
+
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([eventId, userId])
+  @@index([userId])
+  @@index([eventId])
 }
 
 model EventAttendee {

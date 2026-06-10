@@ -167,6 +167,72 @@ export class EventsController {
     return { event: updatedEvent };
   }
 
+  @Patch(":eventId/important")
+  async toggleImportant(@Req() request: RequestWithUser, @Param("eventId") eventId: string) {
+    const userId = getUserId(request);
+    const event = await prisma.event.findFirst({
+      where: {
+        id: eventId,
+        OR: [
+          {
+            visibility: "PRIVATE",
+            createdById: userId,
+          },
+          {
+            visibility: {
+              in: ["CALENDAR", "PUBLIC_LINK"],
+            },
+            calendar: {
+              members: {
+                some: {
+                  userId,
+                },
+              },
+            },
+          },
+        ],
+      },
+      select: {
+        id: true,
+      },
+    });
+
+    if (!event) {
+      throw new NotFoundException("Event not found.");
+    }
+
+    const favorite = await prisma.eventFavorite.findUnique({
+      where: {
+        eventId_userId: {
+          eventId,
+          userId,
+        },
+      },
+    });
+
+    if (favorite) {
+      await prisma.eventFavorite.delete({
+        where: {
+          eventId_userId: {
+            eventId,
+            userId,
+          },
+        },
+      });
+
+      return { isImportant: false };
+    }
+
+    await prisma.eventFavorite.create({
+      data: {
+        eventId,
+        userId,
+      },
+    });
+
+    return { isImportant: true };
+  }
+
   @Delete(":eventId")
   async remove(@Req() request: RequestWithUser, @Param("eventId") eventId: string) {
     const userId = getUserId(request);
