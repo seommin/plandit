@@ -80,7 +80,7 @@ button {
 
 .calendar-selection-action {
   color: var(--muted);
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 650;
   line-height: 1;
 }
