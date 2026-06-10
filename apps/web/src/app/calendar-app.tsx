@@ -639,7 +639,7 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
           <Menu size={23} />
         </button>
         <button
-          className="mobile-brand-script text-center text-[28px] leading-none"
+          className="mobile-brand-script brand-logo-button-mobile text-center"
           aria-label="메인 달력"
           onClick={goToMainCalendar}
           type="button"
@@ -661,7 +661,7 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
           <div>
             <div className="mb-7 flex h-10 items-center justify-center">
               <button
-                className="mobile-brand-script text-[30px] leading-none"
+                className="mobile-brand-script brand-logo-button"
                 aria-label="메인 달력"
                 onClick={goToMainCalendar}
                 type="button"
@@ -1081,7 +1081,7 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
           <aside className="mobile-drawer h-full w-[84vw] max-w-[320px] bg-[#fdfcf9] p-4 shadow-[24px_0_60px_rgba(31,33,29,0.18)]">
             <div className="mb-5 flex items-center justify-between">
               <button
-                className="mobile-brand-script text-[30px] leading-none"
+                className="mobile-brand-script brand-logo-button"
                 aria-label="메인 달력"
                 onClick={goToMainCalendar}
                 type="button"
