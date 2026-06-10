@@ -5,6 +5,7 @@
   "exports": {
     "./auth": "./src/auth.ts",
     "./calendar-defaults": "./src/calendar-defaults.ts",
+    "./calendars": "./src/calendars.ts",
     "./events": "./src/events.ts"
   },
   "scripts": {

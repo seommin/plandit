@@ -1,3 +1,5 @@
+import { UnauthorizedException } from "@nestjs/common";
+
 import { prisma } from "@plandit/database/prisma";
 import {
   DEFAULT_PERSONAL_CALENDAR_NAME,
@@ -5,6 +7,54 @@ import {
 } from "@plandit/shared/calendar-defaults";
 
 const writableRoles = ["OWNER", "ADMIN", "EDITOR"] as const;
+const manageableRoles = ["OWNER", "ADMIN"] as const;
+
+export async function assertExistingUser(userId: string) {
+  const user = await prisma.user.findUnique({
+    where: {
+      id: userId,
+    },
+    select: {
+      id: true,
+    },
+  });
+
+  if (!user) {
+    throw new UnauthorizedException("Invalid user context.");
+  }
+
+  return user;
+}
+
+export async function getCalendarMembership(calendarId: string, userId: string) {
+  return prisma.calendarMember.findUnique({
+    where: {
+      calendarId_userId: {
+        calendarId,
+        userId,
+      },
+    },
+    include: {
+      calendar: true,
+    },
+  });
+}
+
+export async function getManageableCalendar(calendarId: string, userId: string) {
+  return prisma.calendar.findFirst({
+    where: {
+      id: calendarId,
+      members: {
+        some: {
+          userId,
+          role: {
+            in: [...manageableRoles],
+          },
+        },
+      },
+    },
+  });
+}
 
 export async function getWritableCalendar(calendarId: string, userId: string) {
   return prisma.calendar.findFirst({
@@ -23,6 +73,8 @@ export async function getWritableCalendar(calendarId: string, userId: string) {
 }
 
 export async function getDefaultPersonalCalendar(userId: string) {
+  await assertExistingUser(userId);
+
   const existingCalendar = await prisma.calendar.findFirst({
     where: {
       type: "PERSONAL",
