@@ -13,13 +13,10 @@ import {
   Plus,
   Settings2,
   Share2,
-  SquareStack,
   Trash2,
-  User,
   Users,
 } from "lucide-react";
 
-type CalendarScope = "ALL" | "PRIVATE" | "SHARED";
 type CalendarType = "PERSONAL" | "SHARED" | "SUBSCRIBED";
 type CalendarRole = "OWNER" | "ADMIN" | "EDITOR" | "VIEWER";
 
@@ -73,12 +70,6 @@ const weekDays = [
   { label: "목", tone: "text-[var(--muted)]" },
   { label: "금", tone: "text-[var(--muted)]" },
   { label: "토", tone: "text-[#2f6bff]" },
-];
-
-const filterOptions: Array<{ label: string; value: CalendarScope }> = [
-  { label: "전체", value: "ALL" },
-  { label: "개인", value: "PRIVATE" },
-  { label: "공유", value: "SHARED" },
 ];
 
 const navItems = [
@@ -278,7 +269,9 @@ function shouldShowEventTitle(event: CalendarAppEvent, date: Date) {
 }
 
 export default function CalendarApp({ calendars, events, user }: CalendarAppProps) {
-  const [activeScope, setActiveScope] = useState<CalendarScope>("ALL");
+  const [selectedCalendarIds, setSelectedCalendarIds] = useState(() =>
+    calendars.map((calendar) => calendar.id),
+  );
   const [month, setMonth] = useState(() => new Date(2026, 5, 1));
   const [eventItems, setEventItems] = useState(events);
   const [selectedEventId, setSelectedEventId] = useState(events[0]?.id ?? "");
@@ -288,24 +281,10 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
   const [isSaving, setIsSaving] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
-  const filterIcons = {
-    ALL: SquareStack,
-    PRIVATE: User,
-    SHARED: Users,
-  } satisfies Record<CalendarScope, typeof SquareStack>;
-
   const visibleEvents = useMemo(
     () =>
-      eventItems.filter((event) => {
-        if (activeScope === "ALL") {
-          return true;
-        }
-
-        return activeScope === "PRIVATE"
-          ? event.calendar.type === "PERSONAL"
-          : event.calendar.type === "SHARED";
-      }),
-    [activeScope, eventItems],
+      eventItems.filter((event) => selectedCalendarIds.includes(event.calendarId)),
+    [eventItems, selectedCalendarIds],
   );
 
   const monthDays = useMemo(
@@ -341,6 +320,18 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
   const writableCalendars = calendars.filter((calendar) =>
     ["OWNER", "ADMIN", "EDITOR"].includes(calendar.role),
   );
+
+  function toggleCalendar(calendarId: string) {
+    setSelectedCalendarIds((current) =>
+      current.includes(calendarId)
+        ? current.filter((id) => id !== calendarId)
+        : [...current, calendarId],
+    );
+  }
+
+  function selectAllCalendars() {
+    setSelectedCalendarIds(calendars.map((calendar) => calendar.id));
+  }
 
   function openCreateModal() {
     setFormError(null);
@@ -417,6 +408,11 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
       const createdEvent = buildCalendarEvent(result.event, result.event.calendarId);
 
       setEventItems((current) => [...current, createdEvent]);
+      setSelectedCalendarIds((current) =>
+        current.includes(createdEvent.calendarId)
+          ? current
+          : [...current, createdEvent.calendarId],
+      );
       setSelectedEventId(createdEvent.id);
       setIsCreateOpen(false);
       setIsDetailOpen(true);
@@ -545,48 +541,38 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
             </nav>
 
             <div className="mt-8">
-              <p className="mb-3 px-3 text-xs font-semibold uppercase text-[var(--muted)]">
-                캘린더 목록
-              </p>
+              <div className="mb-3 flex items-center justify-between px-3">
+                <p className="text-xs font-semibold uppercase text-[var(--muted)]">
+                  캘린더 목록
+                </p>
+                <button
+                  className="text-xs font-semibold text-[#34362f] hover:text-[var(--ink)]"
+                  onClick={selectAllCalendars}
+                  type="button"
+                >
+                  전체 선택
+                </button>
+              </div>
               <div className="space-y-2">
                 {calendars.map((calendar) => (
-                  <button
+                  <label
                     key={calendar.id}
-                    className={[
-                      "flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left",
-                      activeScope === (calendar.type === "PERSONAL" ? "PRIVATE" : "SHARED")
-                        ? "bg-[#efeee9]"
-                        : "",
-                    ].join(" ")}
-                    onClick={() =>
-                      setActiveScope(calendar.type === "PERSONAL" ? "PRIVATE" : "SHARED")
-                    }
+                    className="flex w-full cursor-pointer items-center gap-3 rounded-lg px-3 py-2 text-left hover:bg-[#efeee9]"
                   >
+                    <input
+                      checked={selectedCalendarIds.includes(calendar.id)}
+                      className="size-4 accent-[var(--ink)]"
+                      onChange={() => toggleCalendar(calendar.id)}
+                      type="checkbox"
+                    />
                     <span
                       className="size-2.5 rounded-full"
                       style={{ backgroundColor: calendar.color }}
                     />
                     <span className="text-sm text-[#34362f]">{calendar.name}</span>
-                  </button>
+                  </label>
                 ))}
               </div>
-            </div>
-
-            <div className="mt-8 grid grid-cols-3 gap-2">
-              <button className="icon-button w-full" aria-label="Notifications" title="Notifications">
-                <Bell size={18} />
-              </button>
-              <button className="icon-button w-full" aria-label="Settings" title="Settings">
-                <Settings2 size={18} />
-              </button>
-              <button
-                className="icon-button w-full"
-                aria-label="Sign out"
-                title="Sign out"
-                onClick={() => signOut({ callbackUrl: "/login" })}
-              >
-                <LogOut size={18} />
-              </button>
             </div>
           </div>
         </aside>
@@ -619,33 +605,60 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
               </button>
             </div>
 
-            <div className="flex items-center justify-center md:justify-end">
-              <div className="flex rounded-lg border border-[var(--line)] bg-white p-1">
-                {filterOptions.map((option) => {
-                  const Icon = filterIcons[option.value];
-
-                  return (
-                    <button
-                      key={option.value}
-                      aria-label={option.label}
-                      className={[
-                        "flex size-8 items-center justify-center rounded-md",
-                        activeScope === option.value
-                          ? "bg-[var(--ink)] text-white"
-                          : "text-[#34362f] hover:bg-[#efeee9]",
-                      ].join(" ")}
-                      onClick={() => setActiveScope(option.value)}
-                      title={option.label}
-                    >
-                      <Icon size={16} />
-                    </button>
-                  );
-                })}
-              </div>
+            <div className="hidden items-center justify-end gap-2 md:flex">
+              <button className="icon-button" aria-label="Notifications" title="Notifications">
+                <Bell size={18} />
+              </button>
+              <button className="icon-button" aria-label="Settings" title="Settings">
+                <Settings2 size={18} />
+              </button>
+              <button
+                className="icon-button"
+                aria-label="Sign out"
+                title="Sign out"
+                onClick={() => signOut({ callbackUrl: "/login" })}
+              >
+                <LogOut size={18} />
+              </button>
             </div>
           </header>
 
-          <div className="grid flex-1 gap-4 xl:grid-cols-[minmax(0,1fr)_340px]">
+          <section className="panel mb-4 p-3 lg:hidden">
+            <div className="mb-3 flex items-center justify-between">
+              <h2 className="text-sm font-semibold">캘린더 목록</h2>
+              <button
+                className="text-xs font-semibold text-[var(--muted)]"
+                onClick={selectAllCalendars}
+                type="button"
+              >
+                전체 선택
+              </button>
+            </div>
+            <div className="flex gap-2 overflow-x-auto pb-1">
+              {calendars.map((calendar) => (
+                <label
+                  key={calendar.id}
+                  className="flex shrink-0 cursor-pointer items-center gap-2 rounded-lg border border-[var(--line)] bg-white px-3 py-2"
+                >
+                  <input
+                    checked={selectedCalendarIds.includes(calendar.id)}
+                    className="size-4 accent-[var(--ink)]"
+                    onChange={() => toggleCalendar(calendar.id)}
+                    type="checkbox"
+                  />
+                  <span
+                    className="size-2.5 rounded-full"
+                    style={{ backgroundColor: calendar.color }}
+                  />
+                  <span className="max-w-28 truncate text-sm font-semibold text-[#34362f]">
+                    {calendar.name}
+                  </span>
+                </label>
+              ))}
+            </div>
+          </section>
+
+          <div className="flex flex-1 flex-col gap-4">
             <div className="panel min-w-0 overflow-hidden">
               <div className="calendar-grid border-b border-[var(--line)] bg-[#f9f8f4]">
                 {weekDays.map((day) => (
@@ -714,53 +727,50 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
               </div>
             </div>
 
-            <aside className="flex min-w-0 flex-col gap-4">
-              <section className="panel p-4">
-                <div className="mb-4 flex items-center justify-between">
-                  <h2 className="text-base font-semibold">오늘</h2>
-                  <Clock3 size={18} className="text-[var(--muted)]" />
-                </div>
-                <div className="space-y-3">
-                  {agenda.length > 0 ? (
-                    agenda.map((item) => (
-                      <button
-                        key={item.id}
-                        className={[
-                          "flex w-full gap-3 rounded-lg border bg-white p-3 text-left",
-                          selectedEventId === item.id
-                            ? "border-[#9fa598]"
-                            : "border-[var(--line)]",
-                        ].join(" ")}
-                        onClick={() => openEventDetail(item.id)}
-                      >
-                        <div
-                          className="mt-1 size-2.5 rounded-full"
-                          style={{ backgroundColor: item.color }}
-                        />
-                        <div className="min-w-0">
-                          <p className="text-xs font-semibold text-[var(--muted)]">
-                            {timeFormatter.format(new Date(item.startsAt))}
-                          </p>
-                          <p className="truncate text-sm font-semibold">{item.title}</p>
-                          <p className="text-xs text-[var(--muted)]">{item.calendar.name}</p>
-                        </div>
-                      </button>
-                    ))
-                  ) : (
-                    <p className="rounded-lg border border-[var(--line)] bg-white p-3 text-sm text-[var(--muted)]">
-                      표시할 일정이 없습니다.
-                    </p>
-                  )}
-                </div>
-              </section>
-
-            </aside>
+            <section className="panel p-4">
+              <div className="mb-4 flex items-center justify-between">
+                <h2 className="text-base font-semibold">오늘 일정</h2>
+                <Clock3 size={18} className="text-[var(--muted)]" />
+              </div>
+              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                {agenda.length > 0 ? (
+                  agenda.map((item) => (
+                    <button
+                      key={item.id}
+                      className={[
+                        "flex w-full gap-3 rounded-lg border bg-white p-3 text-left",
+                        selectedEventId === item.id
+                          ? "border-[#9fa598]"
+                          : "border-[var(--line)]",
+                      ].join(" ")}
+                      onClick={() => openEventDetail(item.id)}
+                    >
+                      <div
+                        className="mt-1 size-2.5 rounded-full"
+                        style={{ backgroundColor: item.color }}
+                      />
+                      <div className="min-w-0">
+                        <p className="text-xs font-semibold text-[var(--muted)]">
+                          {timeFormatter.format(new Date(item.startsAt))}
+                        </p>
+                        <p className="truncate text-sm font-semibold">{item.title}</p>
+                        <p className="text-xs text-[var(--muted)]">{item.calendar.name}</p>
+                      </div>
+                    </button>
+                  ))
+                ) : (
+                  <p className="rounded-lg border border-[var(--line)] bg-white p-3 text-sm text-[var(--muted)] md:col-span-2 xl:col-span-3">
+                    선택한 캘린더에 표시할 일정이 없습니다.
+                  </p>
+                )}
+              </div>
+            </section>
           </div>
         </section>
       </div>
 
       <footer className="fixed inset-x-0 bottom-0 z-20 border-t border-[var(--line)] bg-[#fdfcf9]/95 px-3 py-2 shadow-[0_-12px_40px_rgba(31,33,29,0.08)] backdrop-blur md:hidden">
-        <nav className="mx-auto grid max-w-[520px] grid-cols-5 items-center gap-1">
+        <nav className="mx-auto grid max-w-[360px] grid-cols-3 items-center gap-1">
           <button
             className="flex h-14 items-center justify-center rounded-lg text-[#34362f] hover:bg-[#efeee9]"
             aria-label="오늘"
@@ -768,14 +778,6 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
             onClick={() => setMonth(new Date(2026, 5, 1))}
           >
             <CalendarDays size={21} />
-          </button>
-          <button
-            className="flex h-14 items-center justify-center rounded-lg text-[#34362f] hover:bg-[#efeee9]"
-            aria-label="공유 캘린더"
-            title="공유 캘린더"
-            onClick={() => setActiveScope("SHARED")}
-          >
-            <Users size={21} />
           </button>
           <button
             className="mx-auto flex size-14 items-center justify-center rounded-full bg-[var(--ink)] text-white shadow-[0_12px_28px_rgba(24,25,22,0.24)]"
@@ -787,17 +789,11 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
           </button>
           <button
             className="flex h-14 items-center justify-center rounded-lg text-[#34362f] hover:bg-[#efeee9]"
-            aria-label="알림"
-            title="알림"
+            aria-label="캘린더 전체 선택"
+            title="캘린더 전체 선택"
+            onClick={selectAllCalendars}
           >
-            <Bell size={21} />
-          </button>
-          <button
-            className="flex h-14 items-center justify-center rounded-lg text-[#34362f] hover:bg-[#efeee9]"
-            aria-label="설정"
-            title="설정"
-          >
-            <Settings2 size={21} />
+            <Users size={21} />
           </button>
         </nav>
       </footer>
