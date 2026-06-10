@@ -723,7 +723,56 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
           </div>
         </aside>
 
-        <section className="flex min-w-0 flex-1 flex-col">
+        {isImportantOpen ? (
+          <section className="mobile-drawer min-w-0 flex-1 px-1 md:hidden">
+            <div className="mb-4 grid h-12 grid-cols-[48px_minmax(0,1fr)_48px] items-center">
+              <button
+                className="flex size-12 items-center justify-center rounded-lg text-[#30322d]"
+                aria-label="뒤로가기"
+                onClick={() => setIsImportantOpen(false)}
+                type="button"
+              >
+                <ArrowLeft size={22} />
+              </button>
+              <h2 className="text-center text-lg font-semibold">중요</h2>
+              <span />
+            </div>
+            <div className="space-y-3">
+              {importantEvents.length > 0 ? (
+                importantEvents.map((item) => (
+                  <button
+                    key={item.id}
+                    className="flex w-full gap-3 rounded-lg border border-[var(--line)] bg-white p-3 text-left"
+                    onClick={() => {
+                      setIsImportantOpen(false);
+                      openEventDetail(item.id);
+                    }}
+                    type="button"
+                  >
+                    <Star size={17} className="mt-0.5 fill-[#f2b84b] text-[#b47818]" />
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-semibold">{item.title}</p>
+                      <p className="mt-1 text-xs text-[var(--muted)]">
+                        {dateTimeFormatter.format(new Date(item.startsAt))}
+                      </p>
+                    </div>
+                  </button>
+                ))
+              ) : (
+                <p className="rounded-lg border border-[var(--line)] bg-white p-3 text-sm text-[var(--muted)]">
+                  일정 상세에서 별을 눌러 중요 일정을 추가해보세요.
+                </p>
+              )}
+            </div>
+          </section>
+        ) : null}
+
+        <section
+          className={[
+            "min-w-0 flex-1 flex-col",
+            isImportantOpen ? "hidden md:flex" : "flex",
+          ].join(" ")}
+        >
           <header className="mb-4 flex flex-col gap-3 rounded-lg border border-[var(--line)] bg-[#fdfcf9] px-4 py-3 md:flex-row md:items-center md:justify-between">
             <div className="grid grid-cols-[40px_minmax(0,1fr)_40px] items-center gap-3 md:w-full md:max-w-[420px]">
               <button
@@ -1106,52 +1155,6 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
               </div>
             </div>
           </aside>
-        </div>
-      ) : null}
-
-      {isImportantOpen ? (
-        <div className="fixed inset-0 z-40 bg-[#f6f4ee] md:hidden">
-          <section className="mobile-drawer h-full px-4 pb-6 pt-4">
-            <div className="mb-5 grid h-12 grid-cols-[48px_minmax(0,1fr)_48px] items-center">
-              <button
-                className="flex size-12 items-center justify-center rounded-lg text-[#30322d]"
-                aria-label="뒤로가기"
-                onClick={() => setIsImportantOpen(false)}
-                type="button"
-              >
-                <ArrowLeft size={22} />
-              </button>
-              <h2 className="text-center text-lg font-semibold">중요</h2>
-              <span />
-            </div>
-            <div className="space-y-3">
-              {importantEvents.length > 0 ? (
-                importantEvents.map((item) => (
-                  <button
-                    key={item.id}
-                    className="flex w-full gap-3 rounded-lg border border-[var(--line)] bg-white p-3 text-left"
-                    onClick={() => {
-                      setIsImportantOpen(false);
-                      openEventDetail(item.id);
-                    }}
-                    type="button"
-                  >
-                    <Star size={17} className="mt-0.5 fill-[#f2b84b] text-[#b47818]" />
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-semibold">{item.title}</p>
-                      <p className="mt-1 text-xs text-[var(--muted)]">
-                        {dateTimeFormatter.format(new Date(item.startsAt))}
-                      </p>
-                    </div>
-                  </button>
-                ))
-              ) : (
-                <p className="rounded-lg border border-[var(--line)] bg-white p-3 text-sm text-[var(--muted)]">
-                  일정 상세에서 별을 눌러 중요 일정을 추가해보세요.
-                </p>
-              )}
-            </div>
-          </section>
         </div>
       ) : null}
 
