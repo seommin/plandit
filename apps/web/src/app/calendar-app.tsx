@@ -965,8 +965,8 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
           </button>
           <button
             className="flex h-14 items-center justify-center rounded-lg text-[#34362f] hover:bg-[#efeee9]"
-            aria-label="중요 일정"
-            title="중요 일정"
+            aria-label="중요"
+            title="중요"
             onClick={() => setIsImportantOpen(true)}
           >
             <Star size={21} />
@@ -1000,7 +1000,7 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
 
       {isMobileMenuOpen ? (
         <div className="fixed inset-0 z-40 bg-black/35 md:hidden">
-          <aside className="h-full w-[84vw] max-w-[320px] bg-[#fdfcf9] p-4 shadow-[24px_0_60px_rgba(31,33,29,0.18)]">
+          <aside className="mobile-drawer h-full w-[84vw] max-w-[320px] bg-[#fdfcf9] p-4 shadow-[24px_0_60px_rgba(31,33,29,0.18)]">
             <div className="mb-5 flex items-center justify-between">
               <p className="mobile-brand-script text-[30px] leading-none">Plandit</p>
               <button
@@ -1078,7 +1078,7 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
 
       {isNotificationOpen ? (
         <div className="fixed inset-0 z-40 flex justify-end bg-black/35 md:hidden">
-          <aside className="h-full w-[84vw] max-w-[320px] bg-[#fdfcf9] p-4 shadow-[-24px_0_60px_rgba(31,33,29,0.18)]">
+          <aside className="mobile-drawer h-full w-[84vw] max-w-[320px] bg-[#fdfcf9] p-4 shadow-[-24px_0_60px_rgba(31,33,29,0.18)]">
             <div className="mb-5 flex items-center justify-between">
               <h2 className="text-base font-semibold">알림</h2>
               <button
@@ -1112,7 +1112,7 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
         <div className="fixed inset-0 z-40 flex items-end justify-center bg-black/35 px-0 md:items-center md:px-4">
           <section className="panel mobile-sheet w-full max-w-[520px] p-5">
             <div className="mb-5 flex items-center justify-between">
-              <h2 className="text-lg font-semibold">중요 일정</h2>
+              <h2 className="text-lg font-semibold">중요</h2>
               <button
                 className="icon-button"
                 aria-label="Close"

@@ -107,6 +107,19 @@ button {
   overflow-y: auto;
   border-bottom-left-radius: 0;
   border-bottom-right-radius: 0;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.mobile-sheet::-webkit-scrollbar,
+.mobile-drawer::-webkit-scrollbar {
+  display: none;
+}
+
+.mobile-drawer {
+  overflow-y: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
 }
 
 .calendar-grid {
