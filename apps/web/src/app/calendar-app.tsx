@@ -298,7 +298,10 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
   const [isNotificationOpen, setIsNotificationOpen] = useState(false);
   const [importantEventIds, setImportantEventIds] = useState<string[]>([]);
   const [isSaving, setIsSaving] = useState(false);
+  const [isSharing, setIsSharing] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
+  const [shareUrl, setShareUrl] = useState("");
+  const [shareMessage, setShareMessage] = useState("");
 
   const visibleEvents = useMemo(
     () =>
@@ -415,6 +418,8 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
 
   function openEventDetail(eventId: string) {
     setSelectedEventId(eventId);
+    setShareMessage("");
+    setShareUrl("");
     setIsDetailOpen(true);
   }
 
@@ -615,6 +620,49 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
       setFormError(error instanceof Error ? error.message : "다시 시도해주세요.");
     } finally {
       setIsSaving(false);
+    }
+  }
+
+  async function handleShareEvent() {
+    if (!selectedEvent) {
+      return;
+    }
+
+    setIsSharing(true);
+    setShareMessage("");
+    setFormError(null);
+
+    try {
+      const response = await fetch(`/api/events/${selectedEvent.id}/shares`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          channel: "LINK",
+          includeDescription: true,
+          includeLocation: true,
+        }),
+      });
+      const result = (await response.json()) as { error?: string; url?: string };
+
+      if (!response.ok || !result.url) {
+        throw new Error(result.error ?? "공유 링크를 생성하지 못했습니다.");
+      }
+
+      setShareUrl(result.url);
+
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(result.url);
+        setShareMessage("공유 링크를 복사했습니다.");
+      } else {
+        setShareMessage("공유 링크를 생성했습니다.");
+      }
+    } catch (error) {
+      setShareMessage("");
+      setFormError(error instanceof Error ? error.message : "다시 시도해주세요.");
+    } finally {
+      setIsSharing(false);
     }
   }
 
@@ -1326,23 +1374,47 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
               <button
                 className="flex h-11 items-center justify-center gap-2 rounded-lg border border-[var(--line)] bg-white text-sm font-semibold"
                 onClick={openEditModal}
+                type="button"
               >
                 <Pencil size={16} />
                 수정
               </button>
-              <button className="flex h-11 items-center justify-center gap-2 rounded-lg border border-[var(--line)] bg-white text-sm font-semibold">
+              <button
+                className="flex h-11 items-center justify-center gap-2 rounded-lg border border-[var(--line)] bg-white text-sm font-semibold disabled:opacity-50"
+                disabled={isSharing}
+                onClick={handleShareEvent}
+                type="button"
+              >
                 <Share2 size={16} />
-                공유
+                {isSharing ? "생성 중" : "공유"}
               </button>
               <button
                 className="flex h-11 items-center justify-center gap-2 rounded-lg border border-[#f0c9d0] bg-[#fff7f8] text-sm font-semibold text-[#b93d53] disabled:opacity-50"
                 disabled={isSaving}
                 onClick={handleDeleteEvent}
+                type="button"
               >
                 <Trash2 size={16} />
                 삭제
               </button>
             </div>
+
+            {shareUrl || shareMessage ? (
+              <div className="mt-3 rounded-lg border border-[var(--line)] bg-white p-3">
+                {shareMessage ? (
+                  <p className="text-xs font-semibold text-[#11623b]">{shareMessage}</p>
+                ) : null}
+                {shareUrl ? (
+                  <p className="mt-1 break-all text-xs text-[var(--muted)]">{shareUrl}</p>
+                ) : null}
+              </div>
+            ) : null}
+
+            {formError ? (
+              <p className="mt-3 rounded-lg bg-[#fff3f1] px-3 py-2 text-sm font-semibold text-[#b33a2f]">
+                {formError}
+              </p>
+            ) : null}
           </section>
         </div>
       ) : null}
