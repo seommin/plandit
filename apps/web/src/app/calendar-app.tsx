@@ -598,7 +598,7 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
                   캘린더 목록
                 </p>
                 <button
-                  className="text-[11px] font-semibold text-[var(--muted)] hover:text-[var(--ink)]"
+                  className="calendar-selection-action"
                   onClick={toggleAllCalendars}
                   type="button"
                 >
@@ -877,7 +877,7 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
                   캘린더 목록
                 </p>
                 <button
-                  className="text-[11px] font-semibold text-[var(--muted)] hover:text-[var(--ink)]"
+                  className="calendar-selection-action"
                   onClick={toggleAllCalendars}
                   type="button"
                 >

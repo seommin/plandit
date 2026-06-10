@@ -78,6 +78,17 @@ button {
   padding-top: 4px;
 }
 
+.calendar-selection-action {
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 650;
+  line-height: 1;
+}
+
+.calendar-selection-action:hover {
+  color: var(--ink);
+}
+
 @media (min-width: 1024px) {
   .mobile-menu-button {
     display: none;
