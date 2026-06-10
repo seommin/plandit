@@ -1,6 +1,6 @@
 "use client";
 
-import { type CSSProperties, FormEvent, useMemo, useState } from "react";
+import { type CSSProperties, type DragEvent, FormEvent, useMemo, useState } from "react";
 import { signOut } from "next-auth/react";
 import {
   Bell,
@@ -467,6 +467,94 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
         color: calendar?.color ?? "var(--blue)",
       },
     } satisfies CalendarAppEvent;
+  }
+
+  function getMovedEventRange(event: CalendarAppEvent, targetDate: Date) {
+    const startsAt = new Date(event.startsAt);
+    const endsAt = new Date(event.endsAt);
+    const duration = endsAt.getTime() - startsAt.getTime();
+    const targetStart = new Date(targetDate);
+
+    targetStart.setHours(
+      startsAt.getHours(),
+      startsAt.getMinutes(),
+      startsAt.getSeconds(),
+      startsAt.getMilliseconds(),
+    );
+
+    return {
+      startsAt: targetStart,
+      endsAt: new Date(targetStart.getTime() + duration),
+    };
+  }
+
+  async function moveEventToDate(eventId: string, targetDate: Date) {
+    const event = eventItems.find((item) => item.id === eventId);
+
+    if (!event) {
+      return;
+    }
+
+    const { endsAt, startsAt } = getMovedEventRange(event, targetDate);
+
+    try {
+      const response = await fetch(`/api/events/${event.id}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          calendarId: event.calendarId,
+          description: event.description ?? "",
+          endsAt: endsAt.toISOString(),
+          location: event.location ?? "",
+          startsAt: startsAt.toISOString(),
+          title: event.title,
+        }),
+      });
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error ?? "일정을 이동하지 못했습니다.");
+      }
+
+      const movedEvent = buildCalendarEvent(
+        {
+          ...result.event,
+          isImportant: event.isImportant,
+        },
+        result.event.calendarId,
+      );
+
+      setEventItems((current) =>
+        current.map((item) => (item.id === movedEvent.id ? movedEvent : item)),
+      );
+      setSelectedDate(startOfDay(targetDate));
+    } catch (error) {
+      setFormError(error instanceof Error ? error.message : "다시 시도해주세요.");
+    }
+  }
+
+  function handleEventDragStart(dragEvent: DragEvent<HTMLElement>, eventId: string) {
+    dragEvent.dataTransfer.setData("text/plain", eventId);
+    dragEvent.dataTransfer.effectAllowed = "move";
+  }
+
+  function handleDayDragOver(dragEvent: DragEvent<HTMLButtonElement>) {
+    dragEvent.preventDefault();
+    dragEvent.dataTransfer.dropEffect = "move";
+  }
+
+  function handleDayDrop(dragEvent: DragEvent<HTMLButtonElement>, targetDate: Date) {
+    dragEvent.preventDefault();
+
+    const eventId = dragEvent.dataTransfer.getData("text/plain");
+
+    if (!eventId) {
+      return;
+    }
+
+    void moveEventToDate(eventId, targetDate);
   }
 
   function getEventPayload(data: FormData) {
@@ -940,6 +1028,8 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
                         className="day-cell bg-white/70 text-left"
                         onClick={() => selectCalendarDate(day.date)}
                         onDoubleClick={openCreateModal}
+                        onDragOver={handleDayDragOver}
+                        onDrop={(dropEvent) => handleDayDrop(dropEvent, day.date)}
                         style={
                           {
                             "--week-lane-count": day.weekLaneCount,
@@ -971,6 +1061,8 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
                             <span
                               key={`${event.id}-${day.key}`}
                               className={getEventPillClass(event, day.date)}
+                              draggable
+                              onDragStart={(dragEvent) => handleEventDragStart(dragEvent, event.id)}
                               style={{
                                 backgroundColor: event.color,
                                 gridRowStart: lane + 1,
