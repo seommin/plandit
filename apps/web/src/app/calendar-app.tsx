@@ -407,6 +407,13 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
     setIsMobileListOpen(false);
   }
 
+  function goToMainCalendar() {
+    setIsImportantOpen(false);
+    setIsMobileListOpen(false);
+    setIsMobileMenuOpen(false);
+    setBottomView("DAY");
+  }
+
   function openCalendarCreateModal() {
     setFormError(null);
     setIsCalendarCreateOpen(true);
@@ -631,7 +638,14 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
         >
           <Menu size={23} />
         </button>
-        <p className="mobile-brand-script text-center text-[28px] leading-none">Plandit</p>
+        <button
+          className="mobile-brand-script text-center text-[28px] leading-none"
+          aria-label="메인 달력"
+          onClick={goToMainCalendar}
+          type="button"
+        >
+          Plandit
+        </button>
         <button
           className="flex size-12 items-center justify-center rounded-lg"
           aria-label="알림"
@@ -646,7 +660,14 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
         <aside className="hidden w-[272px] shrink-0 flex-col rounded-lg border border-[var(--line)] bg-[#fdfcf9] p-4 lg:flex">
           <div>
             <div className="mb-7 flex h-10 items-center justify-center">
-              <p className="mobile-brand-script text-[30px] leading-none">Plandit</p>
+              <button
+                className="mobile-brand-script text-[30px] leading-none"
+                aria-label="메인 달력"
+                onClick={goToMainCalendar}
+                type="button"
+              >
+                Plandit
+              </button>
             </div>
 
             <button
@@ -1009,7 +1030,14 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
             className="flex h-14 items-center justify-center rounded-lg text-[#34362f] hover:bg-[#efeee9]"
             aria-label={isMobileListOpen ? "달력 보기" : "목록 보기"}
             title={isMobileListOpen ? "달력 보기" : "목록 보기"}
-            onClick={() => setIsMobileListOpen((current) => !current)}
+            onClick={() => {
+              if (isImportantOpen) {
+                goToMainCalendar();
+                return;
+              }
+
+              setIsMobileListOpen((current) => !current);
+            }}
           >
             {isMobileListOpen ? <List size={21} /> : <CalendarDays size={21} />}
           </button>
@@ -1052,7 +1080,14 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
         <div className="fixed inset-0 z-40 bg-black/35 md:hidden">
           <aside className="mobile-drawer h-full w-[84vw] max-w-[320px] bg-[#fdfcf9] p-4 shadow-[24px_0_60px_rgba(31,33,29,0.18)]">
             <div className="mb-5 flex items-center justify-between">
-              <p className="mobile-brand-script text-[30px] leading-none">Plandit</p>
+              <button
+                className="mobile-brand-script text-[30px] leading-none"
+                aria-label="메인 달력"
+                onClick={goToMainCalendar}
+                type="button"
+              >
+                Plandit
+              </button>
               <button
                 className="icon-button"
                 aria-label="Close"
