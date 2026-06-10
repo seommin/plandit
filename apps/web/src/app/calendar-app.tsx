@@ -10,11 +10,15 @@ import {
   Clock3,
   Pencil,
   LogOut,
+  Menu,
   Plus,
+  Search,
   Settings2,
   Share2,
+  Star,
   Trash2,
   Users,
+  X,
 } from "lucide-react";
 
 type CalendarType = "PERSONAL" | "SHARED" | "SUBSCRIBED";
@@ -278,6 +282,10 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isNotificationOpen, setIsNotificationOpen] = useState(false);
+  const [isImportantOpen, setIsImportantOpen] = useState(false);
+  const [importantEventIds, setImportantEventIds] = useState<string[]>([]);
   const [isSaving, setIsSaving] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
@@ -317,6 +325,14 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
     [visibleEvents],
   );
 
+  const importantEvents = useMemo(
+    () =>
+      eventItems
+        .filter((event) => importantEventIds.includes(event.id))
+        .sort((a, b) => new Date(a.startsAt).getTime() - new Date(b.startsAt).getTime()),
+    [eventItems, importantEventIds],
+  );
+
   const writableCalendars = calendars.filter((calendar) =>
     ["OWNER", "ADMIN", "EDITOR"].includes(calendar.role),
   );
@@ -331,6 +347,18 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
 
   function selectAllCalendars() {
     setSelectedCalendarIds(calendars.map((calendar) => calendar.id));
+  }
+
+  function toggleImportantEvent(eventId: string) {
+    setImportantEventIds((current) =>
+      current.includes(eventId)
+        ? current.filter((id) => id !== eventId)
+        : [...current, eventId],
+    );
+  }
+
+  function goToToday() {
+    setMonth(new Date(2026, 5, 1));
   }
 
   function openCreateModal() {
@@ -495,6 +523,7 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
         setSelectedEventId(nextItems[0]?.id ?? "");
         return nextItems;
       });
+      setImportantEventIds((current) => current.filter((id) => id !== selectedEvent.id));
       setIsEditOpen(false);
       setIsDetailOpen(false);
     } catch (error) {
@@ -509,8 +538,24 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
 
   return (
     <main className="app-shell">
-      <div className="fixed inset-x-0 top-0 z-30 flex h-14 items-center justify-center bg-[var(--ink)] text-white md:hidden">
-        <p className="mobile-brand-script text-[28px] leading-none">Plandit</p>
+      <div className="fixed inset-x-0 top-0 z-30 grid h-14 grid-cols-[56px_minmax(0,1fr)_56px] items-center bg-[var(--ink)] px-1 text-white md:hidden">
+        <button
+          className="flex size-12 items-center justify-center rounded-lg"
+          aria-label="캘린더 메뉴"
+          onClick={() => setIsMobileMenuOpen(true)}
+          type="button"
+        >
+          <Menu size={23} />
+        </button>
+        <p className="mobile-brand-script text-center text-[28px] leading-none">Plandit</p>
+        <button
+          className="flex size-12 items-center justify-center rounded-lg"
+          aria-label="알림"
+          onClick={() => setIsNotificationOpen(true)}
+          type="button"
+        >
+          <Bell size={22} />
+        </button>
       </div>
 
       <div className="mx-auto flex min-h-screen w-full max-w-[1480px] gap-4 px-4 pb-24 pt-[72px] md:pb-4 md:pt-4 lg:px-6">
@@ -546,7 +591,7 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
                   캘린더 목록
                 </p>
                 <button
-                  className="text-xs font-semibold text-[#34362f] hover:text-[var(--ink)]"
+                  className="text-xs font-semibold uppercase text-[var(--muted)] hover:text-[var(--ink)]"
                   onClick={selectAllCalendars}
                   type="button"
                 >
@@ -622,41 +667,6 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
               </button>
             </div>
           </header>
-
-          <section className="panel mb-4 p-3 lg:hidden">
-            <div className="mb-3 flex items-center justify-between">
-              <h2 className="text-sm font-semibold">캘린더 목록</h2>
-              <button
-                className="text-xs font-semibold text-[var(--muted)]"
-                onClick={selectAllCalendars}
-                type="button"
-              >
-                전체 선택
-              </button>
-            </div>
-            <div className="flex gap-2 overflow-x-auto pb-1">
-              {calendars.map((calendar) => (
-                <label
-                  key={calendar.id}
-                  className="flex shrink-0 cursor-pointer items-center gap-2 rounded-lg border border-[var(--line)] bg-white px-3 py-2"
-                >
-                  <input
-                    checked={selectedCalendarIds.includes(calendar.id)}
-                    className="size-4 accent-[var(--ink)]"
-                    onChange={() => toggleCalendar(calendar.id)}
-                    type="checkbox"
-                  />
-                  <span
-                    className="size-2.5 rounded-full"
-                    style={{ backgroundColor: calendar.color }}
-                  />
-                  <span className="max-w-28 truncate text-sm font-semibold text-[#34362f]">
-                    {calendar.name}
-                  </span>
-                </label>
-              ))}
-            </div>
-          </section>
 
           <div className="flex flex-1 flex-col gap-4">
             <div className="panel min-w-0 overflow-hidden">
@@ -770,14 +780,22 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
       </div>
 
       <footer className="fixed inset-x-0 bottom-0 z-20 border-t border-[var(--line)] bg-[#fdfcf9]/95 px-3 py-2 shadow-[0_-12px_40px_rgba(31,33,29,0.08)] backdrop-blur md:hidden">
-        <nav className="mx-auto grid max-w-[360px] grid-cols-3 items-center gap-1">
+        <nav className="mx-auto grid max-w-[520px] grid-cols-5 items-center gap-1">
           <button
             className="flex h-14 items-center justify-center rounded-lg text-[#34362f] hover:bg-[#efeee9]"
             aria-label="오늘"
             title="오늘"
-            onClick={() => setMonth(new Date(2026, 5, 1))}
+            onClick={goToToday}
           >
             <CalendarDays size={21} />
+          </button>
+          <button
+            className="flex h-14 items-center justify-center rounded-lg text-[#34362f] hover:bg-[#efeee9]"
+            aria-label="중요 일정"
+            title="중요 일정"
+            onClick={() => setIsImportantOpen(true)}
+          >
+            <Star size={21} />
           </button>
           <button
             className="mx-auto flex size-14 items-center justify-center rounded-full bg-[var(--ink)] text-white shadow-[0_12px_28px_rgba(24,25,22,0.24)]"
@@ -789,14 +807,177 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
           </button>
           <button
             className="flex h-14 items-center justify-center rounded-lg text-[#34362f] hover:bg-[#efeee9]"
-            aria-label="캘린더 전체 선택"
-            title="캘린더 전체 선택"
-            onClick={selectAllCalendars}
+            aria-label="검색"
+            title="검색"
+            type="button"
           >
-            <Users size={21} />
+            <Search size={21} />
+          </button>
+          <button
+            className="flex h-14 items-center justify-center rounded-lg text-[#34362f] hover:bg-[#efeee9]"
+            aria-label="설정"
+            title="설정"
+            type="button"
+          >
+            <Settings2 size={21} />
           </button>
         </nav>
       </footer>
+
+      {isMobileMenuOpen ? (
+        <div className="fixed inset-0 z-40 bg-black/35 md:hidden">
+          <aside className="h-full w-[84vw] max-w-[320px] bg-[#fdfcf9] p-4 shadow-[24px_0_60px_rgba(31,33,29,0.18)]">
+            <div className="mb-5 flex items-center justify-between">
+              <p className="mobile-brand-script text-[30px] leading-none">Plandit</p>
+              <button
+                className="icon-button"
+                aria-label="Close"
+                onClick={() => setIsMobileMenuOpen(false)}
+                type="button"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <button
+              className="mb-5 flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-[var(--ink)] px-4 text-sm font-semibold text-white"
+              onClick={() => {
+                setIsMobileMenuOpen(false);
+                openCreateModal();
+              }}
+              type="button"
+            >
+              <Plus size={17} />
+              새 일정
+            </button>
+
+            <nav className="mb-6 space-y-1 text-sm font-medium">
+              {navItems.map(([label, Icon]) => (
+                <button
+                  key={label}
+                  className="flex h-10 w-full items-center gap-3 rounded-lg px-3 text-left text-[#34362f] hover:bg-[#efeee9]"
+                  type="button"
+                >
+                  <Icon size={17} />
+                  {label}
+                </button>
+              ))}
+            </nav>
+
+            <div>
+              <div className="mb-3 flex items-center justify-between px-3">
+                <p className="text-xs font-semibold uppercase text-[var(--muted)]">
+                  캘린더 목록
+                </p>
+                <button
+                  className="text-xs font-semibold uppercase text-[var(--muted)] hover:text-[var(--ink)]"
+                  onClick={selectAllCalendars}
+                  type="button"
+                >
+                  전체 선택
+                </button>
+              </div>
+              <div className="space-y-2">
+                {calendars.map((calendar) => (
+                  <label
+                    key={calendar.id}
+                    className="flex w-full cursor-pointer items-center gap-3 rounded-lg px-3 py-2 text-left hover:bg-[#efeee9]"
+                  >
+                    <input
+                      checked={selectedCalendarIds.includes(calendar.id)}
+                      className="size-4 accent-[var(--ink)]"
+                      onChange={() => toggleCalendar(calendar.id)}
+                      type="checkbox"
+                    />
+                    <span
+                      className="size-2.5 rounded-full"
+                      style={{ backgroundColor: calendar.color }}
+                    />
+                    <span className="text-sm text-[#34362f]">{calendar.name}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+          </aside>
+        </div>
+      ) : null}
+
+      {isNotificationOpen ? (
+        <div className="fixed inset-0 z-40 flex justify-end bg-black/35 md:hidden">
+          <aside className="h-full w-[84vw] max-w-[320px] bg-[#fdfcf9] p-4 shadow-[-24px_0_60px_rgba(31,33,29,0.18)]">
+            <div className="mb-5 flex items-center justify-between">
+              <h2 className="text-base font-semibold">알림</h2>
+              <button
+                className="icon-button"
+                aria-label="Close"
+                onClick={() => setIsNotificationOpen(false)}
+                type="button"
+              >
+                <X size={18} />
+              </button>
+            </div>
+            <div className="space-y-3">
+              <div className="rounded-lg border border-[var(--line)] bg-white p-3">
+                <p className="text-sm font-semibold">오늘 일정 확인</p>
+                <p className="mt-1 text-xs text-[var(--muted)]">
+                  선택한 캘린더의 다가오는 일정을 확인해보세요.
+                </p>
+              </div>
+              <div className="rounded-lg border border-[var(--line)] bg-white p-3">
+                <p className="text-sm font-semibold">공유 초대</p>
+                <p className="mt-1 text-xs text-[var(--muted)]">
+                  공유 캘린더 초대 알림이 여기에 표시됩니다.
+                </p>
+              </div>
+            </div>
+          </aside>
+        </div>
+      ) : null}
+
+      {isImportantOpen ? (
+        <div className="fixed inset-0 z-40 flex items-end justify-center bg-black/35 px-0 md:items-center md:px-4">
+          <section className="panel mobile-sheet w-full max-w-[520px] p-5">
+            <div className="mb-5 flex items-center justify-between">
+              <h2 className="text-lg font-semibold">중요 일정</h2>
+              <button
+                className="icon-button"
+                aria-label="Close"
+                onClick={() => setIsImportantOpen(false)}
+                type="button"
+              >
+                <X size={18} />
+              </button>
+            </div>
+            <div className="space-y-3">
+              {importantEvents.length > 0 ? (
+                importantEvents.map((item) => (
+                  <button
+                    key={item.id}
+                    className="flex w-full gap-3 rounded-lg border border-[var(--line)] bg-white p-3 text-left"
+                    onClick={() => {
+                      setIsImportantOpen(false);
+                      openEventDetail(item.id);
+                    }}
+                    type="button"
+                  >
+                    <Star size={17} className="mt-0.5 fill-[#f2b84b] text-[#b47818]" />
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-semibold">{item.title}</p>
+                      <p className="mt-1 text-xs text-[var(--muted)]">
+                        {dateTimeFormatter.format(new Date(item.startsAt))}
+                      </p>
+                    </div>
+                  </button>
+                ))
+              ) : (
+                <p className="rounded-lg border border-[var(--line)] bg-white p-3 text-sm text-[var(--muted)]">
+                  일정 상세에서 별을 눌러 중요 일정을 추가해보세요.
+                </p>
+              )}
+            </div>
+          </section>
+        </div>
+      ) : null}
 
       {isDetailOpen && selectedEvent ? (
         <div className="fixed inset-0 z-40 flex items-end justify-center bg-black/35 px-0 md:items-center md:px-4">
@@ -815,13 +996,34 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
                 </span>
                 <h2 className="text-xl font-semibold leading-7">{selectedEvent.title}</h2>
               </div>
-              <button
-                className="icon-button shrink-0"
-                aria-label="Close"
-                onClick={() => setIsDetailOpen(false)}
-              >
-                ×
-              </button>
+              <div className="flex shrink-0 items-center gap-2">
+                <button
+                  className={[
+                    "icon-button",
+                    importantEventIds.includes(selectedEvent.id)
+                      ? "border-[#f2d28c] bg-[#fff7e0] text-[#b47818]"
+                      : "",
+                  ].join(" ")}
+                  aria-label="중요 일정"
+                  onClick={() => toggleImportantEvent(selectedEvent.id)}
+                  type="button"
+                >
+                  <Star
+                    size={17}
+                    className={
+                      importantEventIds.includes(selectedEvent.id) ? "fill-[#f2b84b]" : ""
+                    }
+                  />
+                </button>
+                <button
+                  className="icon-button"
+                  aria-label="Close"
+                  onClick={() => setIsDetailOpen(false)}
+                  type="button"
+                >
+                  <X size={18} />
+                </button>
+              </div>
             </div>
 
             <div className="space-y-3 rounded-lg border border-[var(--line)] bg-white p-4">
