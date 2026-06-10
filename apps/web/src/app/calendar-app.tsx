@@ -796,9 +796,11 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
         >
           <header className="mb-4 flex flex-col gap-3 rounded-lg border border-[var(--line)] bg-[#fdfcf9] px-4 py-3 md:flex-row md:items-center md:justify-between">
             {bottomView === "IMPORTANT" ? (
-              <div className="flex h-10 items-center justify-center gap-2 md:w-full md:max-w-[420px] md:justify-start">
-                <Star size={19} className="fill-[#f2b84b] text-[#b47818]" />
+              <div className="flex h-10 items-center justify-center gap-3 md:w-full md:max-w-[420px] md:justify-start">
                 <h1 className="text-xl font-semibold leading-tight sm:text-2xl">중요</h1>
+                <span className="rounded-full border border-[var(--line)] bg-white px-2.5 py-1 text-xs font-semibold text-[var(--muted)]">
+                  {importantEvents.length}
+                </span>
               </div>
             ) : (
               <div className="grid grid-cols-[40px_minmax(0,1fr)_40px] items-center gap-3 md:w-full md:max-w-[420px]">
@@ -852,35 +854,43 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
 
           <div className="flex flex-1 flex-col gap-4">
             {bottomView === "IMPORTANT" ? (
-              <section className="panel hidden min-w-0 p-5 md:block">
-                <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+              <section className="panel hidden min-w-0 overflow-hidden md:block">
+                <div className="border-b border-[var(--line)] bg-[#f9f8f4] px-5 py-3">
+                  <div className="grid grid-cols-[minmax(0,1.4fr)_180px_160px] gap-4 text-xs font-semibold text-[var(--muted)]">
+                    <span>일정</span>
+                    <span>시간</span>
+                    <span>캘린더</span>
+                  </div>
+                </div>
+                <div className="divide-y divide-[var(--line)]">
                   {importantEvents.length > 0 ? (
                     importantEvents.map((item) => (
                       <button
                         key={item.id}
                         className={[
-                          "flex w-full gap-3 rounded-lg border bg-white p-4 text-left",
+                          "grid w-full grid-cols-[minmax(0,1.4fr)_180px_160px] items-center gap-4 bg-white px-5 py-4 text-left transition hover:bg-[#faf9f5]",
                           selectedEventId === item.id
-                            ? "border-[#9fa598]"
-                            : "border-[var(--line)]",
+                            ? "shadow-[inset_3px_0_0_#30322d]"
+                            : "",
                         ].join(" ")}
                         onClick={() => openEventDetail(item.id)}
                         type="button"
                       >
-                        <Star size={18} className="mt-0.5 fill-[#f2b84b] text-[#b47818]" />
-                        <div className="min-w-0">
+                        <div className="flex min-w-0 items-center gap-3">
+                          <span
+                            className="size-2 rounded-full"
+                            style={{ backgroundColor: item.color }}
+                          />
                           <p className="truncate text-sm font-semibold">{item.title}</p>
-                          <p className="mt-1 text-xs font-semibold text-[var(--muted)]">
-                            {dateTimeFormatter.format(new Date(item.startsAt))}
-                          </p>
-                          <p className="mt-1 text-xs text-[var(--muted)]">
-                            {item.calendar.name}
-                          </p>
                         </div>
+                        <p className="truncate text-xs font-semibold text-[var(--muted)]">
+                          {dateTimeFormatter.format(new Date(item.startsAt))}
+                        </p>
+                        <p className="truncate text-xs text-[var(--muted)]">{item.calendar.name}</p>
                       </button>
                     ))
                   ) : (
-                    <p className="rounded-lg border border-[var(--line)] bg-white p-4 text-sm text-[var(--muted)] md:col-span-2 xl:col-span-3">
+                    <p className="bg-white px-5 py-8 text-sm text-[var(--muted)]">
                       중요 일정으로 표시한 일정이 없습니다.
                     </p>
                   )}
