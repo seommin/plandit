@@ -1002,28 +1002,6 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
               새 일정
             </button>
 
-            <nav className="mb-6 space-y-1 text-sm font-medium">
-              {viewNavItems.map(([label, Icon, value]) => (
-                <button
-                  key={label}
-                  className={[
-                    "flex h-10 w-full items-center gap-3 rounded-lg px-3 text-left",
-                    bottomView === value
-                      ? "bg-[var(--ink)] text-white"
-                      : "text-[#34362f] hover:bg-[#efeee9]",
-                  ].join(" ")}
-                  onClick={() => {
-                    setBottomView(value);
-                    setIsMobileMenuOpen(false);
-                  }}
-                  type="button"
-                >
-                  <Icon size={17} />
-                  {label}
-                </button>
-              ))}
-            </nav>
-
             <div>
               <div className="mb-3 flex items-center justify-between px-3">
                 <p className="text-xs font-semibold uppercase text-[var(--muted)]">
