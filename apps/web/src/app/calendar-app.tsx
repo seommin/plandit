@@ -289,7 +289,7 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isNotificationOpen, setIsNotificationOpen] = useState(false);
-  const [isScheduleListOpen, setIsScheduleListOpen] = useState(false);
+  const [isMobileListOpen, setIsMobileListOpen] = useState(false);
   const [isImportantOpen, setIsImportantOpen] = useState(false);
   const [importantEventIds, setImportantEventIds] = useState<string[]>([]);
   const [isSaving, setIsSaving] = useState(false);
@@ -823,6 +823,43 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
               </div>
             </div>
 
+            {isMobileListOpen ? (
+              <section className="panel p-4 md:hidden">
+                <div className="mb-4 flex items-center justify-between">
+                  <h2 className="text-base font-semibold">{formatMonthLabel(month)} 목록</h2>
+                  <List size={18} className="text-[var(--muted)]" />
+                </div>
+                <div className="space-y-3">
+                  {monthlyEvents.length > 0 ? (
+                    monthlyEvents.map((item) => (
+                      <button
+                        key={item.id}
+                        className="flex w-full gap-3 rounded-lg border border-[var(--line)] bg-white p-3 text-left"
+                        onClick={() => openEventDetail(item.id)}
+                        type="button"
+                      >
+                        <div
+                          className="mt-1 size-2.5 rounded-full"
+                          style={{ backgroundColor: item.color }}
+                        />
+                        <div className="min-w-0">
+                          <p className="text-xs font-semibold text-[var(--muted)]">
+                            {dateTimeFormatter.format(new Date(item.startsAt))}
+                          </p>
+                          <p className="truncate text-sm font-semibold">{item.title}</p>
+                          <p className="text-xs text-[var(--muted)]">{item.calendar.name}</p>
+                        </div>
+                      </button>
+                    ))
+                  ) : (
+                    <p className="rounded-lg border border-[var(--line)] bg-white p-3 text-sm text-[var(--muted)]">
+                      선택한 캘린더에 표시할 일정이 없습니다.
+                    </p>
+                  )}
+                </div>
+              </section>
+            ) : null}
+
             <section className="panel hidden p-4 md:block">
               <div className="mb-4 flex items-center justify-between">
                 <h2 className="text-base font-semibold">
@@ -897,11 +934,11 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
         <nav className="mx-auto grid max-w-[520px] grid-cols-5 items-center gap-1">
           <button
             className="flex h-14 items-center justify-center rounded-lg text-[#34362f] hover:bg-[#efeee9]"
-            aria-label="일정 목록"
-            title="일정 목록"
-            onClick={() => setIsScheduleListOpen(true)}
+            aria-label={isMobileListOpen ? "달력 보기" : "목록 보기"}
+            title={isMobileListOpen ? "달력 보기" : "목록 보기"}
+            onClick={() => setIsMobileListOpen((current) => !current)}
           >
-            <List size={21} />
+            {isMobileListOpen ? <List size={21} /> : <CalendarDays size={21} />}
           </button>
           <button
             className="flex h-14 items-center justify-center rounded-lg text-[#34362f] hover:bg-[#efeee9]"
@@ -1067,55 +1104,6 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
               </div>
             </div>
           </aside>
-        </div>
-      ) : null}
-
-      {isScheduleListOpen ? (
-        <div className="fixed inset-0 z-40 flex items-end justify-center bg-black/35 px-0 md:hidden">
-          <section className="panel mobile-sheet w-full max-w-[520px] p-5">
-            <div className="mb-5 flex items-center justify-between">
-              <h2 className="text-lg font-semibold">{formatMonthLabel(month)} 목록</h2>
-              <button
-                className="icon-button"
-                aria-label="Close"
-                onClick={() => setIsScheduleListOpen(false)}
-                type="button"
-              >
-                <X size={18} />
-              </button>
-            </div>
-            <div className="space-y-3">
-              {monthlyEvents.length > 0 ? (
-                monthlyEvents.map((item) => (
-                  <button
-                    key={item.id}
-                    className="flex w-full gap-3 rounded-lg border border-[var(--line)] bg-white p-3 text-left"
-                    onClick={() => {
-                      setIsScheduleListOpen(false);
-                      openEventDetail(item.id);
-                    }}
-                    type="button"
-                  >
-                    <div
-                      className="mt-1 size-2.5 rounded-full"
-                      style={{ backgroundColor: item.color }}
-                    />
-                    <div className="min-w-0">
-                      <p className="text-xs font-semibold text-[var(--muted)]">
-                        {dateTimeFormatter.format(new Date(item.startsAt))}
-                      </p>
-                      <p className="truncate text-sm font-semibold">{item.title}</p>
-                      <p className="text-xs text-[var(--muted)]">{item.calendar.name}</p>
-                    </div>
-                  </button>
-                ))
-              ) : (
-                <p className="rounded-lg border border-[var(--line)] bg-white p-3 text-sm text-[var(--muted)]">
-                  선택한 캘린더에 표시할 일정이 없습니다.
-                </p>
-              )}
-            </div>
-          </section>
         </div>
       ) : null}
 
