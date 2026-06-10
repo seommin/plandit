@@ -81,7 +81,7 @@ const weekDays = [
 const viewNavItems = [
   ["일별", CalendarDays, "DAY"],
   ["월별", List, "MONTH"],
-  ["중요 일정", Star, "IMPORTANT"],
+  ["중요", Star, "IMPORTANT"],
 ] as const;
 
 const dateTimeFormatter = new Intl.DateTimeFormat("ko-KR", {
@@ -843,7 +843,7 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
             <section className="panel p-4 md:hidden">
               <div className="mb-4 flex items-center justify-between">
                 <h2 className="text-base font-semibold">
-                  {isMobileListOpen ? `${formatMonthLabel(month)} 월별` : `${formatDayLabel(selectedDate)} 일별`}
+                  {isMobileListOpen ? formatMonthLabel(month) : formatDayLabel(selectedDate)}
                 </h2>
                 {isMobileListOpen ? (
                   <List size={18} className="text-[var(--muted)]" />
@@ -887,10 +887,10 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
               <div className="mb-4 flex items-center justify-between">
                 <h2 className="text-base font-semibold">
                   {bottomView === "DAY"
-                    ? `${formatDayLabel(selectedDate)} 일별`
+                    ? formatDayLabel(selectedDate)
                     : bottomView === "MONTH"
-                      ? `${formatMonthLabel(month)} 월별`
-                      : "중요 일정"}
+                      ? formatMonthLabel(month)
+                      : "중요"}
                 </h2>
                 {bottomView === "DAY" ? (
                   <Clock3 size={18} className="text-[var(--muted)]" />
