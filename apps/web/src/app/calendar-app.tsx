@@ -3,6 +3,7 @@
 import { type CSSProperties, FormEvent, useMemo, useState } from "react";
 import { signOut } from "next-auth/react";
 import {
+  ArrowLeft,
   Bell,
   CalendarDays,
   ChevronLeft,
@@ -1109,18 +1110,19 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
       ) : null}
 
       {isImportantOpen ? (
-        <div className="fixed inset-0 z-40 flex items-end justify-center bg-black/35 px-0 md:items-center md:px-4">
-          <section className="panel mobile-sheet w-full max-w-[520px] p-5">
-            <div className="mb-5 flex items-center justify-between">
-              <h2 className="text-lg font-semibold">중요</h2>
+        <div className="fixed inset-0 z-40 bg-[#f6f4ee] md:hidden">
+          <section className="mobile-drawer h-full px-4 pb-6 pt-4">
+            <div className="mb-5 grid h-12 grid-cols-[48px_minmax(0,1fr)_48px] items-center">
               <button
-                className="icon-button"
-                aria-label="Close"
+                className="flex size-12 items-center justify-center rounded-lg text-[#30322d]"
+                aria-label="뒤로가기"
                 onClick={() => setIsImportantOpen(false)}
                 type="button"
               >
-                <X size={18} />
+                <ArrowLeft size={22} />
               </button>
+              <h2 className="text-center text-lg font-semibold">중요</h2>
+              <span />
             </div>
             <div className="space-y-3">
               {importantEvents.length > 0 ? (
