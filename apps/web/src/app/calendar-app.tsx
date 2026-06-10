@@ -3,7 +3,6 @@
 import { type CSSProperties, FormEvent, useMemo, useState } from "react";
 import { signOut } from "next-auth/react";
 import {
-  ArrowLeft,
   Bell,
   CalendarDays,
   ChevronLeft,
@@ -298,7 +297,6 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isNotificationOpen, setIsNotificationOpen] = useState(false);
   const [isMobileListOpen, setIsMobileListOpen] = useState(false);
-  const [isImportantOpen, setIsImportantOpen] = useState(false);
   const [importantEventIds, setImportantEventIds] = useState<string[]>([]);
   const [isSaving, setIsSaving] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
@@ -408,7 +406,6 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
   }
 
   function goToMainCalendar() {
-    setIsImportantOpen(false);
     setIsMobileListOpen(false);
     setIsMobileMenuOpen(false);
     setBottomView("DAY");
@@ -744,56 +741,7 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
           </div>
         </aside>
 
-        {isImportantOpen ? (
-          <section className="mobile-drawer min-w-0 flex-1 px-1 md:hidden">
-            <div className="mb-4 grid h-12 grid-cols-[48px_minmax(0,1fr)_48px] items-center">
-              <button
-                className="flex size-12 items-center justify-center rounded-lg text-[#30322d]"
-                aria-label="뒤로가기"
-                onClick={() => setIsImportantOpen(false)}
-                type="button"
-              >
-                <ArrowLeft size={22} />
-              </button>
-              <h2 className="text-center text-lg font-semibold">중요</h2>
-              <span />
-            </div>
-            <div className="space-y-3">
-              {importantEvents.length > 0 ? (
-                importantEvents.map((item) => (
-                  <button
-                    key={item.id}
-                    className="flex w-full gap-3 rounded-lg border border-[var(--line)] bg-white p-3 text-left"
-                    onClick={() => {
-                      setIsImportantOpen(false);
-                      openEventDetail(item.id);
-                    }}
-                    type="button"
-                  >
-                    <Star size={17} className="mt-0.5 fill-[#f2b84b] text-[#b47818]" />
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-semibold">{item.title}</p>
-                      <p className="mt-1 text-xs text-[var(--muted)]">
-                        {dateTimeFormatter.format(new Date(item.startsAt))}
-                      </p>
-                    </div>
-                  </button>
-                ))
-              ) : (
-                <p className="rounded-lg border border-[var(--line)] bg-white p-3 text-sm text-[var(--muted)]">
-                  일정 상세에서 별을 눌러 중요 일정을 추가해보세요.
-                </p>
-              )}
-            </div>
-          </section>
-        ) : null}
-
-        <section
-          className={[
-            "min-w-0 flex-1 flex-col",
-            isImportantOpen ? "hidden md:flex" : "flex",
-          ].join(" ")}
-        >
+        <section className="flex min-w-0 flex-1 flex-col">
           <header className="mb-4 flex flex-col gap-3 rounded-lg border border-[var(--line)] bg-[#fdfcf9] px-4 py-3 md:flex-row md:items-center md:justify-between">
             {bottomView === "IMPORTANT" ? (
               <div className="flex h-10 items-center justify-center gap-3 md:w-full md:max-w-[420px] md:justify-start">
@@ -854,8 +802,8 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
 
           <div className="flex flex-1 flex-col gap-4">
             {bottomView === "IMPORTANT" ? (
-              <section className="panel hidden min-w-0 overflow-hidden md:block">
-                <div className="border-b border-[var(--line)] bg-[#f9f8f4] px-5 py-3">
+              <section className="panel min-w-0 overflow-hidden">
+                <div className="hidden border-b border-[var(--line)] bg-[#f9f8f4] px-5 py-3 md:block">
                   <div className="grid grid-cols-[minmax(0,1.4fr)_180px_160px] gap-4 text-xs font-semibold text-[var(--muted)]">
                     <span>일정</span>
                     <span>시간</span>
@@ -868,7 +816,7 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
                       <button
                         key={item.id}
                         className={[
-                          "grid w-full grid-cols-[minmax(0,1.4fr)_180px_160px] items-center gap-4 bg-white px-5 py-4 text-left transition hover:bg-[#faf9f5]",
+                          "flex w-full flex-col gap-2 bg-white px-4 py-4 text-left transition hover:bg-[#faf9f5] md:grid md:grid-cols-[minmax(0,1.4fr)_180px_160px] md:items-center md:gap-4 md:px-5",
                           selectedEventId === item.id
                             ? "shadow-[inset_3px_0_0_#30322d]"
                             : "",
@@ -886,7 +834,9 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
                         <p className="truncate text-xs font-semibold text-[var(--muted)]">
                           {dateTimeFormatter.format(new Date(item.startsAt))}
                         </p>
-                        <p className="truncate text-xs text-[var(--muted)]">{item.calendar.name}</p>
+                        <p className="truncate text-xs text-[var(--muted)]">
+                          {item.calendar.name}
+                        </p>
                       </button>
                     ))
                   ) : (
@@ -1073,7 +1023,7 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
             aria-label={isMobileListOpen ? "달력 보기" : "목록 보기"}
             title={isMobileListOpen ? "달력 보기" : "목록 보기"}
             onClick={() => {
-              if (isImportantOpen) {
+              if (bottomView === "IMPORTANT") {
                 goToMainCalendar();
                 return;
               }
@@ -1087,7 +1037,10 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
             className="flex h-14 items-center justify-center rounded-lg text-[#34362f] hover:bg-[#efeee9]"
             aria-label="중요"
             title="중요"
-            onClick={() => setIsImportantOpen(true)}
+            onClick={() => {
+              setIsMobileListOpen(false);
+              setBottomView("IMPORTANT");
+            }}
           >
             <Star size={21} />
           </button>
