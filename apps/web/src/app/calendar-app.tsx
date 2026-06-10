@@ -11,13 +11,11 @@ import {
   Pencil,
   LogOut,
   Plus,
-  Search,
   Settings2,
   Share2,
   SquareStack,
   Trash2,
   User,
-  UserPlus,
   Users,
 } from "lucide-react";
 
@@ -285,6 +283,7 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
   const [eventItems, setEventItems] = useState(events);
   const [selectedEventId, setSelectedEventId] = useState(events[0]?.id ?? "");
   const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
@@ -342,6 +341,22 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
   const writableCalendars = calendars.filter((calendar) =>
     ["OWNER", "ADMIN", "EDITOR"].includes(calendar.role),
   );
+
+  function openCreateModal() {
+    setFormError(null);
+    setIsCreateOpen(true);
+  }
+
+  function openEventDetail(eventId: string) {
+    setSelectedEventId(eventId);
+    setIsDetailOpen(true);
+  }
+
+  function openEditModal() {
+    setFormError(null);
+    setIsDetailOpen(false);
+    setIsEditOpen(true);
+  }
 
   function buildCalendarEvent(event: CalendarAppEvent, calendarId: string) {
     const calendar = calendars.find((item) => item.id === calendarId);
@@ -404,6 +419,7 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
       setEventItems((current) => [...current, createdEvent]);
       setSelectedEventId(createdEvent.id);
       setIsCreateOpen(false);
+      setIsDetailOpen(true);
     } catch (error) {
       setFormError(error instanceof Error ? error.message : "다시 시도해주세요.");
     } finally {
@@ -446,6 +462,7 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
       );
       setSelectedEventId(updatedEvent.id);
       setIsEditOpen(false);
+      setIsDetailOpen(true);
     } catch (error) {
       setFormError(error instanceof Error ? error.message : "다시 시도해주세요.");
     } finally {
@@ -483,6 +500,7 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
         return nextItems;
       });
       setIsEditOpen(false);
+      setIsDetailOpen(false);
     } catch (error) {
       setFormError(error instanceof Error ? error.message : "다시 시도해주세요.");
     } finally {
@@ -508,10 +526,7 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
 
             <button
               className="mb-6 flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-[var(--ink)] px-4 text-sm font-semibold text-white"
-              onClick={() => {
-                setFormError(null);
-                setIsCreateOpen(true);
-              }}
+              onClick={openCreateModal}
             >
               <Plus size={17} />
               새 일정
@@ -556,12 +571,29 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
                 ))}
               </div>
             </div>
+
+            <div className="mt-8 grid grid-cols-3 gap-2">
+              <button className="icon-button w-full" aria-label="Notifications" title="Notifications">
+                <Bell size={18} />
+              </button>
+              <button className="icon-button w-full" aria-label="Settings" title="Settings">
+                <Settings2 size={18} />
+              </button>
+              <button
+                className="icon-button w-full"
+                aria-label="Sign out"
+                title="Sign out"
+                onClick={() => signOut({ callbackUrl: "/login" })}
+              >
+                <LogOut size={18} />
+              </button>
+            </div>
           </div>
         </aside>
 
         <section className="flex min-w-0 flex-1 flex-col">
           <header className="mb-4 flex flex-col gap-3 rounded-lg border border-[var(--line)] bg-[#fdfcf9] px-4 py-3 md:flex-row md:items-center md:justify-between">
-            <div className="flex items-center justify-between gap-3 md:min-w-[220px] md:justify-start">
+            <div className="grid grid-cols-[40px_minmax(0,1fr)_40px] items-center gap-3 md:w-full md:max-w-[420px]">
               <button
                 className="icon-button"
                 aria-label="Previous month"
@@ -572,7 +604,7 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
               >
                 <ChevronLeft size={18} />
               </button>
-              <h1 className="min-w-[104px] flex-1 text-center text-xl font-semibold leading-tight md:flex-none sm:text-2xl">
+              <h1 className="text-center text-xl font-semibold leading-tight sm:text-2xl">
                 {formatMonthLabel(month)}
               </h1>
               <button
@@ -587,7 +619,7 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
               </button>
             </div>
 
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="flex items-center justify-center md:justify-end">
               <div className="flex rounded-lg border border-[var(--line)] bg-white p-1">
                 {filterOptions.map((option) => {
                   const Icon = filterIcons[option.value];
@@ -610,27 +642,6 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
                   );
                 })}
               </div>
-              <div className="hidden h-10 items-center gap-2 rounded-lg border border-[var(--line)] bg-white px-3 md:flex">
-                <Search size={16} className="text-[var(--muted)]" />
-                <input
-                  className="w-48 bg-transparent text-sm outline-none"
-                  placeholder="일정 검색"
-                />
-              </div>
-              <button className="icon-button hidden md:inline-flex" aria-label="Notifications" title="Notifications">
-                <Bell size={18} />
-              </button>
-              <button className="icon-button hidden md:inline-flex" aria-label="Settings" title="Settings">
-                <Settings2 size={18} />
-              </button>
-              <button
-                className="icon-button hidden md:inline-flex"
-                aria-label="Sign out"
-                title="Sign out"
-                onClick={() => signOut({ callbackUrl: "/login" })}
-              >
-                <LogOut size={18} />
-              </button>
             </div>
           </header>
 
@@ -653,10 +664,7 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
                       <button
                         key={day.key}
                         className="day-cell bg-white/70 text-left"
-                        onDoubleClick={() => {
-                          setFormError(null);
-                          setIsCreateOpen(true);
-                        }}
+                        onDoubleClick={openCreateModal}
                         style={
                           {
                             "--week-lane-count": day.weekLaneCount,
@@ -692,7 +700,7 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
                               }}
                               onClick={(clickEvent) => {
                                 clickEvent.stopPropagation();
-                                setSelectedEventId(event.id);
+                                openEventDetail(event.id);
                               }}
                             >
                               {shouldShowEventTitle(event, day.date) ? event.title : null}
@@ -719,11 +727,11 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
                         key={item.id}
                         className={[
                           "flex w-full gap-3 rounded-lg border bg-white p-3 text-left",
-                          selectedEvent?.id === item.id
+                          selectedEventId === item.id
                             ? "border-[#9fa598]"
                             : "border-[var(--line)]",
                         ].join(" ")}
-                        onClick={() => setSelectedEventId(item.id)}
+                        onClick={() => openEventDetail(item.id)}
                       >
                         <div
                           className="mt-1 size-2.5 rounded-full"
@@ -746,121 +754,138 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
                 </div>
               </section>
 
-              <section className="panel p-4">
-                <div className="mb-4 flex items-center justify-between">
-                  <h2 className="text-base font-semibold">일정 상세</h2>
-                  <div className="flex items-center gap-2">
-                    {selectedEvent ? (
-                      <span
-                        className={[
-                          "rounded-full px-2 py-1 text-xs font-semibold",
-                          selectedEvent.calendar.type === "PERSONAL"
-                            ? "bg-[#e8f4ee] text-[#11623b]"
-                            : "bg-[#eef1ff] text-[#2f4fb8]",
-                        ].join(" ")}
-                      >
-                        {selectedEvent.calendar.type === "PERSONAL" ? "Private" : "Shared"}
-                      </span>
-                    ) : null}
-                    {selectedEvent ? (
-                      <>
-                        <button
-                          className="icon-button"
-                          aria-label="일정 수정"
-                          title="일정 수정"
-                          onClick={() => {
-                            setFormError(null);
-                            setIsEditOpen(true);
-                          }}
-                        >
-                          <Pencil size={16} />
-                        </button>
-                        <button
-                          className="icon-button"
-                          aria-label="일정 삭제"
-                          title="일정 삭제"
-                          disabled={isSaving}
-                          onClick={handleDeleteEvent}
-                        >
-                          <Trash2 size={16} />
-                        </button>
-                      </>
-                    ) : null}
-                  </div>
-                </div>
-                {selectedEvent ? (
-                  <div className="rounded-lg border border-[var(--line)] bg-white p-3">
-                    <p className="text-sm font-semibold">{selectedEvent.title}</p>
-                    <p className="mt-1 text-xs font-semibold text-[var(--muted)]">
-                      {(selectedEvent.allDay ? dateFormatter : dateTimeFormatter).format(
-                        new Date(selectedEvent.startsAt),
-                      )}
-                    </p>
-                    {selectedEvent.description ? (
-                      <p className="mt-3 text-sm leading-6 text-[#34362f]">
-                        {selectedEvent.description}
-                      </p>
-                    ) : null}
-                    {selectedEvent.location ? (
-                      <p className="mt-3 text-xs font-semibold text-[var(--muted)]">
-                        {selectedEvent.location}
-                      </p>
-                    ) : null}
-                  </div>
-                ) : (
-                  <p className="rounded-lg border border-[var(--line)] bg-white p-3 text-sm text-[var(--muted)]">
-                    일정을 선택하거나 새 일정을 만들어보세요.
-                  </p>
-                )}
-              </section>
-
-              <section className="panel p-4">
-                <div className="mb-4 flex items-center justify-between">
-                  <h2 className="text-base font-semibold">공유</h2>
-                  <Share2 size={18} className="text-[var(--muted)]" />
-                </div>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-semibold">공유 캘린더</p>
-                    <p className="text-xs text-[var(--muted)]">
-                      멤버 초대 기능이 다음 단계로 연결됩니다.
-                    </p>
-                  </div>
-                  <button className="flex h-9 items-center gap-2 rounded-lg border border-[var(--line)] bg-white px-3 text-sm font-semibold">
-                    <Users size={16} />
-                    초대
-                  </button>
-                </div>
-              </section>
             </aside>
           </div>
         </section>
       </div>
 
       <footer className="fixed inset-x-0 bottom-0 z-20 border-t border-[var(--line)] bg-[#fdfcf9]/95 px-3 py-2 shadow-[0_-12px_40px_rgba(31,33,29,0.08)] backdrop-blur md:hidden">
-        <nav className="mx-auto grid max-w-[520px] grid-cols-5 gap-1">
-          {[
-            ["오늘", CalendarDays],
-            ["공유", Share2],
-            ["초대", UserPlus],
-            ["알림", Bell],
-            ["설정", Settings2],
-          ].map(([label, Icon]) => (
-            <button
-              key={label as string}
-              className="flex h-14 items-center justify-center rounded-lg text-[#34362f] hover:bg-[#efeee9]"
-              aria-label={label as string}
-              title={label as string}
-            >
-              <Icon size={21} />
-            </button>
-          ))}
+        <nav className="mx-auto grid max-w-[520px] grid-cols-5 items-center gap-1">
+          <button
+            className="flex h-14 items-center justify-center rounded-lg text-[#34362f] hover:bg-[#efeee9]"
+            aria-label="오늘"
+            title="오늘"
+            onClick={() => setMonth(new Date(2026, 5, 1))}
+          >
+            <CalendarDays size={21} />
+          </button>
+          <button
+            className="flex h-14 items-center justify-center rounded-lg text-[#34362f] hover:bg-[#efeee9]"
+            aria-label="공유 캘린더"
+            title="공유 캘린더"
+            onClick={() => setActiveScope("SHARED")}
+          >
+            <Users size={21} />
+          </button>
+          <button
+            className="mx-auto flex size-14 items-center justify-center rounded-full bg-[var(--ink)] text-white shadow-[0_12px_28px_rgba(24,25,22,0.24)]"
+            aria-label="새 일정"
+            title="새 일정"
+            onClick={openCreateModal}
+          >
+            <Plus size={25} />
+          </button>
+          <button
+            className="flex h-14 items-center justify-center rounded-lg text-[#34362f] hover:bg-[#efeee9]"
+            aria-label="알림"
+            title="알림"
+          >
+            <Bell size={21} />
+          </button>
+          <button
+            className="flex h-14 items-center justify-center rounded-lg text-[#34362f] hover:bg-[#efeee9]"
+            aria-label="설정"
+            title="설정"
+          >
+            <Settings2 size={21} />
+          </button>
         </nav>
       </footer>
 
+      {isDetailOpen && selectedEvent ? (
+        <div className="fixed inset-0 z-40 flex items-end justify-center bg-black/35 px-0 md:items-center md:px-4">
+          <section className="panel mobile-sheet w-full max-w-[520px] p-5">
+            <div className="mb-5 flex items-start justify-between gap-4">
+              <div className="min-w-0">
+                <span
+                  className={[
+                    "mb-3 inline-flex rounded-full px-2.5 py-1 text-xs font-semibold",
+                    selectedEvent.calendar.type === "PERSONAL"
+                      ? "bg-[#e8f4ee] text-[#11623b]"
+                      : "bg-[#eef1ff] text-[#2f4fb8]",
+                  ].join(" ")}
+                >
+                  {selectedEvent.calendar.type === "PERSONAL" ? "내 캘린더" : "공유 캘린더"}
+                </span>
+                <h2 className="text-xl font-semibold leading-7">{selectedEvent.title}</h2>
+              </div>
+              <button
+                className="icon-button shrink-0"
+                aria-label="Close"
+                onClick={() => setIsDetailOpen(false)}
+              >
+                ×
+              </button>
+            </div>
+
+            <div className="space-y-3 rounded-lg border border-[var(--line)] bg-white p-4">
+              <div>
+                <p className="text-xs font-semibold text-[var(--muted)]">시간</p>
+                <p className="mt-1 text-sm font-semibold">
+                  {(selectedEvent.allDay ? dateFormatter : dateTimeFormatter).format(
+                    new Date(selectedEvent.startsAt),
+                  )}
+                </p>
+                <p className="mt-1 text-xs text-[var(--muted)]">
+                  ~ {(selectedEvent.allDay ? dateFormatter : dateTimeFormatter).format(
+                    new Date(selectedEvent.endsAt),
+                  )}
+                </p>
+              </div>
+              {selectedEvent.location ? (
+                <div>
+                  <p className="text-xs font-semibold text-[var(--muted)]">장소</p>
+                  <p className="mt-1 text-sm font-semibold">{selectedEvent.location}</p>
+                </div>
+              ) : null}
+              {selectedEvent.description ? (
+                <div>
+                  <p className="text-xs font-semibold text-[var(--muted)]">메모</p>
+                  <p className="mt-1 text-sm leading-6 text-[#34362f]">
+                    {selectedEvent.description}
+                  </p>
+                </div>
+              ) : null}
+            </div>
+
+            <div className="mt-4 grid grid-cols-3 gap-2">
+              <button
+                className="flex h-11 items-center justify-center gap-2 rounded-lg border border-[var(--line)] bg-white text-sm font-semibold"
+                onClick={openEditModal}
+              >
+                <Pencil size={16} />
+                수정
+              </button>
+              <button className="flex h-11 items-center justify-center gap-2 rounded-lg border border-[var(--line)] bg-white text-sm font-semibold">
+                <Share2 size={16} />
+                공유
+              </button>
+              <button
+                className="flex h-11 items-center justify-center gap-2 rounded-lg border border-[#f0c9d0] bg-[#fff7f8] text-sm font-semibold text-[#b93d53] disabled:opacity-50"
+                disabled={isSaving}
+                onClick={handleDeleteEvent}
+              >
+                <Trash2 size={16} />
+                삭제
+              </button>
+            </div>
+          </section>
+        </div>
+      ) : null}
+
       {isEditOpen && selectedEvent ? (
-        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/30 px-4">
-          <section className="panel w-full max-w-[460px] p-5">
+        <div className="fixed inset-0 z-40 flex items-end justify-center bg-black/30 px-0 md:items-center md:px-4">
+          <section className="panel mobile-sheet w-full max-w-[460px] p-5">
             <div className="mb-5 flex items-center justify-between">
               <h2 className="text-lg font-semibold">일정 수정</h2>
               <button
@@ -940,8 +965,8 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
       ) : null}
 
       {isCreateOpen ? (
-        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/30 px-4">
-          <section className="panel w-full max-w-[460px] p-5">
+        <div className="fixed inset-0 z-40 flex items-end justify-center bg-black/30 px-0 md:items-center md:px-4">
+          <section className="panel mobile-sheet w-full max-w-[460px] p-5">
             <div className="mb-5 flex items-center justify-between">
               <h2 className="text-lg font-semibold">새 일정</h2>
               <button
@@ -974,7 +999,7 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
                   </option>
                 ))}
               </select>
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                 <input
                   className="h-11 rounded-lg border border-[var(--line)] bg-white px-3 outline-none focus:border-[#aeb3a6]"
                   defaultValue={defaultStartsAt}

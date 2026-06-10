@@ -91,6 +91,13 @@ button {
   box-shadow: 0 24px 70px rgba(31, 33, 29, 0.08);
 }
 
+.mobile-sheet {
+  max-height: calc(100vh - 72px);
+  overflow-y: auto;
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
 .calendar-grid {
   display: grid;
   grid-template-columns: repeat(7, minmax(0, 1fr));
@@ -177,5 +184,12 @@ button {
   .day-cell {
     --day-cell-padding: 8px;
     height: max(88px, calc(52px + var(--week-lane-count) * 33px));
+  }
+}
+
+@media (min-width: 768px) {
+  .mobile-sheet {
+    max-height: min(720px, calc(100vh - 48px));
+    border-radius: 8px;
   }
 }
