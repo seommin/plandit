@@ -8,12 +8,14 @@ import {
   ChevronLeft,
   ChevronRight,
   Clock3,
+  Pencil,
   LogOut,
   Plus,
   Search,
   Settings2,
   Share2,
   SquareStack,
+  Trash2,
   User,
   UserPlus,
   Users,
@@ -283,6 +285,7 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
   const [eventItems, setEventItems] = useState(events);
   const [selectedEventId, setSelectedEventId] = useState(events[0]?.id ?? "");
   const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [isEditOpen, setIsEditOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
@@ -340,30 +343,54 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
     ["OWNER", "ADMIN", "EDITOR"].includes(calendar.role),
   );
 
+  function buildCalendarEvent(event: CalendarAppEvent, calendarId: string) {
+    const calendar = calendars.find((item) => item.id === calendarId);
+
+    return {
+      ...event,
+      color: event.color ?? calendar?.color ?? "var(--blue)",
+      calendar: {
+        id: calendar?.id ?? calendarId,
+        name: calendar?.name ?? "내 캘린더",
+        type: calendar?.type ?? "PERSONAL",
+        color: calendar?.color ?? "var(--blue)",
+      },
+    } satisfies CalendarAppEvent;
+  }
+
+  function getEventPayload(data: FormData) {
+    const startsAt = new Date(String(data.get("startsAt")));
+    const endsAt = new Date(String(data.get("endsAt")));
+
+    if (endsAt <= startsAt) {
+      throw new Error("종료 일시는 시작 일시보다 뒤여야 합니다.");
+    }
+
+    return {
+      calendarId: String(data.get("calendarId")),
+      title: String(data.get("title")),
+      description: String(data.get("description") ?? ""),
+      location: String(data.get("location") ?? ""),
+      startsAt: startsAt.toISOString(),
+      endsAt: endsAt.toISOString(),
+    };
+  }
+
   async function handleCreateEvent(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setIsSaving(true);
     setFormError(null);
 
     const data = new FormData(event.currentTarget);
-    const calendarId = String(data.get("calendarId"));
-    const startsAt = new Date(String(data.get("startsAt")));
-    const endsAt = new Date(String(data.get("endsAt")));
 
     try {
+      const payload = getEventPayload(data);
       const response = await fetch("/api/events", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({
-          calendarId,
-          title: String(data.get("title")),
-          description: String(data.get("description") ?? ""),
-          location: String(data.get("location") ?? ""),
-          startsAt: startsAt.toISOString(),
-          endsAt: endsAt.toISOString(),
-        }),
+        body: JSON.stringify(payload),
       });
 
       const result = await response.json();
@@ -372,23 +399,90 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
         throw new Error(result.error ?? "일정을 저장하지 못했습니다.");
       }
 
-      const calendar = calendars.find((item) => item.id === result.event.calendarId);
-      const createdEvent: CalendarAppEvent = {
-        ...result.event,
-        startsAt: result.event.startsAt,
-        endsAt: result.event.endsAt,
-        color: result.event.color ?? calendar?.color ?? "var(--blue)",
-        calendar: {
-          id: calendar?.id ?? result.event.calendarId,
-          name: calendar?.name ?? "내 캘린더",
-          type: calendar?.type ?? "PERSONAL",
-          color: calendar?.color ?? "var(--blue)",
-        },
-      };
+      const createdEvent = buildCalendarEvent(result.event, result.event.calendarId);
 
       setEventItems((current) => [...current, createdEvent]);
       setSelectedEventId(createdEvent.id);
       setIsCreateOpen(false);
+    } catch (error) {
+      setFormError(error instanceof Error ? error.message : "다시 시도해주세요.");
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
+  async function handleUpdateEvent(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (!selectedEvent) {
+      return;
+    }
+
+    setIsSaving(true);
+    setFormError(null);
+
+    const data = new FormData(event.currentTarget);
+
+    try {
+      const payload = getEventPayload(data);
+      const response = await fetch(`/api/events/${selectedEvent.id}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(payload),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error ?? "일정을 수정하지 못했습니다.");
+      }
+
+      const updatedEvent = buildCalendarEvent(result.event, result.event.calendarId);
+
+      setEventItems((current) =>
+        current.map((item) => (item.id === updatedEvent.id ? updatedEvent : item)),
+      );
+      setSelectedEventId(updatedEvent.id);
+      setIsEditOpen(false);
+    } catch (error) {
+      setFormError(error instanceof Error ? error.message : "다시 시도해주세요.");
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
+  async function handleDeleteEvent() {
+    if (!selectedEvent) {
+      return;
+    }
+
+    const shouldDelete = window.confirm("이 일정을 삭제할까요?");
+
+    if (!shouldDelete) {
+      return;
+    }
+
+    setIsSaving(true);
+    setFormError(null);
+
+    try {
+      const response = await fetch(`/api/events/${selectedEvent.id}`, {
+        method: "DELETE",
+      });
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error ?? "일정을 삭제하지 못했습니다.");
+      }
+
+      setEventItems((current) => {
+        const nextItems = current.filter((item) => item.id !== selectedEvent.id);
+        setSelectedEventId(nextItems[0]?.id ?? "");
+        return nextItems;
+      });
+      setIsEditOpen(false);
     } catch (error) {
       setFormError(error instanceof Error ? error.message : "다시 시도해주세요.");
     } finally {
@@ -414,7 +508,10 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
 
             <button
               className="mb-6 flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-[var(--ink)] px-4 text-sm font-semibold text-white"
-              onClick={() => setIsCreateOpen(true)}
+              onClick={() => {
+                setFormError(null);
+                setIsCreateOpen(true);
+              }}
             >
               <Plus size={17} />
               새 일정
@@ -556,7 +653,10 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
                       <button
                         key={day.key}
                         className="day-cell bg-white/70 text-left"
-                        onDoubleClick={() => setIsCreateOpen(true)}
+                        onDoubleClick={() => {
+                          setFormError(null);
+                          setIsCreateOpen(true);
+                        }}
                         style={
                           {
                             "--week-lane-count": day.weekLaneCount,
@@ -649,18 +749,44 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
               <section className="panel p-4">
                 <div className="mb-4 flex items-center justify-between">
                   <h2 className="text-base font-semibold">일정 상세</h2>
-                  {selectedEvent ? (
-                    <span
-                      className={[
-                        "rounded-full px-2 py-1 text-xs font-semibold",
-                        selectedEvent.calendar.type === "PERSONAL"
-                          ? "bg-[#e8f4ee] text-[#11623b]"
-                          : "bg-[#eef1ff] text-[#2f4fb8]",
-                      ].join(" ")}
-                    >
-                      {selectedEvent.calendar.type === "PERSONAL" ? "Private" : "Shared"}
-                    </span>
-                  ) : null}
+                  <div className="flex items-center gap-2">
+                    {selectedEvent ? (
+                      <span
+                        className={[
+                          "rounded-full px-2 py-1 text-xs font-semibold",
+                          selectedEvent.calendar.type === "PERSONAL"
+                            ? "bg-[#e8f4ee] text-[#11623b]"
+                            : "bg-[#eef1ff] text-[#2f4fb8]",
+                        ].join(" ")}
+                      >
+                        {selectedEvent.calendar.type === "PERSONAL" ? "Private" : "Shared"}
+                      </span>
+                    ) : null}
+                    {selectedEvent ? (
+                      <>
+                        <button
+                          className="icon-button"
+                          aria-label="일정 수정"
+                          title="일정 수정"
+                          onClick={() => {
+                            setFormError(null);
+                            setIsEditOpen(true);
+                          }}
+                        >
+                          <Pencil size={16} />
+                        </button>
+                        <button
+                          className="icon-button"
+                          aria-label="일정 삭제"
+                          title="일정 삭제"
+                          disabled={isSaving}
+                          onClick={handleDeleteEvent}
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </>
+                    ) : null}
+                  </div>
                 </div>
                 {selectedEvent ? (
                   <div className="rounded-lg border border-[var(--line)] bg-white p-3">
@@ -732,6 +858,87 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
         </nav>
       </footer>
 
+      {isEditOpen && selectedEvent ? (
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/30 px-4">
+          <section className="panel w-full max-w-[460px] p-5">
+            <div className="mb-5 flex items-center justify-between">
+              <h2 className="text-lg font-semibold">일정 수정</h2>
+              <button
+                className="icon-button"
+                aria-label="Close"
+                onClick={() => {
+                  setFormError(null);
+                  setIsEditOpen(false);
+                }}
+              >
+                ×
+              </button>
+            </div>
+            <form className="space-y-3" onSubmit={handleUpdateEvent}>
+              <input
+                className="h-11 w-full rounded-lg border border-[var(--line)] bg-white px-3 outline-none focus:border-[#aeb3a6]"
+                defaultValue={selectedEvent.title}
+                name="title"
+                placeholder="일정 제목"
+                required
+              />
+              <select
+                className="h-11 w-full rounded-lg border border-[var(--line)] bg-white px-3 outline-none focus:border-[#aeb3a6]"
+                name="calendarId"
+                required
+                defaultValue={selectedEvent.calendarId}
+              >
+                {writableCalendars.map((calendar) => (
+                  <option key={calendar.id} value={calendar.id}>
+                    {calendar.name}
+                  </option>
+                ))}
+              </select>
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                <input
+                  className="h-11 rounded-lg border border-[var(--line)] bg-white px-3 outline-none focus:border-[#aeb3a6]"
+                  defaultValue={toInputValue(new Date(selectedEvent.startsAt))}
+                  name="startsAt"
+                  required
+                  type="datetime-local"
+                />
+                <input
+                  className="h-11 rounded-lg border border-[var(--line)] bg-white px-3 outline-none focus:border-[#aeb3a6]"
+                  defaultValue={toInputValue(new Date(selectedEvent.endsAt))}
+                  name="endsAt"
+                  required
+                  type="datetime-local"
+                />
+              </div>
+              <input
+                className="h-11 w-full rounded-lg border border-[var(--line)] bg-white px-3 outline-none focus:border-[#aeb3a6]"
+                defaultValue={selectedEvent.location ?? ""}
+                name="location"
+                placeholder="장소"
+              />
+              <textarea
+                className="min-h-24 w-full rounded-lg border border-[var(--line)] bg-white px-3 py-3 outline-none focus:border-[#aeb3a6]"
+                defaultValue={selectedEvent.description ?? ""}
+                name="description"
+                placeholder="메모"
+              />
+              {formError ? (
+                <p className="rounded-lg bg-[#fff3f1] px-3 py-2 text-sm font-semibold text-[#b33a2f]">
+                  {formError}
+                </p>
+              ) : null}
+              <button
+                className="h-11 w-full rounded-lg bg-[var(--ink)] text-sm font-semibold text-white disabled:opacity-50"
+                disabled={isSaving}
+                type="submit"
+              >
+                {isSaving ? "수정 중" : "수정"}
+              </button>
+            </form>
+          </section>
+        </div>
+      ) : null}
+
       {isCreateOpen ? (
         <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/30 px-4">
           <section className="panel w-full max-w-[460px] p-5">
@@ -740,7 +947,10 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
               <button
                 className="icon-button"
                 aria-label="Close"
-                onClick={() => setIsCreateOpen(false)}
+                onClick={() => {
+                  setFormError(null);
+                  setIsCreateOpen(false);
+                }}
               >
                 ×
               </button>
