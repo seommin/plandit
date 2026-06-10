@@ -919,6 +919,7 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
             </div>
             )}
 
+            {bottomView !== "IMPORTANT" ? (
             <section className="panel p-4 md:hidden">
               <div className="mb-4 flex items-center justify-between">
                 <h2 className="text-base font-semibold">
@@ -961,6 +962,7 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
                 )}
               </div>
             </section>
+            ) : null}
 
             {bottomView !== "IMPORTANT" ? (
             <section className="panel hidden p-4 md:block">
