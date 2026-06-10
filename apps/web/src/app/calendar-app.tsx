@@ -823,42 +823,48 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
               </div>
             </div>
 
-            {isMobileListOpen ? (
-              <section className="panel p-4 md:hidden">
-                <div className="mb-4 flex items-center justify-between">
-                  <h2 className="text-base font-semibold">{formatMonthLabel(month)} 목록</h2>
+            <section className="panel p-4 md:hidden">
+              <div className="mb-4 flex items-center justify-between">
+                <h2 className="text-base font-semibold">
+                  {isMobileListOpen ? `${formatMonthLabel(month)} 목록` : "오늘 일정"}
+                </h2>
+                {isMobileListOpen ? (
                   <List size={18} className="text-[var(--muted)]" />
-                </div>
-                <div className="space-y-3">
-                  {monthlyEvents.length > 0 ? (
-                    monthlyEvents.map((item) => (
-                      <button
-                        key={item.id}
-                        className="flex w-full gap-3 rounded-lg border border-[var(--line)] bg-white p-3 text-left"
-                        onClick={() => openEventDetail(item.id)}
-                        type="button"
-                      >
-                        <div
-                          className="mt-1 size-2.5 rounded-full"
-                          style={{ backgroundColor: item.color }}
-                        />
-                        <div className="min-w-0">
-                          <p className="text-xs font-semibold text-[var(--muted)]">
-                            {dateTimeFormatter.format(new Date(item.startsAt))}
-                          </p>
-                          <p className="truncate text-sm font-semibold">{item.title}</p>
-                          <p className="text-xs text-[var(--muted)]">{item.calendar.name}</p>
-                        </div>
-                      </button>
-                    ))
-                  ) : (
-                    <p className="rounded-lg border border-[var(--line)] bg-white p-3 text-sm text-[var(--muted)]">
-                      선택한 캘린더에 표시할 일정이 없습니다.
-                    </p>
-                  )}
-                </div>
-              </section>
-            ) : null}
+                ) : (
+                  <CalendarDays size={18} className="text-[var(--muted)]" />
+                )}
+              </div>
+              <div className="space-y-3">
+                {(isMobileListOpen ? monthlyEvents : agenda).length > 0 ? (
+                  (isMobileListOpen ? monthlyEvents : agenda).map((item) => (
+                    <button
+                      key={item.id}
+                      className="flex w-full gap-3 rounded-lg border border-[var(--line)] bg-white p-3 text-left"
+                      onClick={() => openEventDetail(item.id)}
+                      type="button"
+                    >
+                      <div
+                        className="mt-1 size-2.5 rounded-full"
+                        style={{ backgroundColor: item.color }}
+                      />
+                      <div className="min-w-0">
+                        <p className="text-xs font-semibold text-[var(--muted)]">
+                          {isMobileListOpen
+                            ? dateTimeFormatter.format(new Date(item.startsAt))
+                            : timeFormatter.format(new Date(item.startsAt))}
+                        </p>
+                        <p className="truncate text-sm font-semibold">{item.title}</p>
+                        <p className="text-xs text-[var(--muted)]">{item.calendar.name}</p>
+                      </div>
+                    </button>
+                  ))
+                ) : (
+                  <p className="rounded-lg border border-[var(--line)] bg-white p-3 text-sm text-[var(--muted)]">
+                    선택한 캘린더에 표시할 일정이 없습니다.
+                  </p>
+                )}
+              </div>
+            </section>
 
             <section className="panel hidden p-4 md:block">
               <div className="mb-4 flex items-center justify-between">
