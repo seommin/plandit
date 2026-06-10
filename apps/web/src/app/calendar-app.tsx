@@ -296,7 +296,6 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isNotificationOpen, setIsNotificationOpen] = useState(false);
-  const [isMobileListOpen, setIsMobileListOpen] = useState(false);
   const [importantEventIds, setImportantEventIds] = useState<string[]>([]);
   const [isSaving, setIsSaving] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
@@ -402,11 +401,9 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
   function selectCalendarDate(date: Date) {
     setSelectedDate(date);
     setBottomView("DAY");
-    setIsMobileListOpen(false);
   }
 
   function goToMainCalendar() {
-    setIsMobileListOpen(false);
     setIsMobileMenuOpen(false);
     setBottomView("DAY");
   }
@@ -923,17 +920,17 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
             <section className="panel p-4 md:hidden">
               <div className="mb-4 flex items-center justify-between">
                 <h2 className="text-base font-semibold">
-                  {isMobileListOpen ? formatMonthLabel(month) : formatDayLabel(selectedDate)}
+                  {bottomView === "MONTH" ? formatMonthLabel(month) : formatDayLabel(selectedDate)}
                 </h2>
-                {isMobileListOpen ? (
+                {bottomView === "MONTH" ? (
                   <List size={18} className="text-[var(--muted)]" />
                 ) : (
                   <CalendarDays size={18} className="text-[var(--muted)]" />
                 )}
               </div>
               <div className="space-y-3">
-                {(isMobileListOpen ? monthlyEvents : dailyEvents).length > 0 ? (
-                  (isMobileListOpen ? monthlyEvents : dailyEvents).map((item) => (
+                {(bottomView === "MONTH" ? monthlyEvents : dailyEvents).length > 0 ? (
+                  (bottomView === "MONTH" ? monthlyEvents : dailyEvents).map((item) => (
                     <button
                       key={item.id}
                       className="flex w-full gap-3 rounded-lg border border-[var(--line)] bg-white p-3 text-left"
@@ -946,7 +943,7 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
                       />
                       <div className="min-w-0">
                         <p className="text-xs font-semibold text-[var(--muted)]">
-                          {isMobileListOpen
+                          {bottomView === "MONTH"
                             ? dateTimeFormatter.format(new Date(item.startsAt))
                             : timeFormatter.format(new Date(item.startsAt))}
                         </p>
@@ -1022,25 +1019,24 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
         <nav className="mx-auto grid max-w-[520px] grid-cols-5 items-center gap-1">
           <button
             className="flex h-14 items-center justify-center rounded-lg text-[#34362f] hover:bg-[#efeee9]"
-            aria-label={isMobileListOpen ? "달력 보기" : "목록 보기"}
-            title={isMobileListOpen ? "달력 보기" : "목록 보기"}
+            aria-label={bottomView === "MONTH" ? "일별 보기" : "월별 보기"}
+            title={bottomView === "MONTH" ? "일별 보기" : "월별 보기"}
             onClick={() => {
               if (bottomView === "IMPORTANT") {
                 goToMainCalendar();
                 return;
               }
 
-              setIsMobileListOpen((current) => !current);
+              setBottomView((current) => (current === "MONTH" ? "DAY" : "MONTH"));
             }}
           >
-            {isMobileListOpen ? <List size={21} /> : <CalendarDays size={21} />}
+            {bottomView === "MONTH" ? <List size={21} /> : <CalendarDays size={21} />}
           </button>
           <button
             className="flex h-14 items-center justify-center rounded-lg text-[#34362f] hover:bg-[#efeee9]"
             aria-label="중요"
             title="중요"
             onClick={() => {
-              setIsMobileListOpen(false);
               setBottomView("IMPORTANT");
             }}
           >
