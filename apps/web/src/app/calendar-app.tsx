@@ -66,7 +66,7 @@ type CalendarDayEvent = {
   lane: number;
 };
 
-type BottomView = "TODAY" | "MONTH" | "IMPORTANT";
+type BottomView = "DAY" | "MONTH" | "IMPORTANT";
 
 const weekDays = [
   { label: "일", tone: "text-[#d64f68]" },
@@ -79,8 +79,8 @@ const weekDays = [
 ];
 
 const viewNavItems = [
-  ["오늘 일정", CalendarDays, "TODAY"],
-  ["월 목록", List, "MONTH"],
+  ["일별", CalendarDays, "DAY"],
+  ["월별", List, "MONTH"],
   ["중요 일정", Star, "IMPORTANT"],
 ] as const;
 
@@ -103,6 +103,12 @@ const timeFormatter = new Intl.DateTimeFormat("ko-KR", {
 
 function formatMonthLabel(month: Date) {
   return `${month.getFullYear()}. ${String(month.getMonth() + 1).padStart(2, "0")}`;
+}
+
+function formatDayLabel(date: Date) {
+  return `${date.getFullYear()}. ${String(date.getMonth() + 1).padStart(2, "0")}. ${String(
+    date.getDate(),
+  ).padStart(2, "0")}`;
 }
 
 function toInputValue(date: Date) {
@@ -280,9 +286,10 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
     calendars.map((calendar) => calendar.id),
   );
   const [month, setMonth] = useState(() => new Date(2026, 5, 1));
+  const [selectedDate, setSelectedDate] = useState(() => new Date(2026, 5, 10));
   const [eventItems, setEventItems] = useState(events);
   const [selectedEventId, setSelectedEventId] = useState(events[0]?.id ?? "");
-  const [bottomView, setBottomView] = useState<BottomView>("TODAY");
+  const [bottomView, setBottomView] = useState<BottomView>("DAY");
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isCalendarCreateOpen, setIsCalendarCreateOpen] = useState(false);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
@@ -322,13 +329,14 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
     );
   }, [eventItems, selectedEventId, visibleEvents]);
 
-  const agenda = useMemo(
+  const dailyEvents = useMemo(
     () =>
       visibleEvents
+        .filter((event) => eventOverlapsDay(event, selectedDate))
         .slice()
         .sort((a, b) => new Date(a.startsAt).getTime() - new Date(b.startsAt).getTime())
-        .slice(0, 5),
-    [visibleEvents],
+        .slice(0, 8),
+    [selectedDate, visibleEvents],
   );
 
   const monthRange = useMemo(() => {
@@ -390,6 +398,12 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
   function openCreateModal() {
     setFormError(null);
     setIsCreateOpen(true);
+  }
+
+  function selectCalendarDate(date: Date) {
+    setSelectedDate(date);
+    setBottomView("DAY");
+    setIsMobileListOpen(false);
   }
 
   function openCalendarCreateModal() {
@@ -773,6 +787,7 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
                       <button
                         key={day.key}
                         className="day-cell bg-white/70 text-left"
+                        onClick={() => selectCalendarDate(day.date)}
                         onDoubleClick={openCreateModal}
                         style={
                           {
@@ -784,8 +799,10 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
                           <span
                             className={[
                               "flex size-7 items-center justify-center rounded-full text-sm font-semibold",
-                              day.today
+                              startOfDay(day.date).getTime() === startOfDay(selectedDate).getTime()
                                 ? "bg-[var(--ink)] text-white"
+                                : day.today
+                                  ? "border border-[var(--ink)] text-[#30322d]"
                                 : day.muted
                                   ? "text-[#a2a59b]"
                                   : day.isSunday || day.isHoliday
@@ -826,7 +843,7 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
             <section className="panel p-4 md:hidden">
               <div className="mb-4 flex items-center justify-between">
                 <h2 className="text-base font-semibold">
-                  {isMobileListOpen ? `${formatMonthLabel(month)} 목록` : "오늘 일정"}
+                  {isMobileListOpen ? `${formatMonthLabel(month)} 월별` : `${formatDayLabel(selectedDate)} 일별`}
                 </h2>
                 {isMobileListOpen ? (
                   <List size={18} className="text-[var(--muted)]" />
@@ -835,8 +852,8 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
                 )}
               </div>
               <div className="space-y-3">
-                {(isMobileListOpen ? monthlyEvents : agenda).length > 0 ? (
-                  (isMobileListOpen ? monthlyEvents : agenda).map((item) => (
+                {(isMobileListOpen ? monthlyEvents : dailyEvents).length > 0 ? (
+                  (isMobileListOpen ? monthlyEvents : dailyEvents).map((item) => (
                     <button
                       key={item.id}
                       className="flex w-full gap-3 rounded-lg border border-[var(--line)] bg-white p-3 text-left"
@@ -869,13 +886,13 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
             <section className="panel hidden p-4 md:block">
               <div className="mb-4 flex items-center justify-between">
                 <h2 className="text-base font-semibold">
-                  {bottomView === "TODAY"
-                    ? "오늘 일정"
+                  {bottomView === "DAY"
+                    ? `${formatDayLabel(selectedDate)} 일별`
                     : bottomView === "MONTH"
-                      ? `${formatMonthLabel(month)} 목록`
+                      ? `${formatMonthLabel(month)} 월별`
                       : "중요 일정"}
                 </h2>
-                {bottomView === "TODAY" ? (
+                {bottomView === "DAY" ? (
                   <Clock3 size={18} className="text-[var(--muted)]" />
                 ) : bottomView === "MONTH" ? (
                   <List size={18} className="text-[var(--muted)]" />
@@ -885,14 +902,14 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
               </div>
 
               <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-                {(bottomView === "TODAY"
-                  ? agenda
+                {(bottomView === "DAY"
+                  ? dailyEvents
                   : bottomView === "MONTH"
                     ? monthlyEvents
                     : importantEvents
                 ).length > 0 ? (
-                  (bottomView === "TODAY"
-                    ? agenda
+                  (bottomView === "DAY"
+                    ? dailyEvents
                     : bottomView === "MONTH"
                       ? monthlyEvents
                       : importantEvents
@@ -914,7 +931,7 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
                       />
                       <div className="min-w-0">
                         <p className="text-xs font-semibold text-[var(--muted)]">
-                          {bottomView === "TODAY"
+                          {bottomView === "DAY"
                             ? timeFormatter.format(new Date(item.startsAt))
                             : dateTimeFormatter.format(new Date(item.startsAt))}
                         </p>
@@ -1075,9 +1092,9 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
             </div>
             <div className="space-y-3">
               <div className="rounded-lg border border-[var(--line)] bg-white p-3">
-                <p className="text-sm font-semibold">오늘 일정 확인</p>
+                <p className="text-sm font-semibold">일별 일정 확인</p>
                 <p className="mt-1 text-xs text-[var(--muted)]">
-                  선택한 캘린더의 다가오는 일정을 확인해보세요.
+                  선택한 날짜의 일정을 확인해보세요.
                 </p>
               </div>
               <div className="rounded-lg border border-[var(--line)] bg-white p-3">
