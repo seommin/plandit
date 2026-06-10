@@ -1,0 +1,20 @@
+{
+  "name": "@plandit/shared",
+  "version": "0.1.0",
+  "private": true,
+  "exports": {
+    "./auth": "./src/auth.ts",
+    "./calendar-defaults": "./src/calendar-defaults.ts",
+    "./events": "./src/events.ts"
+  },
+  "scripts": {
+    "build": "tsc --noEmit",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "zod": "4.3.6"
+  },
+  "devDependencies": {
+    "typescript": "6.0.3"
+  }
+}

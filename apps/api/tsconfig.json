@@ -1,0 +1,25 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "declaration": false,
+    "emitDecoratorMetadata": true,
+    "experimentalDecorators": true,
+    "module": "CommonJS",
+    "moduleResolution": "Node",
+    "noEmit": false,
+    "outDir": "./dist",
+    "rootDir": "../..",
+    "baseUrl": ".",
+    "paths": {
+      "@plandit/database/*": [
+        "../../packages/database/src/*"
+      ],
+      "@plandit/shared/*": [
+        "../../packages/shared/src/*"
+      ]
+    },
+    "sourceMap": true
+  },
+  "include": ["src/**/*.ts"],
+  "exclude": ["node_modules", "dist"]
+}

@@ -3,7 +3,7 @@
 .next/
 node_modules/
 .pnpm-store/
-src/generated/
+**/src/generated/
 coverage/
 dist/
 *.tsbuildinfo
