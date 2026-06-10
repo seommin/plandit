@@ -8,40 +8,20 @@
     "pnpm": "11.5.2"
   },
   "scripts": {
-    "dev": "next dev",
-    "build": "prisma generate && next build",
-    "start": "next start",
-    "typecheck": "tsc --noEmit",
+    "dev": "pnpm --parallel --filter @plandit/api --filter @plandit/web dev",
+    "dev:web": "pnpm --filter @plandit/web dev",
+    "dev:api": "pnpm --filter @plandit/api dev",
+    "build": "pnpm --filter @plandit/database prisma:generate && pnpm -r --filter @plandit/shared --filter @plandit/database --filter @plandit/api --filter @plandit/web build",
+    "start:web": "pnpm --filter @plandit/web start",
+    "start:api": "pnpm --filter @plandit/api start",
+    "typecheck": "pnpm -r --filter @plandit/shared --filter @plandit/database --filter @plandit/api --filter @plandit/web typecheck",
     "docker:up": "docker compose up --build",
     "docker:down": "docker compose down",
-    "prisma:generate": "prisma generate",
-    "prisma:migrate": "prisma migrate dev",
-    "prisma:studio": "prisma studio"
-  },
-  "dependencies": {
-    "@auth/prisma-adapter": "2.9.1",
-    "@fontsource/pretendard": "5.2.5",
-    "@fontsource/satisfy": "5.2.7",
-    "@prisma/adapter-pg": "7.4.0",
-    "@prisma/client": "7.4.0",
-    "bcryptjs": "3.0.3",
-    "dotenv": "17.4.2",
-    "lucide-react": "1.17.0",
-    "next": "16.2.7",
-    "next-auth": "5.0.0-beta.31",
-    "pg": "8.20.0",
-    "react": "19.2.7",
-    "react-dom": "19.2.7",
-    "zod": "4.3.6"
+    "prisma:generate": "pnpm --filter @plandit/database prisma:generate",
+    "prisma:migrate": "pnpm --filter @plandit/database prisma:migrate",
+    "prisma:studio": "pnpm --filter @plandit/database prisma:studio"
   },
   "devDependencies": {
-    "@tailwindcss/postcss": "4.3.0",
-    "@types/node": "24.11.1",
-    "@types/pg": "8.15.6",
-    "@types/react": "19.2.7",
-    "@types/react-dom": "19.2.3",
-    "prisma": "7.4.0",
-    "tailwindcss": "4.3.0",
     "typescript": "6.0.3"
   }
 }

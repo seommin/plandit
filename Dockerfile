@@ -14,32 +14,32 @@ WORKDIR /app
 FROM base AS deps
 
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY apps/web/package.json ./apps/web/package.json
+COPY apps/api/package.json ./apps/api/package.json
+COPY packages/database/package.json ./packages/database/package.json
+COPY packages/shared/package.json ./packages/shared/package.json
 RUN pnpm install --frozen-lockfile
 
 FROM deps AS dev
 
 COPY . .
-EXPOSE 3000
-CMD ["pnpm", "dev", "--hostname", "0.0.0.0"]
+EXPOSE 3000 4000
+CMD ["pnpm", "dev"]
 
 FROM deps AS builder
 
 COPY . .
 ENV DATABASE_URL="postgresql://plandit:plandit@postgres:5432/plandit"
 ENV DIRECT_URL="postgresql://plandit:plandit@postgres:5432/plandit"
+ENV API_INTERNAL_SECRET="build-time-secret"
+ENV API_INTERNAL_URL="http://api:4000"
 RUN pnpm build
 
 FROM base AS runner
 
 ENV NODE_ENV="production"
 
-COPY --from=builder /app/package.json ./package.json
-COPY --from=builder /app/pnpm-lock.yaml ./pnpm-lock.yaml
-COPY --from=builder /app/pnpm-workspace.yaml ./pnpm-workspace.yaml
-COPY --from=builder /app/.next ./.next
-COPY --from=builder /app/prisma ./prisma
-COPY --from=builder /app/src/generated ./src/generated
-COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app ./
 
-EXPOSE 3000
-CMD ["pnpm", "start"]
+EXPOSE 3000 4000
+CMD ["pnpm", "start:web"]
