@@ -795,31 +795,42 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
           ].join(" ")}
         >
           <header className="mb-4 flex flex-col gap-3 rounded-lg border border-[var(--line)] bg-[#fdfcf9] px-4 py-3 md:flex-row md:items-center md:justify-between">
-            <div className="grid grid-cols-[40px_minmax(0,1fr)_40px] items-center gap-3 md:w-full md:max-w-[420px]">
-              <button
-                className="icon-button"
-                aria-label="Previous month"
-                title="Previous month"
-                onClick={() =>
-                  setMonth((current) => new Date(current.getFullYear(), current.getMonth() - 1, 1))
-                }
-              >
-                <ChevronLeft size={18} />
-              </button>
-              <h1 className="text-center text-xl font-semibold leading-tight sm:text-2xl">
-                {formatMonthLabel(month)}
-              </h1>
-              <button
-                className="icon-button"
-                aria-label="Next month"
-                title="Next month"
-                onClick={() =>
-                  setMonth((current) => new Date(current.getFullYear(), current.getMonth() + 1, 1))
-                }
-              >
-                <ChevronRight size={18} />
-              </button>
-            </div>
+            {bottomView === "IMPORTANT" ? (
+              <div className="flex h-10 items-center justify-center gap-2 md:w-full md:max-w-[420px] md:justify-start">
+                <Star size={19} className="fill-[#f2b84b] text-[#b47818]" />
+                <h1 className="text-xl font-semibold leading-tight sm:text-2xl">중요</h1>
+              </div>
+            ) : (
+              <div className="grid grid-cols-[40px_minmax(0,1fr)_40px] items-center gap-3 md:w-full md:max-w-[420px]">
+                <button
+                  className="icon-button"
+                  aria-label="Previous month"
+                  title="Previous month"
+                  onClick={() =>
+                    setMonth(
+                      (current) => new Date(current.getFullYear(), current.getMonth() - 1, 1),
+                    )
+                  }
+                >
+                  <ChevronLeft size={18} />
+                </button>
+                <h1 className="text-center text-xl font-semibold leading-tight sm:text-2xl">
+                  {formatMonthLabel(month)}
+                </h1>
+                <button
+                  className="icon-button"
+                  aria-label="Next month"
+                  title="Next month"
+                  onClick={() =>
+                    setMonth(
+                      (current) => new Date(current.getFullYear(), current.getMonth() + 1, 1),
+                    )
+                  }
+                >
+                  <ChevronRight size={18} />
+                </button>
+              </div>
+            )}
 
             <div className="hidden items-center justify-end gap-2 md:flex">
               <button className="icon-button" aria-label="Notifications" title="Notifications">
@@ -840,6 +851,42 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
           </header>
 
           <div className="flex flex-1 flex-col gap-4">
+            {bottomView === "IMPORTANT" ? (
+              <section className="panel hidden min-w-0 p-5 md:block">
+                <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                  {importantEvents.length > 0 ? (
+                    importantEvents.map((item) => (
+                      <button
+                        key={item.id}
+                        className={[
+                          "flex w-full gap-3 rounded-lg border bg-white p-4 text-left",
+                          selectedEventId === item.id
+                            ? "border-[#9fa598]"
+                            : "border-[var(--line)]",
+                        ].join(" ")}
+                        onClick={() => openEventDetail(item.id)}
+                        type="button"
+                      >
+                        <Star size={18} className="mt-0.5 fill-[#f2b84b] text-[#b47818]" />
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-semibold">{item.title}</p>
+                          <p className="mt-1 text-xs font-semibold text-[var(--muted)]">
+                            {dateTimeFormatter.format(new Date(item.startsAt))}
+                          </p>
+                          <p className="mt-1 text-xs text-[var(--muted)]">
+                            {item.calendar.name}
+                          </p>
+                        </div>
+                      </button>
+                    ))
+                  ) : (
+                    <p className="rounded-lg border border-[var(--line)] bg-white p-4 text-sm text-[var(--muted)] md:col-span-2 xl:col-span-3">
+                      중요 일정으로 표시한 일정이 없습니다.
+                    </p>
+                  )}
+                </div>
+              </section>
+            ) : (
             <div className="panel min-w-0 overflow-hidden">
               <div className="calendar-grid border-b border-[var(--line)] bg-[#f9f8f4]">
                 {weekDays.map((day) => (
@@ -910,6 +957,7 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
                 ))}
               </div>
             </div>
+            )}
 
             <section className="panel p-4 md:hidden">
               <div className="mb-4 flex items-center justify-between">
@@ -954,37 +1002,22 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
               </div>
             </section>
 
+            {bottomView !== "IMPORTANT" ? (
             <section className="panel hidden p-4 md:block">
               <div className="mb-4 flex items-center justify-between">
                 <h2 className="text-base font-semibold">
-                  {bottomView === "DAY"
-                    ? formatDayLabel(selectedDate)
-                    : bottomView === "MONTH"
-                      ? formatMonthLabel(month)
-                      : "중요"}
+                  {bottomView === "DAY" ? formatDayLabel(selectedDate) : formatMonthLabel(month)}
                 </h2>
                 {bottomView === "DAY" ? (
                   <Clock3 size={18} className="text-[var(--muted)]" />
-                ) : bottomView === "MONTH" ? (
-                  <List size={18} className="text-[var(--muted)]" />
                 ) : (
-                  <Star size={18} className="text-[var(--muted)]" />
+                  <List size={18} className="text-[var(--muted)]" />
                 )}
               </div>
 
               <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-                {(bottomView === "DAY"
-                  ? dailyEvents
-                  : bottomView === "MONTH"
-                    ? monthlyEvents
-                    : importantEvents
-                ).length > 0 ? (
-                  (bottomView === "DAY"
-                    ? dailyEvents
-                    : bottomView === "MONTH"
-                      ? monthlyEvents
-                      : importantEvents
-                  ).map((item) => (
+                {(bottomView === "DAY" ? dailyEvents : monthlyEvents).length > 0 ? (
+                  (bottomView === "DAY" ? dailyEvents : monthlyEvents).map((item) => (
                     <button
                       key={item.id}
                       className={[
@@ -1013,13 +1046,12 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
                   ))
                 ) : (
                   <p className="rounded-lg border border-[var(--line)] bg-white p-3 text-sm text-[var(--muted)] md:col-span-2 xl:col-span-3">
-                    {bottomView === "IMPORTANT"
-                      ? "중요 일정으로 표시한 일정이 없습니다."
-                      : "선택한 캘린더에 표시할 일정이 없습니다."}
+                    선택한 캘린더에 표시할 일정이 없습니다.
                   </p>
                 )}
               </div>
             </section>
+            ) : null}
           </div>
         </section>
       </div>
