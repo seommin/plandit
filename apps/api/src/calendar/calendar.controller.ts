@@ -12,6 +12,8 @@ import {
   Query,
   Req,
 } from "@nestjs/common";
+import { randomBytes } from "crypto";
+import { z } from "zod";
 
 import { prisma } from "@plandit/database/prisma";
 import {
@@ -26,6 +28,11 @@ import {
   getManageableCalendar,
 } from "../events/event-permissions";
 import { getUserId, type RequestWithUser } from "../request-user";
+
+const calendarInviteSchema = z.object({
+  email: z.string().email().max(255),
+  role: z.enum(["ADMIN", "EDITOR", "VIEWER"]).default("VIEWER"),
+});
 
 function toCalendarResponse(calendar: {
   id: string;
@@ -320,6 +327,133 @@ export class CalendarController {
         joinedAt: member.joinedAt.toISOString(),
         user: member.user,
       })),
+    };
+  }
+
+  @Post("calendars/:calendarId/invites")
+  async invite(
+    @Req() request: RequestWithUser,
+    @Param("calendarId") calendarId: string,
+    @Body() payload: unknown,
+  ) {
+    const userId = getUserId(request);
+    const parsed = calendarInviteSchema.safeParse(payload);
+
+    if (!parsed.success) {
+      throw new BadRequestException("Invalid invite payload.");
+    }
+
+    const calendar = await getManageableCalendar(calendarId, userId);
+
+    if (!calendar) {
+      throw new NotFoundException("Calendar not found.");
+    }
+
+    if (calendar.type === "PERSONAL") {
+      throw new ForbiddenException("Personal calendars cannot invite members.");
+    }
+
+    const email = parsed.data.email.trim().toLowerCase();
+    const invitee = await prisma.user.findUnique({
+      where: {
+        email,
+      },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+      },
+    });
+
+    if (invitee) {
+      if (invitee.id === userId) {
+        throw new BadRequestException("You cannot invite yourself.");
+      }
+
+      const member = await prisma.calendarMember.upsert({
+        where: {
+          calendarId_userId: {
+            calendarId,
+            userId: invitee.id,
+          },
+        },
+        create: {
+          calendarId,
+          userId: invitee.id,
+          role: parsed.data.role,
+        },
+        update: {
+          role: parsed.data.role,
+        },
+        include: {
+          user: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              image: true,
+            },
+          },
+        },
+      });
+
+      return {
+        status: "member",
+        member: {
+          id: member.id,
+          role: member.role,
+          joinedAt: member.joinedAt.toISOString(),
+          user: member.user,
+        },
+      };
+    }
+
+    const expiresAt = new Date();
+    expiresAt.setDate(expiresAt.getDate() + 14);
+
+    const existingInvite = await prisma.calendarInvite.findFirst({
+      where: {
+        calendarId,
+        email,
+        acceptedAt: null,
+        expiresAt: {
+          gt: new Date(),
+        },
+      },
+      orderBy: {
+        createdAt: "desc",
+      },
+    });
+    const invite = existingInvite
+      ? await prisma.calendarInvite.update({
+          where: {
+            id: existingInvite.id,
+          },
+          data: {
+            role: parsed.data.role,
+            token: randomBytes(18).toString("base64url"),
+            expiresAt,
+          },
+        })
+      : await prisma.calendarInvite.create({
+          data: {
+            calendarId,
+            email,
+            role: parsed.data.role,
+            token: randomBytes(18).toString("base64url"),
+            invitedBy: userId,
+            expiresAt,
+          },
+        });
+
+    return {
+      status: "invited",
+      invite: {
+        id: invite.id,
+        email: invite.email,
+        role: invite.role,
+        expiresAt: invite.expiresAt.toISOString(),
+      },
     };
   }
 }
