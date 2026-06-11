@@ -302,6 +302,7 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isInviteOpen, setIsInviteOpen] = useState(false);
   const [inviteCalendarId, setInviteCalendarId] = useState("");
+  const [readNotificationKey, setReadNotificationKey] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [isSharing, setIsSharing] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
@@ -387,6 +388,15 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
       .sort((a, b) => new Date(a.startsAt).getTime() - new Date(b.startsAt).getTime())
       .slice(0, 8);
   }, [selectedDate, visibleEvents]);
+  const notificationKey = useMemo(
+    () =>
+      notificationEvents
+        .map((event) => `${event.id}:${event.startsAt}:${event.endsAt}`)
+        .join("|"),
+    [notificationEvents],
+  );
+  const hasUnreadNotifications =
+    notificationEvents.length > 0 && notificationKey !== readNotificationKey;
   const searchedEvents = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
 
@@ -464,6 +474,11 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
 
   function openSettingsModal() {
     setIsSettingsOpen(true);
+  }
+
+  function openNotificationPanel() {
+    setReadNotificationKey(notificationKey);
+    setIsNotificationOpen(true);
   }
 
   function canInviteToCalendar(calendar: CalendarAppCalendar) {
@@ -947,11 +962,11 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
         <button
           className="relative flex size-12 items-center justify-center rounded-lg"
           aria-label="알림"
-          onClick={() => setIsNotificationOpen(true)}
+          onClick={openNotificationPanel}
           type="button"
         >
           <Bell size={22} />
-          {notificationEvents.length > 0 ? (
+          {hasUnreadNotifications ? (
             <span className="absolute right-2 top-2 size-2 rounded-full bg-[#d64f68]" />
           ) : null}
         </button>
@@ -1112,11 +1127,11 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
                 className="icon-button relative"
                 aria-label="Notifications"
                 title="Notifications"
-                onClick={() => setIsNotificationOpen(true)}
+                onClick={openNotificationPanel}
                 type="button"
               >
                 <Bell size={18} />
-                {notificationEvents.length > 0 ? (
+                {hasUnreadNotifications ? (
                   <span className="absolute right-2 top-2 size-2 rounded-full bg-[#d64f68]" />
                 ) : null}
               </button>
