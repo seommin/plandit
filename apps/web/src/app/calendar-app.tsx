@@ -581,25 +581,6 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
     }
   }
 
-  function moveSelectedEventByDays(days: number) {
-    if (!selectedEvent) {
-      return;
-    }
-
-    const targetDate = new Date(selectedEvent.startsAt);
-    targetDate.setDate(targetDate.getDate() + days);
-
-    void moveEventToDate(selectedEvent.id, targetDate);
-  }
-
-  function moveSelectedEventToToday() {
-    if (!selectedEvent) {
-      return;
-    }
-
-    void moveEventToDate(selectedEvent.id, startOfDay(new Date()));
-  }
-
   function handleEventDragStart(dragEvent: DragEvent<HTMLElement>, eventId: string) {
     dragEvent.dataTransfer.setData("text/plain", eventId);
     dragEvent.dataTransfer.effectAllowed = "move";
@@ -1624,33 +1605,6 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
                   </p>
                 </div>
               ) : null}
-            </div>
-
-            <div className="mt-3 grid grid-cols-3 gap-2 rounded-lg border border-[var(--line)] bg-white p-2">
-              <button
-                className="h-10 rounded-md text-sm font-semibold text-[#34362f] hover:bg-[#efeee9] disabled:opacity-50"
-                disabled={isSaving}
-                onClick={() => moveSelectedEventByDays(-1)}
-                type="button"
-              >
-                전날
-              </button>
-              <button
-                className="h-10 rounded-md text-sm font-semibold text-[#34362f] hover:bg-[#efeee9] disabled:opacity-50"
-                disabled={isSaving}
-                onClick={moveSelectedEventToToday}
-                type="button"
-              >
-                오늘
-              </button>
-              <button
-                className="h-10 rounded-md text-sm font-semibold text-[#34362f] hover:bg-[#efeee9] disabled:opacity-50"
-                disabled={isSaving}
-                onClick={() => moveSelectedEventByDays(1)}
-                type="button"
-              >
-                다음날
-              </button>
             </div>
 
             <div className="mt-4 grid grid-cols-3 gap-2">
