@@ -504,7 +504,7 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
   }
 
   function canInviteToCalendar(calendar: CalendarAppCalendar) {
-    return calendar.type === "SHARED" && ["OWNER", "ADMIN"].includes(calendar.role);
+    return ["OWNER", "ADMIN"].includes(calendar.role);
   }
 
   async function loadCalendarMembers(calendarId: string) {
@@ -789,7 +789,6 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
         body: JSON.stringify({
           color: String(data.get("color")),
           name: String(data.get("name")),
-          type: String(data.get("type")),
         }),
       });
 
@@ -852,6 +851,13 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
           : "초대 링크가 생성되었습니다.",
       );
       setInviteUrl(result.url ?? "");
+      setCalendarItems((current) =>
+        current.map((calendar) =>
+          calendar.id === selectedInviteCalendar.id
+            ? { ...calendar, type: "SHARED" }
+            : calendar,
+        ),
+      );
       if (result.status === "member") {
         void loadCalendarMembers(selectedInviteCalendar.id);
       }
@@ -1894,15 +1900,6 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
                 placeholder="캘린더 이름"
                 required
               />
-              <select
-                className="h-11 w-full rounded-lg border border-[var(--line)] bg-white px-3 outline-none focus:border-[#aeb3a6]"
-                defaultValue="SHARED"
-                name="type"
-                required
-              >
-                <option value="PERSONAL">개인 캘린더</option>
-                <option value="SHARED">공유 캘린더</option>
-              </select>
               <label className="flex h-11 items-center justify-between rounded-lg border border-[var(--line)] bg-white px-3 text-sm font-semibold">
                 색상
                 <input

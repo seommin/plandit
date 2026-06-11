@@ -349,10 +349,6 @@ export class CalendarController {
       throw new NotFoundException("Calendar not found.");
     }
 
-    if (calendar.type === "PERSONAL") {
-      throw new ForbiddenException("Personal calendars cannot invite members.");
-    }
-
     const email = parsed.data.email.trim().toLowerCase();
     const invitee = await prisma.user.findUnique({
       where: {
@@ -396,6 +392,17 @@ export class CalendarController {
           },
         },
       });
+
+      if (calendar.type === "PERSONAL") {
+        await prisma.calendar.update({
+          where: {
+            id: calendarId,
+          },
+          data: {
+            type: "SHARED",
+          },
+        });
+      }
 
       return {
         status: "member",
@@ -445,6 +452,17 @@ export class CalendarController {
             expiresAt,
           },
         });
+
+    if (calendar.type === "PERSONAL") {
+      await prisma.calendar.update({
+        where: {
+          id: calendarId,
+        },
+        data: {
+          type: "SHARED",
+        },
+      });
+    }
 
     return {
       status: "invited",
