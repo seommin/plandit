@@ -298,6 +298,7 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isNotificationOpen, setIsNotificationOpen] = useState(false);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isSharing, setIsSharing] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
@@ -437,6 +438,10 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
 
   function openSearchModal() {
     setIsSearchOpen(true);
+  }
+
+  function openSettingsModal() {
+    setIsSettingsOpen(true);
   }
 
   function openEventDetail(eventId: string) {
@@ -1002,7 +1007,13 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
               <button className="icon-button" aria-label="Notifications" title="Notifications">
                 <Bell size={18} />
               </button>
-              <button className="icon-button" aria-label="Settings" title="Settings">
+              <button
+                className="icon-button"
+                aria-label="Settings"
+                title="Settings"
+                onClick={openSettingsModal}
+                type="button"
+              >
                 <Settings2 size={18} />
               </button>
               <button
@@ -1286,6 +1297,7 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
             className="flex h-14 items-center justify-center rounded-lg text-[#34362f] hover:bg-[#efeee9]"
             aria-label="설정"
             title="설정"
+            onClick={openSettingsModal}
             type="button"
           >
             <Settings2 size={21} />
@@ -1468,6 +1480,64 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
                   검색 결과가 없습니다.
                 </p>
               )}
+            </div>
+          </section>
+        </div>
+      ) : null}
+
+      {isSettingsOpen ? (
+        <div className="fixed inset-0 z-40 flex items-end justify-center bg-black/35 px-0 md:items-center md:px-4">
+          <section className="panel mobile-sheet w-full max-w-[520px] p-5">
+            <div className="mb-5 flex items-center justify-between gap-3">
+              <h2 className="text-lg font-semibold">설정</h2>
+              <button
+                className="icon-button"
+                aria-label="Close"
+                onClick={() => setIsSettingsOpen(false)}
+                type="button"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              <section className="rounded-lg border border-[var(--line)] bg-white p-4">
+                <p className="text-xs font-semibold text-[var(--muted)]">계정</p>
+                <p className="mt-2 truncate text-sm font-semibold">{user.name}</p>
+                <p className="mt-1 truncate text-xs text-[var(--muted)]">{user.email}</p>
+              </section>
+
+              <section className="grid grid-cols-2 gap-2">
+                <div className="rounded-lg border border-[var(--line)] bg-white p-4">
+                  <p className="text-xs font-semibold text-[var(--muted)]">캘린더</p>
+                  <p className="mt-2 text-xl font-semibold">{calendarItems.length}</p>
+                </div>
+                <div className="rounded-lg border border-[var(--line)] bg-white p-4">
+                  <p className="text-xs font-semibold text-[var(--muted)]">표시 중</p>
+                  <p className="mt-2 text-xl font-semibold">{selectedCalendarIds.length}</p>
+                </div>
+              </section>
+
+              <section className="rounded-lg border border-[var(--line)] bg-white p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-xs font-semibold text-[var(--muted)]">시간대</p>
+                    <p className="mt-2 text-sm font-semibold">Asia/Seoul</p>
+                  </div>
+                  <span className="rounded-full border border-[var(--line)] px-2.5 py-1 text-xs font-semibold text-[var(--muted)]">
+                    ko-KR
+                  </span>
+                </div>
+              </section>
+
+              <button
+                className="flex h-11 w-full items-center justify-center gap-2 rounded-lg border border-[var(--line)] bg-white text-sm font-semibold text-[#34362f]"
+                onClick={() => signOut({ callbackUrl: "/login" })}
+                type="button"
+              >
+                <LogOut size={16} />
+                로그아웃
+              </button>
             </div>
           </section>
         </div>
