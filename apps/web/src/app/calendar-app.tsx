@@ -70,6 +70,18 @@ type CalendarDayEvent = {
 
 type BottomView = "DAY" | "MONTH" | "IMPORTANT";
 
+type CalendarMember = {
+  id: string;
+  role: CalendarRole;
+  joinedAt: string;
+  user: {
+    id: string;
+    name: string | null;
+    email: string;
+    image: string | null;
+  };
+};
+
 const weekDays = [
   { label: "일", tone: "text-[#d64f68]" },
   { label: "월", tone: "text-[var(--muted)]" },
@@ -85,6 +97,13 @@ const viewNavItems = [
   ["월별", List, "MONTH"],
   ["중요", Star, "IMPORTANT"],
 ] as const;
+
+const memberRoleLabels = {
+  ADMIN: "관리",
+  EDITOR: "편집",
+  OWNER: "소유",
+  VIEWER: "보기",
+} satisfies Record<CalendarRole, string>;
 
 const dateTimeFormatter = new Intl.DateTimeFormat("ko-KR", {
   dateStyle: "medium",
@@ -302,6 +321,8 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isInviteOpen, setIsInviteOpen] = useState(false);
   const [inviteCalendarId, setInviteCalendarId] = useState("");
+  const [inviteMembers, setInviteMembers] = useState<CalendarMember[]>([]);
+  const [isLoadingInviteMembers, setIsLoadingInviteMembers] = useState(false);
   const [readNotificationKey, setReadNotificationKey] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [isSharing, setIsSharing] = useState(false);
@@ -486,12 +507,37 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
     return calendar.type === "SHARED" && ["OWNER", "ADMIN"].includes(calendar.role);
   }
 
+  async function loadCalendarMembers(calendarId: string) {
+    setIsLoadingInviteMembers(true);
+
+    try {
+      const response = await fetch(`/api/calendars/${calendarId}/members`);
+      const result = (await response.json()) as {
+        error?: string;
+        members?: CalendarMember[];
+      };
+
+      if (!response.ok) {
+        throw new Error(result.error ?? "멤버 목록을 불러오지 못했습니다.");
+      }
+
+      setInviteMembers(result.members ?? []);
+    } catch (error) {
+      setFormError(error instanceof Error ? error.message : "다시 시도해주세요.");
+      setInviteMembers([]);
+    } finally {
+      setIsLoadingInviteMembers(false);
+    }
+  }
+
   function openInviteModal(calendarId: string) {
     setFormError(null);
     setInviteMessage("");
     setInviteUrl("");
+    setInviteMembers([]);
     setInviteCalendarId(calendarId);
     setIsInviteOpen(true);
+    void loadCalendarMembers(calendarId);
   }
 
   function openEventDetail(eventId: string) {
@@ -806,6 +852,9 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
           : "초대 링크가 생성되었습니다.",
       );
       setInviteUrl(result.url ?? "");
+      if (result.status === "member") {
+        void loadCalendarMembers(selectedInviteCalendar.id);
+      }
       event.currentTarget.reset();
     } catch (error) {
       setFormError(error instanceof Error ? error.message : "다시 시도해주세요.");
@@ -1777,6 +1826,44 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
                 {isSaving ? "초대 중" : "초대"}
               </button>
             </form>
+            <div className="mt-5 border-t border-[var(--line)] pt-4">
+              <div className="mb-3 flex items-center justify-between">
+                <h3 className="text-sm font-semibold">멤버</h3>
+                <span className="text-xs font-semibold text-[var(--muted)]">
+                  {inviteMembers.length}
+                </span>
+              </div>
+              <div className="max-h-44 space-y-2 overflow-y-auto pr-1 scrollbar-hide">
+                {isLoadingInviteMembers ? (
+                  <p className="rounded-lg border border-[var(--line)] bg-white p-3 text-sm text-[var(--muted)]">
+                    불러오는 중입니다.
+                  </p>
+                ) : inviteMembers.length > 0 ? (
+                  inviteMembers.map((member) => (
+                    <div
+                      key={member.id}
+                      className="flex items-center justify-between gap-3 rounded-lg border border-[var(--line)] bg-white p-3"
+                    >
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-semibold">
+                          {member.user.name ?? member.user.email}
+                        </p>
+                        <p className="mt-1 truncate text-xs text-[var(--muted)]">
+                          {member.user.email}
+                        </p>
+                      </div>
+                      <span className="shrink-0 rounded-full border border-[var(--line)] px-2.5 py-1 text-xs font-semibold text-[var(--muted)]">
+                        {memberRoleLabels[member.role]}
+                      </span>
+                    </div>
+                  ))
+                ) : (
+                  <p className="rounded-lg border border-[var(--line)] bg-white p-3 text-sm text-[var(--muted)]">
+                    표시할 멤버가 없습니다.
+                  </p>
+                )}
+              </div>
+            </div>
           </section>
         </div>
       ) : null}
