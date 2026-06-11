@@ -297,9 +297,11 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isNotificationOpen, setIsNotificationOpen] = useState(false);
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isSharing, setIsSharing] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
   const [shareUrl, setShareUrl] = useState("");
   const [shareMessage, setShareMessage] = useState("");
 
@@ -364,6 +366,31 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
         .sort((a, b) => new Date(a.startsAt).getTime() - new Date(b.startsAt).getTime()),
     [eventItems],
   );
+  const searchedEvents = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+
+    if (!query) {
+      return visibleEvents
+        .slice()
+        .sort((a, b) => new Date(a.startsAt).getTime() - new Date(b.startsAt).getTime())
+        .slice(0, 8);
+    }
+
+    return visibleEvents
+      .filter((event) =>
+        [
+          event.title,
+          event.location ?? "",
+          event.description ?? "",
+          event.calendar.name,
+        ]
+          .join(" ")
+          .toLowerCase()
+          .includes(query),
+      )
+      .sort((a, b) => new Date(a.startsAt).getTime() - new Date(b.startsAt).getTime())
+      .slice(0, 20);
+  }, [searchQuery, visibleEvents]);
 
   const writableCalendars = calendarItems.filter((calendar) =>
     ["OWNER", "ADMIN", "EDITOR"].includes(calendar.role),
@@ -408,11 +435,25 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
     setIsCalendarCreateOpen(true);
   }
 
+  function openSearchModal() {
+    setIsSearchOpen(true);
+  }
+
   function openEventDetail(eventId: string) {
     setSelectedEventId(eventId);
     setShareMessage("");
     setShareUrl("");
     setIsDetailOpen(true);
+  }
+
+  function openSearchResult(event: CalendarAppEvent) {
+    const eventDate = new Date(event.startsAt);
+
+    setSelectedDate(startOfDay(eventDate));
+    setMonth(new Date(eventDate.getFullYear(), eventDate.getMonth(), 1));
+    setBottomView("DAY");
+    setIsSearchOpen(false);
+    openEventDetail(event.id);
   }
 
   async function handleToggleImportantEvent() {
@@ -968,6 +1009,15 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
             )}
 
             <div className="hidden items-center justify-end gap-2 md:flex">
+              <button
+                className="icon-button"
+                aria-label="Search"
+                title="Search"
+                onClick={openSearchModal}
+                type="button"
+              >
+                <Search size={18} />
+              </button>
               <button className="icon-button" aria-label="Notifications" title="Notifications">
                 <Bell size={18} />
               </button>
@@ -1246,6 +1296,7 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
             className="flex h-14 items-center justify-center rounded-lg text-[#34362f] hover:bg-[#efeee9]"
             aria-label="검색"
             title="검색"
+            onClick={openSearchModal}
             type="button"
           >
             <Search size={21} />
@@ -1375,6 +1426,69 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
               </div>
             </div>
           </aside>
+        </div>
+      ) : null}
+
+      {isSearchOpen ? (
+        <div className="fixed inset-0 z-40 flex items-end justify-center bg-black/35 px-0 md:items-center md:px-4">
+          <section className="panel mobile-sheet w-full max-w-[560px] p-5">
+            <div className="mb-4 flex items-center justify-between gap-3">
+              <h2 className="text-lg font-semibold">검색</h2>
+              <button
+                className="icon-button"
+                aria-label="Close"
+                onClick={() => setIsSearchOpen(false)}
+                type="button"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <label className="flex h-12 items-center gap-3 rounded-lg border border-[var(--line)] bg-white px-3">
+              <Search size={18} className="text-[var(--muted)]" />
+              <input
+                autoFocus
+                className="min-w-0 flex-1 bg-transparent text-sm font-semibold outline-none placeholder:text-[var(--muted)]"
+                onChange={(event) => setSearchQuery(event.target.value)}
+                placeholder="일정, 장소, 메모 검색"
+                value={searchQuery}
+              />
+            </label>
+
+            <div className="mt-4 max-h-[52vh] space-y-2 overflow-y-auto pr-1 scrollbar-hide">
+              {searchedEvents.length > 0 ? (
+                searchedEvents.map((item) => (
+                  <button
+                    key={item.id}
+                    className="flex w-full gap-3 rounded-lg border border-[var(--line)] bg-white p-3 text-left hover:bg-[#faf9f5]"
+                    onClick={() => openSearchResult(item)}
+                    type="button"
+                  >
+                    <span
+                      className="mt-1 size-2.5 rounded-full"
+                      style={{ backgroundColor: item.color }}
+                    />
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-sm font-semibold">
+                        {item.title}
+                      </span>
+                      <span className="mt-1 block truncate text-xs font-semibold text-[var(--muted)]">
+                        {dateTimeFormatter.format(new Date(item.startsAt))}
+                      </span>
+                      <span className="mt-1 block truncate text-xs text-[var(--muted)]">
+                        {item.calendar.name}
+                        {item.location ? ` · ${item.location}` : ""}
+                      </span>
+                    </span>
+                  </button>
+                ))
+              ) : (
+                <p className="rounded-lg border border-[var(--line)] bg-white p-4 text-sm text-[var(--muted)]">
+                  검색 결과가 없습니다.
+                </p>
+              )}
+            </div>
+          </section>
         </div>
       ) : null}
 
