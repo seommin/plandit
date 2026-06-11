@@ -307,6 +307,7 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
   const [isSharing, setIsSharing] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [inviteMessage, setInviteMessage] = useState("");
+  const [inviteUrl, setInviteUrl] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [shareUrl, setShareUrl] = useState("");
   const [shareMessage, setShareMessage] = useState("");
@@ -488,6 +489,7 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
   function openInviteModal(calendarId: string) {
     setFormError(null);
     setInviteMessage("");
+    setInviteUrl("");
     setInviteCalendarId(calendarId);
     setIsInviteOpen(true);
   }
@@ -773,6 +775,7 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
     setIsSaving(true);
     setFormError(null);
     setInviteMessage("");
+    setInviteUrl("");
 
     const data = new FormData(event.currentTarget);
 
@@ -790,6 +793,7 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
       const result = (await response.json()) as {
         error?: string;
         status?: "member" | "invited";
+        url?: string;
       };
 
       if (!response.ok) {
@@ -799,8 +803,9 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
       setInviteMessage(
         result.status === "member"
           ? "가입된 사용자를 캘린더 멤버로 추가했습니다."
-          : "초대가 생성되었습니다. 초대 수락 기능과 메일 발송은 다음 단계에서 연결합니다.",
+          : "초대 링크가 생성되었습니다.",
       );
+      setInviteUrl(result.url ?? "");
       event.currentTarget.reset();
     } catch (error) {
       setFormError(error instanceof Error ? error.message : "다시 시도해주세요.");
@@ -1723,6 +1728,7 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
                 onClick={() => {
                   setFormError(null);
                   setInviteMessage("");
+                  setInviteUrl("");
                   setIsInviteOpen(false);
                 }}
                 type="button"
@@ -1751,6 +1757,11 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
               {inviteMessage ? (
                 <p className="rounded-lg bg-[#eff8f1] px-3 py-2 text-sm font-semibold text-[#11623b]">
                   {inviteMessage}
+                </p>
+              ) : null}
+              {inviteUrl ? (
+                <p className="break-all rounded-lg border border-[var(--line)] bg-white px-3 py-2 text-xs text-[var(--muted)]">
+                  {inviteUrl}
                 </p>
               ) : null}
               {formError ? (

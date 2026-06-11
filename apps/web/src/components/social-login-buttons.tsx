@@ -23,7 +23,11 @@ const socialProviders = [
   },
 ] as const;
 
-export default function SocialLoginButtons() {
+type SocialLoginButtonsProps = {
+  callbackUrl?: string;
+};
+
+export default function SocialLoginButtons({ callbackUrl = "/" }: SocialLoginButtonsProps) {
   return (
     <div className="space-y-2">
       {socialProviders.map((provider) => (
@@ -33,7 +37,7 @@ export default function SocialLoginButtons() {
             "flex h-11 w-full items-center justify-center gap-3 rounded-lg text-sm font-semibold",
             provider.className,
           ].join(" ")}
-          onClick={() => signIn(provider.id)}
+          onClick={() => signIn(provider.id, { callbackUrl })}
           type="button"
         >
           {provider.icon}

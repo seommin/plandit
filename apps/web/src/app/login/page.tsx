@@ -1,16 +1,25 @@
 "use client";
 
 import Link from "next/link";
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import { signIn } from "next-auth/react";
 
 import SocialLoginButtons from "@/components/social-login-buttons";
 
+function getSafeCallbackUrl(value: string | null) {
+  return value?.startsWith("/") && !value.startsWith("//") ? value : "/";
+}
+
 export default function LoginPage() {
+  const [callbackUrl, setCallbackUrl] = useState("/");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [status, setStatus] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  useEffect(() => {
+    setCallbackUrl(getSafeCallbackUrl(new URLSearchParams(window.location.search).get("callbackUrl")));
+  }, []);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -28,7 +37,7 @@ export default function LoginPage() {
         throw new Error("이메일 또는 비밀번호를 확인해주세요.");
       }
 
-      window.location.href = "/";
+      window.location.href = callbackUrl;
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "다시 시도해주세요.");
     } finally {
@@ -84,14 +93,17 @@ export default function LoginPage() {
           <div className="h-px flex-1 bg-[var(--line)]" />
         </div>
 
-        <SocialLoginButtons />
+        <SocialLoginButtons callbackUrl={callbackUrl} />
 
         <div className="mt-5 flex items-center justify-center gap-3 text-sm font-semibold text-[var(--muted)]">
           <Link className="hover:text-[var(--ink)]" href="/forgot-password">
             비밀번호 찾기
           </Link>
           <span className="h-3 w-px bg-[var(--line)]" />
-          <Link className="hover:text-[var(--ink)]" href="/signup">
+          <Link
+            className="hover:text-[var(--ink)]"
+            href={`/signup?callbackUrl=${encodeURIComponent(callbackUrl)}`}
+          >
             회원가입
           </Link>
         </div>
