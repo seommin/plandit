@@ -18,6 +18,7 @@ import {
   Share2,
   Star,
   Trash2,
+  UserPlus,
   X,
 } from "lucide-react";
 
@@ -299,9 +300,12 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
   const [isNotificationOpen, setIsNotificationOpen] = useState(false);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isInviteOpen, setIsInviteOpen] = useState(false);
+  const [inviteCalendarId, setInviteCalendarId] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [isSharing, setIsSharing] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
+  const [inviteMessage, setInviteMessage] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [shareUrl, setShareUrl] = useState("");
   const [shareMessage, setShareMessage] = useState("");
@@ -412,6 +416,8 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
   const writableCalendars = calendarItems.filter((calendar) =>
     ["OWNER", "ADMIN", "EDITOR"].includes(calendar.role),
   );
+  const selectedInviteCalendar =
+    calendarItems.find((calendar) => calendar.id === inviteCalendarId) ?? null;
   const isAllCalendarsSelected =
     calendarItems.length > 0 && selectedCalendarIds.length === calendarItems.length;
   const calendarSelectionActionLabel = isAllCalendarsSelected ? "전체 해제" : "전체 선택";
@@ -458,6 +464,17 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
 
   function openSettingsModal() {
     setIsSettingsOpen(true);
+  }
+
+  function canInviteToCalendar(calendar: CalendarAppCalendar) {
+    return calendar.type === "SHARED" && ["OWNER", "ADMIN"].includes(calendar.role);
+  }
+
+  function openInviteModal(calendarId: string) {
+    setFormError(null);
+    setInviteMessage("");
+    setInviteCalendarId(calendarId);
+    setIsInviteOpen(true);
   }
 
   function openEventDetail(eventId: string) {
@@ -731,6 +748,52 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
     }
   }
 
+  async function handleInviteCalendar(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (!selectedInviteCalendar) {
+      return;
+    }
+
+    setIsSaving(true);
+    setFormError(null);
+    setInviteMessage("");
+
+    const data = new FormData(event.currentTarget);
+
+    try {
+      const response = await fetch(`/api/calendars/${selectedInviteCalendar.id}/invites`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          email: String(data.get("email")),
+          role: String(data.get("role")),
+        }),
+      });
+      const result = (await response.json()) as {
+        error?: string;
+        status?: "member" | "invited";
+      };
+
+      if (!response.ok) {
+        throw new Error(result.error ?? "초대를 처리하지 못했습니다.");
+      }
+
+      setInviteMessage(
+        result.status === "member"
+          ? "가입된 사용자를 캘린더 멤버로 추가했습니다."
+          : "초대가 생성되었습니다. 초대 수락 기능과 메일 발송은 다음 단계에서 연결합니다.",
+      );
+      event.currentTarget.reset();
+    } catch (error) {
+      setFormError(error instanceof Error ? error.message : "다시 시도해주세요.");
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
   async function handleUpdateEvent(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
@@ -960,22 +1023,34 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
               </div>
               <div className="space-y-2">
                 {calendarItems.map((calendar) => (
-                  <label
+                  <div
                     key={calendar.id}
-                    className="flex w-full cursor-pointer items-center gap-3 rounded-lg px-3 py-2 text-left hover:bg-[#efeee9]"
+                    className="flex w-full items-center gap-2 rounded-lg px-3 py-2 hover:bg-[#efeee9]"
                   >
-                    <input
-                      checked={selectedCalendarIds.includes(calendar.id)}
-                      className="size-4 accent-[var(--ink)]"
-                      onChange={() => toggleCalendar(calendar.id)}
-                      type="checkbox"
-                    />
-                    <span
-                      className="size-2.5 rounded-full"
-                      style={{ backgroundColor: calendar.color }}
-                    />
-                    <span className="text-sm text-[#34362f]">{calendar.name}</span>
-                  </label>
+                    <label className="flex min-w-0 flex-1 cursor-pointer items-center gap-3 text-left">
+                      <input
+                        checked={selectedCalendarIds.includes(calendar.id)}
+                        className="size-4 accent-[var(--ink)]"
+                        onChange={() => toggleCalendar(calendar.id)}
+                        type="checkbox"
+                      />
+                      <span
+                        className="size-2.5 shrink-0 rounded-full"
+                        style={{ backgroundColor: calendar.color }}
+                      />
+                      <span className="truncate text-sm text-[#34362f]">{calendar.name}</span>
+                    </label>
+                    {canInviteToCalendar(calendar) ? (
+                      <button
+                        className="flex size-7 shrink-0 items-center justify-center rounded-md text-[var(--muted)] hover:bg-white hover:text-[var(--ink)]"
+                        aria-label={`${calendar.name} 초대`}
+                        onClick={() => openInviteModal(calendar.id)}
+                        type="button"
+                      >
+                        <UserPlus size={15} />
+                      </button>
+                    ) : null}
+                  </div>
                 ))}
               </div>
             </div>
@@ -1405,22 +1480,37 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
               </div>
               <div className="space-y-2">
                 {calendarItems.map((calendar) => (
-                  <label
+                  <div
                     key={calendar.id}
-                    className="flex w-full cursor-pointer items-center gap-3 rounded-lg px-3 py-2 text-left hover:bg-[#efeee9]"
+                    className="flex w-full items-center gap-2 rounded-lg px-3 py-2 hover:bg-[#efeee9]"
                   >
-                    <input
-                      checked={selectedCalendarIds.includes(calendar.id)}
-                      className="size-4 accent-[var(--ink)]"
-                      onChange={() => toggleCalendar(calendar.id)}
-                      type="checkbox"
-                    />
-                    <span
-                      className="size-2.5 rounded-full"
-                      style={{ backgroundColor: calendar.color }}
-                    />
-                    <span className="text-sm text-[#34362f]">{calendar.name}</span>
-                  </label>
+                    <label className="flex min-w-0 flex-1 cursor-pointer items-center gap-3 text-left">
+                      <input
+                        checked={selectedCalendarIds.includes(calendar.id)}
+                        className="size-4 accent-[var(--ink)]"
+                        onChange={() => toggleCalendar(calendar.id)}
+                        type="checkbox"
+                      />
+                      <span
+                        className="size-2.5 shrink-0 rounded-full"
+                        style={{ backgroundColor: calendar.color }}
+                      />
+                      <span className="truncate text-sm text-[#34362f]">{calendar.name}</span>
+                    </label>
+                    {canInviteToCalendar(calendar) ? (
+                      <button
+                        className="flex size-7 shrink-0 items-center justify-center rounded-md text-[var(--muted)] hover:bg-white hover:text-[var(--ink)]"
+                        aria-label={`${calendar.name} 초대`}
+                        onClick={() => {
+                          setIsMobileMenuOpen(false);
+                          openInviteModal(calendar.id);
+                        }}
+                        type="button"
+                      >
+                        <UserPlus size={15} />
+                      </button>
+                    ) : null}
+                  </div>
                 ))}
               </div>
             </div>
@@ -1598,6 +1688,69 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
                 로그아웃
               </button>
             </div>
+          </section>
+        </div>
+      ) : null}
+
+      {isInviteOpen && selectedInviteCalendar ? (
+        <div className="fixed inset-0 z-40 flex items-end justify-center bg-black/35 px-0 md:items-center md:px-4">
+          <section className="panel mobile-sheet w-full max-w-[460px] p-5">
+            <div className="mb-5 flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <h2 className="text-lg font-semibold">사용자 초대</h2>
+                <p className="mt-1 truncate text-xs text-[var(--muted)]">
+                  {selectedInviteCalendar.name}
+                </p>
+              </div>
+              <button
+                className="icon-button"
+                aria-label="Close"
+                onClick={() => {
+                  setFormError(null);
+                  setInviteMessage("");
+                  setIsInviteOpen(false);
+                }}
+                type="button"
+              >
+                <X size={18} />
+              </button>
+            </div>
+            <form className="space-y-3" onSubmit={handleInviteCalendar}>
+              <input
+                className="h-11 w-full rounded-lg border border-[var(--line)] bg-white px-3 outline-none focus:border-[#aeb3a6]"
+                name="email"
+                placeholder="이메일"
+                required
+                type="email"
+              />
+              <select
+                className="h-11 w-full rounded-lg border border-[var(--line)] bg-white px-3 outline-none focus:border-[#aeb3a6]"
+                defaultValue="VIEWER"
+                name="role"
+                required
+              >
+                <option value="VIEWER">보기만 가능</option>
+                <option value="EDITOR">일정 편집 가능</option>
+                <option value="ADMIN">캘린더 관리 가능</option>
+              </select>
+              {inviteMessage ? (
+                <p className="rounded-lg bg-[#eff8f1] px-3 py-2 text-sm font-semibold text-[#11623b]">
+                  {inviteMessage}
+                </p>
+              ) : null}
+              {formError ? (
+                <p className="rounded-lg bg-[#fff3f1] px-3 py-2 text-sm font-semibold text-[#b33a2f]">
+                  {formError}
+                </p>
+              ) : null}
+              <button
+                className="h-11 w-full rounded-lg bg-[var(--ink)] text-sm font-semibold text-white disabled:opacity-50"
+                disabled={isSaving}
+                type="submit"
+              >
+                {isSaving ? "초대 중" : "초대"}
+              </button>
+            </form>
           </section>
         </div>
       ) : null}
