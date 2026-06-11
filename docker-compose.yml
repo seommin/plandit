@@ -5,7 +5,6 @@ services:
       target: dev
     command: sh -c "pnpm prisma:generate && pnpm --filter @plandit/web dev --hostname 0.0.0.0"
     environment:
-      NODE_ENV: development
       NEXTAUTH_URL: http://localhost:3000
       NEXTAUTH_SECRET: local-development-secret-change-me
       AUTH_SECRET: local-development-secret-change-me
@@ -36,7 +35,6 @@ services:
       target: dev
     command: sh -c "pnpm prisma:generate && pnpm --filter @plandit/api dev"
     environment:
-      NODE_ENV: development
       API_PORT: 4000
       API_INTERNAL_SECRET: local-internal-api-secret
       WEB_ORIGIN: http://localhost:3000
