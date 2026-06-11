@@ -454,6 +454,115 @@ export class CalendarController {
         role: invite.role,
         expiresAt: invite.expiresAt.toISOString(),
       },
+      url: new URL(
+        `/invite/${invite.token}`,
+        process.env.WEB_ORIGIN ?? "http://localhost:3000",
+      ).toString(),
+    };
+  }
+
+  @Get("invites/:token")
+  async readInvite(@Param("token") token: string) {
+    const invite = await prisma.calendarInvite.findUnique({
+      where: {
+        token,
+      },
+      include: {
+        calendar: {
+          select: {
+            id: true,
+            name: true,
+            color: true,
+            type: true,
+          },
+        },
+      },
+    });
+
+    if (!invite || invite.acceptedAt || invite.expiresAt < new Date()) {
+      throw new NotFoundException("Invite not found.");
+    }
+
+    return {
+      invite: {
+        id: invite.id,
+        email: invite.email,
+        role: invite.role,
+        expiresAt: invite.expiresAt.toISOString(),
+        calendar: invite.calendar,
+      },
+    };
+  }
+
+  @Post("invites/:token/accept")
+  async acceptInvite(@Req() request: RequestWithUser, @Param("token") token: string) {
+    const userId = getUserId(request);
+    const user = await prisma.user.findUnique({
+      where: {
+        id: userId,
+      },
+      select: {
+        id: true,
+        email: true,
+      },
+    });
+
+    if (!user) {
+      throw new NotFoundException("User not found.");
+    }
+
+    const invite = await prisma.calendarInvite.findUnique({
+      where: {
+        token,
+      },
+      include: {
+        calendar: true,
+      },
+    });
+
+    if (!invite || invite.acceptedAt || invite.expiresAt < new Date()) {
+      throw new NotFoundException("Invite not found.");
+    }
+
+    if (invite.email.toLowerCase() !== user.email.toLowerCase()) {
+      throw new ForbiddenException("This invite belongs to another email.");
+    }
+
+    const member = await prisma.calendarMember.upsert({
+      where: {
+        calendarId_userId: {
+          calendarId: invite.calendarId,
+          userId,
+        },
+      },
+      create: {
+        calendarId: invite.calendarId,
+        userId,
+        role: invite.role,
+      },
+      update: {
+        role: invite.role,
+      },
+    });
+
+    await prisma.calendarInvite.update({
+      where: {
+        id: invite.id,
+      },
+      data: {
+        acceptedAt: new Date(),
+      },
+    });
+
+    return {
+      calendar: {
+        id: invite.calendar.id,
+        name: invite.calendar.name,
+      },
+      member: {
+        id: member.id,
+        role: member.role,
+      },
     };
   }
 }

@@ -1,17 +1,26 @@
 "use client";
 
 import Link from "next/link";
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import { signIn } from "next-auth/react";
 
 import SocialLoginButtons from "@/components/social-login-buttons";
 
+function getSafeCallbackUrl(value: string | null) {
+  return value?.startsWith("/") && !value.startsWith("//") ? value : "/";
+}
+
 export default function SignupPage() {
+  const [callbackUrl, setCallbackUrl] = useState("/");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [status, setStatus] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  useEffect(() => {
+    setCallbackUrl(getSafeCallbackUrl(new URLSearchParams(window.location.search).get("callbackUrl")));
+  }, []);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -42,7 +51,7 @@ export default function SignupPage() {
         throw new Error("가입은 완료됐지만 로그인에 실패했습니다.");
       }
 
-      window.location.href = "/";
+      window.location.href = callbackUrl;
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "다시 시도해주세요.");
     } finally {
@@ -107,10 +116,13 @@ export default function SignupPage() {
           <div className="h-px flex-1 bg-[var(--line)]" />
         </div>
 
-        <SocialLoginButtons />
+        <SocialLoginButtons callbackUrl={callbackUrl} />
 
         <div className="mt-5 text-center text-sm font-semibold text-[var(--muted)]">
-          <Link className="hover:text-[var(--ink)]" href="/login">
+          <Link
+            className="hover:text-[var(--ink)]"
+            href={`/login?callbackUrl=${encodeURIComponent(callbackUrl)}`}
+          >
             이미 계정이 있나요?
           </Link>
         </div>
