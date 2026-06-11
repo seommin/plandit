@@ -1111,12 +1111,13 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
                     </label>
                     {canInviteToCalendar(calendar) ? (
                       <button
-                        className="flex size-7 shrink-0 items-center justify-center rounded-md text-[var(--muted)] hover:bg-white hover:text-[var(--ink)]"
-                        aria-label={`${calendar.name} 초대`}
+                        className="flex h-7 shrink-0 items-center gap-1 rounded-md border border-[var(--line)] bg-white px-2 text-xs font-semibold text-[var(--muted)] hover:text-[var(--ink)]"
+                        aria-label={`${calendar.name} 멤버`}
                         onClick={() => openInviteModal(calendar.id)}
                         type="button"
                       >
-                        <UserPlus size={15} />
+                        <UserPlus size={13} />
+                        멤버
                       </button>
                     ) : null}
                   </div>
@@ -1568,15 +1569,16 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
                     </label>
                     {canInviteToCalendar(calendar) ? (
                       <button
-                        className="flex size-7 shrink-0 items-center justify-center rounded-md text-[var(--muted)] hover:bg-white hover:text-[var(--ink)]"
-                        aria-label={`${calendar.name} 초대`}
+                        className="flex h-7 shrink-0 items-center gap-1 rounded-md border border-[var(--line)] bg-white px-2 text-xs font-semibold text-[var(--muted)] hover:text-[var(--ink)]"
+                        aria-label={`${calendar.name} 멤버`}
                         onClick={() => {
                           setIsMobileMenuOpen(false);
                           openInviteModal(calendar.id);
                         }}
                         type="button"
                       >
-                        <UserPlus size={15} />
+                        <UserPlus size={13} />
+                        멤버
                       </button>
                     ) : null}
                   </div>
