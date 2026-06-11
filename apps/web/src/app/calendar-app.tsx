@@ -367,6 +367,22 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
         .sort((a, b) => new Date(a.startsAt).getTime() - new Date(b.startsAt).getTime()),
     [eventItems],
   );
+  const notificationEvents = useMemo(() => {
+    const rangeStart = startOfDay(selectedDate);
+    const rangeEnd = new Date(rangeStart);
+
+    rangeEnd.setDate(rangeEnd.getDate() + 14);
+
+    return visibleEvents
+      .filter((event) => {
+        const startsAt = new Date(event.startsAt);
+        const endsAt = new Date(event.endsAt);
+
+        return endsAt >= rangeStart && startsAt <= rangeEnd;
+      })
+      .sort((a, b) => new Date(a.startsAt).getTime() - new Date(b.startsAt).getTime())
+      .slice(0, 8);
+  }, [selectedDate, visibleEvents]);
   const searchedEvents = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
 
@@ -458,6 +474,16 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
     setMonth(new Date(eventDate.getFullYear(), eventDate.getMonth(), 1));
     setBottomView("DAY");
     setIsSearchOpen(false);
+    openEventDetail(event.id);
+  }
+
+  function openNotificationEvent(event: CalendarAppEvent) {
+    const eventDate = new Date(event.startsAt);
+
+    setSelectedDate(startOfDay(eventDate));
+    setMonth(new Date(eventDate.getFullYear(), eventDate.getMonth(), 1));
+    setBottomView("DAY");
+    setIsNotificationOpen(false);
     openEventDetail(event.id);
   }
 
@@ -856,12 +882,15 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
           Plandit
         </button>
         <button
-          className="flex size-12 items-center justify-center rounded-lg"
+          className="relative flex size-12 items-center justify-center rounded-lg"
           aria-label="알림"
           onClick={() => setIsNotificationOpen(true)}
           type="button"
         >
           <Bell size={22} />
+          {notificationEvents.length > 0 ? (
+            <span className="absolute right-2 top-2 size-2 rounded-full bg-[#d64f68]" />
+          ) : null}
         </button>
       </div>
 
@@ -1004,8 +1033,17 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
               >
                 <Search size={18} />
               </button>
-              <button className="icon-button" aria-label="Notifications" title="Notifications">
+              <button
+                className="icon-button relative"
+                aria-label="Notifications"
+                title="Notifications"
+                onClick={() => setIsNotificationOpen(true)}
+                type="button"
+              >
                 <Bell size={18} />
+                {notificationEvents.length > 0 ? (
+                  <span className="absolute right-2 top-2 size-2 rounded-full bg-[#d64f68]" />
+                ) : null}
               </button>
               <button
                 className="icon-button"
@@ -1391,10 +1429,13 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
       ) : null}
 
       {isNotificationOpen ? (
-        <div className="fixed inset-0 z-40 flex justify-end bg-black/35 md:hidden">
-          <aside className="mobile-drawer h-full w-[84vw] max-w-[320px] bg-[#fdfcf9] p-4 shadow-[-24px_0_60px_rgba(31,33,29,0.18)]">
+        <div className="fixed inset-0 z-40 flex justify-end bg-black/35">
+          <aside className="mobile-drawer h-full w-[86vw] max-w-[360px] bg-[#fdfcf9] p-4 shadow-[-24px_0_60px_rgba(31,33,29,0.18)]">
             <div className="mb-5 flex items-center justify-between">
-              <h2 className="text-base font-semibold">알림</h2>
+              <div>
+                <h2 className="text-base font-semibold">알림</h2>
+                <p className="mt-1 text-xs text-[var(--muted)]">다가오는 일정</p>
+              </div>
               <button
                 className="icon-button"
                 aria-label="Close"
@@ -1404,19 +1445,37 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
                 <X size={18} />
               </button>
             </div>
-            <div className="space-y-3">
-              <div className="rounded-lg border border-[var(--line)] bg-white p-3">
-                <p className="text-sm font-semibold">일별 일정 확인</p>
-                <p className="mt-1 text-xs text-[var(--muted)]">
-                  선택한 날짜의 일정을 확인해보세요.
+            <div className="max-h-[calc(100vh-96px)] space-y-2 overflow-y-auto pr-1 scrollbar-hide">
+              {notificationEvents.length > 0 ? (
+                notificationEvents.map((item) => (
+                  <button
+                    key={item.id}
+                    className="flex w-full gap-3 rounded-lg border border-[var(--line)] bg-white p-3 text-left hover:bg-[#faf9f5]"
+                    onClick={() => openNotificationEvent(item)}
+                    type="button"
+                  >
+                    <span
+                      className="mt-1 size-2.5 rounded-full"
+                      style={{ backgroundColor: item.color }}
+                    />
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-sm font-semibold">
+                        {item.title}
+                      </span>
+                      <span className="mt-1 block truncate text-xs font-semibold text-[var(--muted)]">
+                        {dateTimeFormatter.format(new Date(item.startsAt))}
+                      </span>
+                      <span className="mt-1 block truncate text-xs text-[var(--muted)]">
+                        {item.calendar.name}
+                      </span>
+                    </span>
+                  </button>
+                ))
+              ) : (
+                <p className="rounded-lg border border-[var(--line)] bg-white p-4 text-sm text-[var(--muted)]">
+                  앞으로 14일 안에 표시할 일정이 없습니다.
                 </p>
-              </div>
-              <div className="rounded-lg border border-[var(--line)] bg-white p-3">
-                <p className="text-sm font-semibold">공유 초대</p>
-                <p className="mt-1 text-xs text-[var(--muted)]">
-                  공유 캘린더 초대 알림이 여기에 표시됩니다.
-                </p>
-              </div>
+              )}
             </div>
           </aside>
         </div>
