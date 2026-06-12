@@ -1,4 +1,6 @@
 .env
+.env.*
+!.env.example
 .env*.local
 .next/
 node_modules/
@@ -7,3 +9,28 @@ node_modules/
 coverage/
 dist/
 *.tsbuildinfo
+
+# IDE / editor
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+yarn-debug.log*
+
+# Deployment / framework output
+.vercel/
+.turbo/
+out/
+build/
+
+# Local Docker overrides
+docker-compose.override.yml

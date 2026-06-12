@@ -869,6 +869,69 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
     }
   }
 
+  async function handleUpdateCalendarMember(memberId: string, role: CalendarRole) {
+    if (!selectedInviteCalendar) {
+      return;
+    }
+
+    setFormError(null);
+
+    try {
+      const response = await fetch(
+        `/api/calendars/${selectedInviteCalendar.id}/members/${memberId}`,
+        {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ role }),
+        },
+      );
+      const result = (await response.json()) as {
+        error?: string;
+        member?: CalendarMember;
+      };
+
+      if (!response.ok || !result.member) {
+        throw new Error(result.error ?? "멤버 권한을 변경하지 못했습니다.");
+      }
+
+      setInviteMembers((current) =>
+        current.map((member) => (member.id === result.member?.id ? result.member : member)),
+      );
+    } catch (error) {
+      setFormError(error instanceof Error ? error.message : "다시 시도해주세요.");
+    }
+  }
+
+  async function handleRemoveCalendarMember(memberId: string) {
+    if (!selectedInviteCalendar) {
+      return;
+    }
+
+    setFormError(null);
+
+    try {
+      const response = await fetch(
+        `/api/calendars/${selectedInviteCalendar.id}/members/${memberId}`,
+        {
+          method: "DELETE",
+        },
+      );
+      const result = (await response.json()) as {
+        error?: string;
+      };
+
+      if (!response.ok) {
+        throw new Error(result.error ?? "멤버를 내보내지 못했습니다.");
+      }
+
+      setInviteMembers((current) => current.filter((member) => member.id !== memberId));
+    } catch (error) {
+      setFormError(error instanceof Error ? error.message : "다시 시도해주세요.");
+    }
+  }
+
   async function handleUpdateEvent(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
@@ -1850,19 +1913,46 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
                   inviteMembers.map((member) => (
                     <div
                       key={member.id}
-                      className="flex items-center justify-between gap-3 rounded-lg border border-[var(--line)] bg-white p-3"
+                      className="rounded-lg border border-[var(--line)] bg-white p-3"
                     >
-                      <div className="min-w-0">
-                        <p className="truncate text-sm font-semibold">
-                          {member.user.name ?? member.user.email}
-                        </p>
-                        <p className="mt-1 truncate text-xs text-[var(--muted)]">
-                          {member.user.email}
-                        </p>
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-semibold">
+                            {member.user.name ?? member.user.email}
+                          </p>
+                          <p className="mt-1 truncate text-xs text-[var(--muted)]">
+                            {member.user.email}
+                          </p>
+                        </div>
+                        <span className="shrink-0 rounded-full border border-[var(--line)] px-2.5 py-1 text-xs font-semibold text-[var(--muted)]">
+                          {memberRoleLabels[member.role]}
+                        </span>
                       </div>
-                      <span className="shrink-0 rounded-full border border-[var(--line)] px-2.5 py-1 text-xs font-semibold text-[var(--muted)]">
-                        {memberRoleLabels[member.role]}
-                      </span>
+                      {member.user.id !== user.id && member.role !== "OWNER" ? (
+                        <div className="mt-3 grid grid-cols-[minmax(0,1fr)_72px] gap-2">
+                          <select
+                            className="h-9 rounded-md border border-[var(--line)] bg-white px-2 text-xs font-semibold outline-none focus:border-[#aeb3a6]"
+                            onChange={(event) =>
+                              void handleUpdateCalendarMember(
+                                member.id,
+                                event.target.value as CalendarRole,
+                              )
+                            }
+                            value={member.role}
+                          >
+                            <option value="VIEWER">보기</option>
+                            <option value="EDITOR">편집</option>
+                            <option value="ADMIN">관리</option>
+                          </select>
+                          <button
+                            className="h-9 rounded-md border border-[#f0c9d0] bg-[#fff7f8] text-xs font-semibold text-[#b93d53]"
+                            onClick={() => void handleRemoveCalendarMember(member.id)}
+                            type="button"
+                          >
+                            내보내기
+                          </button>
+                        </div>
+                      ) : null}
                     </div>
                   ))
                 ) : (
