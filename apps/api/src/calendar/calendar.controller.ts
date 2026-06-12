@@ -34,6 +34,10 @@ const calendarInviteSchema = z.object({
   role: z.enum(["ADMIN", "EDITOR", "VIEWER"]).default("VIEWER"),
 });
 
+const calendarMemberUpdateSchema = z.object({
+  role: z.enum(["ADMIN", "EDITOR", "VIEWER"]),
+});
+
 function toCalendarResponse(calendar: {
   id: string;
   name: string;
@@ -328,6 +332,130 @@ export class CalendarController {
         user: member.user,
       })),
     };
+  }
+
+  @Patch("calendars/:calendarId/members/:memberId")
+  async updateMember(
+    @Req() request: RequestWithUser,
+    @Param("calendarId") calendarId: string,
+    @Param("memberId") memberId: string,
+    @Body() payload: unknown,
+  ) {
+    const userId = getUserId(request);
+    const parsed = calendarMemberUpdateSchema.safeParse(payload);
+
+    if (!parsed.success) {
+      throw new BadRequestException("Invalid member payload.");
+    }
+
+    const calendar = await getManageableCalendar(calendarId, userId);
+
+    if (!calendar) {
+      throw new NotFoundException("Calendar not found.");
+    }
+
+    const member = await prisma.calendarMember.findFirst({
+      where: {
+        id: memberId,
+        calendarId,
+      },
+      include: {
+        user: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            image: true,
+          },
+        },
+      },
+    });
+
+    if (!member) {
+      throw new NotFoundException("Member not found.");
+    }
+
+    if (member.userId === userId) {
+      throw new BadRequestException("You cannot change your own role.");
+    }
+
+    const updatedMember = await prisma.calendarMember.update({
+      where: {
+        id: memberId,
+      },
+      data: {
+        role: parsed.data.role,
+      },
+      include: {
+        user: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            image: true,
+          },
+        },
+      },
+    });
+
+    return {
+      member: {
+        id: updatedMember.id,
+        role: updatedMember.role,
+        joinedAt: updatedMember.joinedAt.toISOString(),
+        user: updatedMember.user,
+      },
+    };
+  }
+
+  @Delete("calendars/:calendarId/members/:memberId")
+  async removeMember(
+    @Req() request: RequestWithUser,
+    @Param("calendarId") calendarId: string,
+    @Param("memberId") memberId: string,
+  ) {
+    const userId = getUserId(request);
+    const calendar = await getManageableCalendar(calendarId, userId);
+
+    if (!calendar) {
+      throw new NotFoundException("Calendar not found.");
+    }
+
+    const member = await prisma.calendarMember.findFirst({
+      where: {
+        id: memberId,
+        calendarId,
+      },
+    });
+
+    if (!member) {
+      throw new NotFoundException("Member not found.");
+    }
+
+    if (member.userId === userId) {
+      throw new BadRequestException("You cannot remove yourself.");
+    }
+
+    if (member.role === "OWNER") {
+      const ownerCount = await prisma.calendarMember.count({
+        where: {
+          calendarId,
+          role: "OWNER",
+        },
+      });
+
+      if (ownerCount <= 1) {
+        throw new BadRequestException("A calendar needs at least one owner.");
+      }
+    }
+
+    await prisma.calendarMember.delete({
+      where: {
+        id: memberId,
+      },
+    });
+
+    return { ok: true };
   }
 
   @Post("calendars/:calendarId/invites")
