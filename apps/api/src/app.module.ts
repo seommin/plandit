@@ -5,6 +5,7 @@ import { AuthController } from "./auth/auth.controller";
 import { CalendarController } from "./calendar/calendar.controller";
 import { EventsController } from "./events/events.controller";
 import { InternalApiGuard } from "./internal-api.guard";
+import { PushController } from "./push/push.controller";
 import { SharesController } from "./shares/shares.controller";
 
 @Module({
@@ -12,6 +13,7 @@ import { SharesController } from "./shares/shares.controller";
     AuthController,
     CalendarController,
     EventsController,
+    PushController,
     SharesController,
   ],
   providers: [

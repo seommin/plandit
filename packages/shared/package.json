@@ -6,7 +6,8 @@
     "./auth": "./src/auth.ts",
     "./calendar-defaults": "./src/calendar-defaults.ts",
     "./calendars": "./src/calendars.ts",
-    "./events": "./src/events.ts"
+    "./events": "./src/events.ts",
+    "./push": "./src/push.ts"
   },
   "scripts": {
     "build": "tsc --noEmit",

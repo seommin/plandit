@@ -27,6 +27,14 @@ The product starts as a web-first SaaS calendar with a data model that can later
 - `packages/database`: Prisma schema, migrations, generated clients, and database connection helpers.
 - `packages/shared`: Shared validation schemas and product constants used by web and API.
 
+## Push Provider Boundary
+
+Push subscriptions and delivery attempts are stored in PostgreSQL through Prisma.
+The NestJS API owns delivery through a provider interface, currently backed by
+`NOOP` so local development can exercise registration and delivery logging
+without external credentials. Future providers such as Web Push, Expo, FCM, or
+APNs should implement the same interface in `apps/api/src/push/push-provider.ts`.
+
 The preferred runtime flow for product data is:
 
 ```txt
