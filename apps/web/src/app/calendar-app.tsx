@@ -1,14 +1,18 @@
 "use client";
 
-import { type CSSProperties, type DragEvent, FormEvent, useMemo, useState } from "react";
+import { type CSSProperties, type DragEvent, FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { signOut } from "next-auth/react";
 import {
   Bell,
   CalendarDays,
+  CalendarRange,
+  Check,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
   Clock3,
   List,
+  Moon,
   Pencil,
   LogOut,
   Menu,
@@ -17,6 +21,7 @@ import {
   Settings2,
   Share2,
   Star,
+  Sun,
   Trash2,
   UserPlus,
   X,
@@ -31,6 +36,9 @@ export type CalendarAppCalendar = {
   type: CalendarType;
   color: string;
   role: CalendarRole;
+  description?: string | null;
+  timezone?: string;
+  isDefault?: boolean;
 };
 
 export type CalendarAppEvent = {
@@ -69,6 +77,8 @@ type CalendarDayEvent = {
 };
 
 type BottomView = "DAY" | "MONTH" | "IMPORTANT";
+type CalendarView = "MONTH" | "WEEK" | "LIST";
+type Theme = "light" | "dark";
 
 type CalendarMember = {
   id: string;
@@ -82,6 +92,102 @@ type CalendarMember = {
   };
 };
 
+type CalendarSelectProps = {
+  calendars: CalendarAppCalendar[];
+  defaultValue?: string;
+  name: string;
+};
+
+function CalendarSelect({ calendars, defaultValue, name }: CalendarSelectProps) {
+  const initialValue =
+    calendars.find((calendar) => calendar.id === defaultValue)?.id ?? calendars[0]?.id ?? "";
+  const [value, setValue] = useState(initialValue);
+  const [isOpen, setIsOpen] = useState(false);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const selectedCalendar = calendars.find((calendar) => calendar.id === value);
+
+  useEffect(() => {
+    function handlePointerDown(event: PointerEvent) {
+      if (!rootRef.current?.contains(event.target as Node)) {
+        setIsOpen(false);
+      }
+    }
+
+    document.addEventListener("pointerdown", handlePointerDown);
+    return () => document.removeEventListener("pointerdown", handlePointerDown);
+  }, []);
+
+  return (
+    <div className="relative" ref={rootRef}>
+      <input name={name} type="hidden" value={value} />
+      <button
+        aria-expanded={isOpen}
+        aria-haspopup="listbox"
+        className={`flex h-11 w-full items-center gap-3 rounded-lg border bg-white px-3 text-left text-sm outline-none transition-[border-color,box-shadow,background-color] hover:border-[#c9cbc2] focus-visible:border-[var(--ink)] focus-visible:ring-3 focus-visible:ring-black/10 ${
+          isOpen ? "border-[var(--ink)] ring-3 ring-black/10" : "border-[var(--line)]"
+        }`}
+        disabled={calendars.length === 0}
+        onClick={() => setIsOpen((open) => !open)}
+        onKeyDown={(event) => {
+          if (event.key === "Escape") setIsOpen(false);
+        }}
+        type="button"
+      >
+        {selectedCalendar ? (
+          <span
+            aria-hidden="true"
+            className="size-2.5 shrink-0 rounded-full ring-2 ring-black/5"
+            style={{ backgroundColor: selectedCalendar.color }}
+          />
+        ) : null}
+        <span className="min-w-0 flex-1 truncate font-medium">
+          {selectedCalendar?.name ?? "캘린더를 선택하세요"}
+        </span>
+        <ChevronDown
+          aria-hidden="true"
+          className={`size-4 shrink-0 text-[var(--muted)] transition-transform ${isOpen ? "rotate-180" : ""}`}
+        />
+      </button>
+
+      {isOpen ? (
+        <div
+          aria-label="캘린더 선택"
+          className="absolute inset-x-0 top-[calc(100%+6px)] z-50 max-h-56 overflow-y-auto rounded-xl border border-[var(--line)] bg-white p-1.5 shadow-[0_16px_40px_rgba(24,25,22,0.16)]"
+          role="listbox"
+        >
+          {calendars.map((calendar) => {
+            const isSelected = calendar.id === value;
+
+            return (
+              <button
+                aria-selected={isSelected}
+                className={`flex h-10 w-full items-center gap-3 rounded-lg px-2.5 text-left text-sm transition-colors ${
+                  isSelected ? "bg-[#f0efea] font-semibold" : "hover:bg-[#f7f6f2]"
+                }`}
+                key={calendar.id}
+                onClick={() => {
+                  setValue(calendar.id);
+                  setIsOpen(false);
+                }}
+                role="option"
+                type="button"
+              >
+                <span
+                  aria-hidden="true"
+                  className="size-2.5 shrink-0 rounded-full ring-2 ring-black/5"
+                  style={{ backgroundColor: calendar.color }}
+                />
+                <span className="min-w-0 flex-1 truncate">{calendar.name}</span>
+                {isSelected ? <Check aria-hidden="true" className="size-4 shrink-0" /> : null}
+              </button>
+            );
+          })}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 const weekDays = [
   { label: "일", tone: "text-[#d64f68]" },
   { label: "월", tone: "text-[var(--muted)]" },
@@ -91,12 +197,6 @@ const weekDays = [
   { label: "금", tone: "text-[var(--muted)]" },
   { label: "토", tone: "text-[#2f6bff]" },
 ];
-
-const viewNavItems = [
-  ["일별", CalendarDays, "DAY"],
-  ["월별", List, "MONTH"],
-  ["중요", Star, "IMPORTANT"],
-] as const;
 
 const memberRoleLabels = {
   ADMIN: "관리",
@@ -142,6 +242,12 @@ function toInputValue(date: Date) {
   return `${year}-${month}-${day}T${hour}:${minute}`;
 }
 
+function urlBase64ToUint8Array(value: string) {
+  const padding = "=".repeat((4 - (value.length % 4)) % 4);
+  const base64 = (value + padding).replace(/-/g, "+").replace(/_/g, "/");
+  return Uint8Array.from(window.atob(base64), (character) => character.charCodeAt(0));
+}
+
 function startOfDay(date: Date) {
   return new Date(date.getFullYear(), date.getMonth(), date.getDate());
 }
@@ -150,6 +256,20 @@ function endOfDay(date: Date) {
   const end = startOfDay(date);
   end.setDate(end.getDate() + 1);
   return end;
+}
+
+function startOfWeek(date: Date) {
+  const start = startOfDay(date);
+  start.setDate(start.getDate() - start.getDay());
+  return start;
+}
+
+function formatWeekLabel(date: Date) {
+  const start = startOfWeek(date);
+  const end = new Date(start);
+  end.setDate(end.getDate() + 6);
+
+  return `${start.getMonth() + 1}. ${start.getDate()} – ${end.getMonth() + 1}. ${end.getDate()}`;
 }
 
 function eventOverlapsRange(event: CalendarAppEvent, rangeStart: Date, rangeEnd: Date) {
@@ -306,13 +426,24 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
   const [selectedCalendarIds, setSelectedCalendarIds] = useState(() =>
     calendars.map((calendar) => calendar.id),
   );
-  const [month, setMonth] = useState(() => new Date(2026, 5, 1));
-  const [selectedDate, setSelectedDate] = useState(() => new Date(2026, 5, 10));
+  const [month, setMonth] = useState(() => {
+    const today = new Date();
+    return new Date(today.getFullYear(), today.getMonth(), 1);
+  });
+  const [selectedDate, setSelectedDate] = useState(() => new Date());
   const [eventItems, setEventItems] = useState(events);
   const [selectedEventId, setSelectedEventId] = useState(events[0]?.id ?? "");
   const [bottomView, setBottomView] = useState<BottomView>("DAY");
+  const [calendarView, setCalendarView] = useState<CalendarView>("MONTH");
+  const [theme, setTheme] = useState<Theme>("light");
+  const [isMonthPickerOpen, setIsMonthPickerOpen] = useState(false);
+  const [pickerYear, setPickerYear] = useState(() => new Date().getFullYear());
+  const monthPickerRef = useRef<HTMLDivElement>(null);
+  const selectedYearRef = useRef<HTMLButtonElement>(null);
+  const selectedMonthRef = useRef<HTMLButtonElement>(null);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isCalendarCreateOpen, setIsCalendarCreateOpen] = useState(false);
+  const [editingCalendarId, setEditingCalendarId] = useState("");
   const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -332,6 +463,72 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
   const [searchQuery, setSearchQuery] = useState("");
   const [shareUrl, setShareUrl] = useState("");
   const [shareMessage, setShareMessage] = useState("");
+  const [pushMessage, setPushMessage] = useState("");
+  const [isPushSaving, setIsPushSaving] = useState(false);
+
+  useEffect(() => {
+    const storedTheme = window.localStorage.getItem("plandit-theme");
+    const initialTheme: Theme =
+      storedTheme === "dark" || storedTheme === "light"
+        ? storedTheme
+        : window.matchMedia("(prefers-color-scheme: dark)").matches
+          ? "dark"
+          : "light";
+
+    setTheme(initialTheme);
+    document.documentElement.dataset.theme = initialTheme;
+  }, []);
+
+  useEffect(() => {
+    if (!isMonthPickerOpen) return;
+
+    window.requestAnimationFrame(() => {
+      selectedYearRef.current?.scrollIntoView({ block: "center" });
+      selectedMonthRef.current?.scrollIntoView({ block: "center" });
+    });
+  }, [isMonthPickerOpen]);
+
+  useEffect(() => {
+    function handleMonthPickerPointerDown(event: PointerEvent) {
+      if (!monthPickerRef.current?.contains(event.target as Node)) {
+        setIsMonthPickerOpen(false);
+      }
+    }
+
+    document.addEventListener("pointerdown", handleMonthPickerPointerDown);
+    return () => document.removeEventListener("pointerdown", handleMonthPickerPointerDown);
+  }, []);
+
+  useEffect(() => {
+    function handleShortcut(event: KeyboardEvent) {
+      const target = event.target as HTMLElement | null;
+
+      if (target?.matches("input, textarea, select") || target?.isContentEditable) {
+        return;
+      }
+
+      if (event.key.toLowerCase() === "c") {
+        event.preventDefault();
+        openCreateModal();
+      } else if (event.key.toLowerCase() === "t") {
+        event.preventDefault();
+        goToToday();
+      } else if (event.key === "/") {
+        event.preventDefault();
+        openSearchModal();
+      } else if (event.key === "Escape") {
+        setIsCreateOpen(false);
+        setIsDetailOpen(false);
+        setIsEditOpen(false);
+        setIsSearchOpen(false);
+        setIsNotificationOpen(false);
+        setIsMobileMenuOpen(false);
+      }
+    }
+
+    window.addEventListener("keydown", handleShortcut);
+    return () => window.removeEventListener("keydown", handleShortcut);
+  });
 
   const visibleEvents = useMemo(
     () =>
@@ -387,6 +584,45 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
     [monthRange, visibleEvents],
   );
 
+  const weekDates = useMemo(() => {
+    const start = startOfWeek(selectedDate);
+    return Array.from({ length: 7 }, (_, index) => {
+      const date = new Date(start);
+      date.setDate(date.getDate() + index);
+      return date;
+    });
+  }, [selectedDate]);
+
+  const weeklyEventsByDay = useMemo(
+    () =>
+      weekDates.map((date) => ({
+        date,
+        events: visibleEvents
+          .filter((event) => eventOverlapsDay(event, date))
+          .slice()
+          .sort((a, b) => new Date(a.startsAt).getTime() - new Date(b.startsAt).getTime()),
+      })),
+    [visibleEvents, weekDates],
+  );
+
+  const listEventGroups = useMemo(() => {
+    const groups = new Map<number, CalendarAppEvent[]>();
+
+    visibleEvents
+      .slice()
+      .sort((a, b) => new Date(a.startsAt).getTime() - new Date(b.startsAt).getTime())
+      .forEach((event) => {
+        const date = startOfDay(new Date(event.startsAt));
+        const key = date.getTime();
+        groups.set(key, [...(groups.get(key) ?? []), event]);
+      });
+
+    return Array.from(groups, ([timestamp, groupedEvents]) => ({
+      date: new Date(timestamp),
+      events: groupedEvents,
+    }));
+  }, [visibleEvents]);
+
   const importantEvents = useMemo(
     () =>
       eventItems
@@ -423,10 +659,7 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
     const query = searchQuery.trim().toLowerCase();
 
     if (!query) {
-      return visibleEvents
-        .slice()
-        .sort((a, b) => new Date(a.startsAt).getTime() - new Date(b.startsAt).getTime())
-        .slice(0, 8);
+      return [];
     }
 
     return visibleEvents
@@ -452,7 +685,7 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
     calendarItems.find((calendar) => calendar.id === inviteCalendarId) ?? null;
   const isAllCalendarsSelected =
     calendarItems.length > 0 && selectedCalendarIds.length === calendarItems.length;
-  const calendarSelectionActionLabel = isAllCalendarsSelected ? "전체 해제" : "전체 선택";
+  const isSomeCalendarSelected = selectedCalendarIds.length > 0 && !isAllCalendarsSelected;
 
   function toggleCalendar(calendarId: string) {
     setSelectedCalendarIds((current) =>
@@ -475,6 +708,26 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
     setIsCreateOpen(true);
   }
 
+  function goToToday() {
+    const today = new Date();
+    setMonth(new Date(today.getFullYear(), today.getMonth(), 1));
+    setSelectedDate(today);
+    setBottomView("DAY");
+    setCalendarView("MONTH");
+  }
+
+  function changeDisplayedMonth(year: number, monthIndex: number) {
+    const lastDay = new Date(year, monthIndex + 1, 0).getDate();
+    const nextSelectedDate = new Date(
+      year,
+      monthIndex,
+      Math.min(selectedDate.getDate(), lastDay),
+    );
+
+    setMonth(new Date(year, monthIndex, 1));
+    setSelectedDate(nextSelectedDate);
+  }
+
   function selectCalendarDate(date: Date) {
     setSelectedDate(date);
     setBottomView("DAY");
@@ -483,6 +736,7 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
   function goToMainCalendar() {
     setIsMobileMenuOpen(false);
     setBottomView("DAY");
+    setCalendarView("MONTH");
   }
 
   function openCalendarCreateModal() {
@@ -495,7 +749,14 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
   }
 
   function openSettingsModal() {
+    setPushMessage("");
     setIsSettingsOpen(true);
+  }
+
+  function changeTheme(nextTheme: Theme) {
+    setTheme(nextTheme);
+    document.documentElement.dataset.theme = nextTheme;
+    window.localStorage.setItem("plandit-theme", nextTheme);
   }
 
   function openNotificationPanel() {
@@ -729,6 +990,7 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
       location: String(data.get("location") ?? ""),
       startsAt: startsAt.toISOString(),
       endsAt: endsAt.toISOString(),
+      allDay: data.get("allDay") === "on",
     };
   }
 
@@ -803,6 +1065,65 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
       setCalendarItems((current) => [...current, createdCalendar]);
       setSelectedCalendarIds((current) => [...current, createdCalendar.id]);
       setIsCalendarCreateOpen(false);
+    } catch (error) {
+      setFormError(error instanceof Error ? error.message : "다시 시도해주세요.");
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
+  async function handleUpdateCalendar(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const calendar = calendarItems.find((item) => item.id === editingCalendarId);
+    if (!calendar) return;
+
+    const data = new FormData(event.currentTarget);
+    setIsSaving(true);
+    setFormError(null);
+    try {
+      const response = await fetch(`/api/calendars/${calendar.id}`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          name: String(data.get("name")),
+          color: String(data.get("color")),
+          description: String(data.get("description")) || undefined,
+          timezone: String(data.get("timezone")),
+        }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error ?? "캘린더를 수정하지 못했습니다.");
+
+      const updated = result.calendar as CalendarAppCalendar;
+      setCalendarItems((current) => current.map((item) => item.id === updated.id ? updated : item));
+      setEventItems((current) => current.map((item) => item.calendarId === updated.id ? {
+        ...item,
+        color: item.color === item.calendar.color ? updated.color : item.color,
+        calendar: { ...item.calendar, name: updated.name, color: updated.color },
+      } : item));
+      setEditingCalendarId("");
+    } catch (error) {
+      setFormError(error instanceof Error ? error.message : "다시 시도해주세요.");
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
+  async function handleDeleteCalendar() {
+    const calendar = calendarItems.find((item) => item.id === editingCalendarId);
+    if (!calendar || calendar.isDefault || !window.confirm(`'${calendar.name}' 캘린더와 모든 일정을 삭제할까요?`)) return;
+
+    setIsSaving(true);
+    setFormError(null);
+    try {
+      const response = await fetch(`/api/calendars/${calendar.id}`, { method: "DELETE" });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error ?? "캘린더를 삭제하지 못했습니다.");
+
+      setCalendarItems((current) => current.filter((item) => item.id !== calendar.id));
+      setSelectedCalendarIds((current) => current.filter((id) => id !== calendar.id));
+      setEventItems((current) => current.filter((item) => item.calendarId !== calendar.id));
+      setEditingCalendarId("");
     } catch (error) {
       setFormError(error instanceof Error ? error.message : "다시 시도해주세요.");
     } finally {
@@ -1060,242 +1381,412 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
     }
   }
 
-  const defaultStartsAt = toInputValue(new Date(2026, 5, 9, 9, 0));
-  const defaultEndsAt = toInputValue(new Date(2026, 5, 9, 10, 0));
+  async function handleRegisterPushChannel() {
+    setIsPushSaving(true);
+    setPushMessage("");
 
-  return (
-    <main className="app-shell">
-      <div className="fixed inset-x-0 top-0 z-30 grid h-14 grid-cols-[56px_minmax(0,1fr)_56px] items-center bg-[var(--ink)] px-1 text-white md:hidden">
-        <button
-          className="flex size-12 items-center justify-center rounded-lg"
-          aria-label="캘린더 메뉴"
-          onClick={() => setIsMobileMenuOpen(true)}
-          type="button"
-        >
-          <Menu size={23} />
-        </button>
-        <button
-          className="mobile-brand-script brand-logo-button-mobile text-center"
-          aria-label="메인 달력"
-          onClick={goToMainCalendar}
-          type="button"
-        >
-          Plandit
-        </button>
-        <button
-          className="relative flex size-12 items-center justify-center rounded-lg"
-          aria-label="알림"
-          onClick={openNotificationPanel}
-          type="button"
-        >
-          <Bell size={22} />
-          {hasUnreadNotifications ? (
-            <span className="absolute right-2 top-2 size-2 rounded-full bg-[#d64f68]" />
-          ) : null}
-        </button>
-      </div>
+    try {
+      const publicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
+      if (!publicKey) throw new Error("Web Push 공개 키가 설정되지 않았습니다.");
+      if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
+        throw new Error("이 브라우저는 푸시 알림을 지원하지 않습니다.");
+      }
+      const permission = await Notification.requestPermission();
+      if (permission !== "granted") throw new Error("알림 권한이 필요합니다.");
 
-      <div className="mx-auto flex min-h-screen w-full max-w-[1480px] gap-4 px-4 pb-24 pt-[72px] md:pb-4 md:pt-4 lg:px-6">
-        <aside className="hidden w-[272px] shrink-0 flex-col rounded-lg border border-[var(--line)] bg-[#fdfcf9] p-4 lg:flex">
-          <div>
-            <div className="mb-7 flex h-10 items-center justify-center">
-              <button
-                className="mobile-brand-script brand-logo-button"
-                aria-label="메인 달력"
-                onClick={goToMainCalendar}
-                type="button"
-              >
-                Plandit
-              </button>
-            </div>
+      const registration = await navigator.serviceWorker.register("/push-sw.js");
+      const subscription = await registration.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(publicKey),
+      });
+      const serialized = subscription.toJSON();
+      const response = await fetch("/api/push/subscriptions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          provider: "WEB_PUSH",
+          endpoint: subscription.endpoint,
+          deviceName: "현재 브라우저",
+          platform: "web",
+          userAgent: navigator.userAgent,
+          metadata: {
+            auth: serialized.keys?.auth,
+            p256dh: serialized.keys?.p256dh,
+          },
+        }),
+      });
+      const result = (await response.json()) as { error?: string };
 
-            <button
-              className="mb-6 flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-[var(--ink)] px-4 text-sm font-semibold text-white"
-              onClick={openCreateModal}
+      if (!response.ok) {
+        throw new Error(result.error ?? "알림 채널을 등록하지 못했습니다.");
+      }
+
+      setPushMessage("이 브라우저의 실제 푸시 알림을 등록했습니다.");
+    } catch (error) {
+      setPushMessage(error instanceof Error ? error.message : "다시 시도해주세요.");
+    } finally {
+      setIsPushSaving(false);
+    }
+  }
+
+  async function handleSendTestPush() {
+    setIsPushSaving(true);
+    setPushMessage("");
+
+    try {
+      const response = await fetch("/api/push/test", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          title: "Plandit",
+          body: "Web Push 알림이 정상적으로 연결되었습니다.",
+          url: "/",
+        }),
+      });
+      const result = (await response.json()) as {
+        error?: string;
+        failed?: number;
+        sent?: number;
+        total?: number;
+      };
+
+      if (!response.ok) {
+        throw new Error(result.error ?? "테스트 알림을 보내지 못했습니다.");
+      }
+
+      setPushMessage(
+        `테스트 발송 기록: 성공 ${result.sent ?? 0}, 실패 ${result.failed ?? 0}, 전체 ${
+          result.total ?? 0
+        }`,
+      );
+    } catch (error) {
+      setPushMessage(error instanceof Error ? error.message : "다시 시도해주세요.");
+    } finally {
+      setIsPushSaving(false);
+    }
+  }
+
+  const navigationPanel = (
+    <>
+      <button
+        className="mb-6 flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-[var(--ink)] px-4 text-sm font-semibold text-white"
+        onClick={() => {
+          setIsMobileMenuOpen(false);
+          openCreateModal();
+        }}
+        type="button"
+      >
+        <Plus size={17} />
+        새 일정
+      </button>
+
+      <div>
+        <div className="mb-3 flex items-center justify-between px-3">
+          <label className="flex cursor-pointer items-center gap-3">
+            <input
+              aria-label="모든 캘린더 선택"
+              checked={isAllCalendarsSelected}
+              className="size-4 accent-[var(--ink)]"
+              onChange={toggleAllCalendars}
+              ref={(input) => {
+                if (input) input.indeterminate = isSomeCalendarSelected;
+              }}
+              type="checkbox"
+            />
+            <span className="text-xs font-semibold uppercase text-[var(--muted)]">
+              캘린더 목록
+            </span>
+          </label>
+          <button
+            className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-transparent text-[var(--ink)] transition-colors hover:bg-[#e7e6e0]"
+            aria-label="새 캘린더"
+            onClick={() => {
+              setIsMobileMenuOpen(false);
+              openCalendarCreateModal();
+            }}
+            type="button"
+          >
+            <Plus size={15} />
+          </button>
+        </div>
+        <div className="space-y-2">
+          {calendarItems.map((calendar) => (
+            <div
+              key={calendar.id}
+              className="flex w-full items-center gap-2 rounded-lg px-3 py-2 hover:bg-[#efeee9]"
             >
-              <Plus size={17} />
-              새 일정
-            </button>
-
-            <nav className="space-y-1 text-sm font-medium">
-              {viewNavItems.map(([label, Icon, value]) => (
+              <label className="flex min-w-0 flex-1 cursor-pointer items-center gap-3 text-left">
+                <input
+                  checked={selectedCalendarIds.includes(calendar.id)}
+                  className="size-4 accent-[var(--ink)]"
+                  onChange={() => toggleCalendar(calendar.id)}
+                  type="checkbox"
+                />
+                <span
+                  className="size-2.5 shrink-0 rounded-full"
+                  style={{ backgroundColor: calendar.color }}
+                />
+                <span className="truncate text-[15px] font-medium text-[#34362f]">{calendar.name}</span>
+              </label>
+              {canInviteToCalendar(calendar) ? (
                 <button
-                  key={label}
-                  className={[
-                    "flex h-10 w-full items-center gap-3 rounded-lg px-3 text-left",
-                    bottomView === value
-                      ? "bg-[var(--ink)] text-white"
-                      : "text-[#34362f] hover:bg-[#efeee9]",
-                  ].join(" ")}
-                  onClick={() => setBottomView(value)}
+                  className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-transparent text-[var(--muted)] transition-colors hover:bg-[#e7e6e0] hover:text-[var(--ink)]"
+                  aria-label={`${calendar.name} 멤버`}
+                  onClick={() => {
+                    setIsMobileMenuOpen(false);
+                    openInviteModal(calendar.id);
+                  }}
                   type="button"
                 >
-                  <Icon size={17} />
-                  {label}
+                  <UserPlus size={15} />
                 </button>
-              ))}
-            </nav>
+              ) : null}
+            </div>
+          ))}
+        </div>
+      </div>
 
-            <div className="mt-8">
-              <div className="mb-3 flex items-center justify-between px-3">
-                <p className="text-xs font-semibold uppercase text-[var(--muted)]">
-                  캘린더 목록
-                </p>
-                <div className="flex items-center gap-2">
-                  <button
-                    className="calendar-selection-action"
-                    onClick={toggleAllCalendars}
-                    type="button"
-                  >
-                    {calendarSelectionActionLabel}
-                  </button>
-                  <button
-                    className="flex size-6 items-center justify-center rounded-md border border-[var(--line)] bg-white text-[var(--ink)]"
-                    aria-label="새 캘린더"
-                    onClick={openCalendarCreateModal}
-                    type="button"
-                  >
-                    <Plus size={14} />
-                  </button>
+      <button
+        className="sticky bottom-0 mt-auto flex h-11 w-full shrink-0 items-center gap-3 rounded-lg bg-[#fdfcf9] px-3 text-sm font-semibold text-[#34362f] shadow-[0_-8px_20px_rgba(253,252,249,0.94)] hover:bg-[#e7e6e0]"
+        onClick={() => {
+          setIsMobileMenuOpen(false);
+          openSettingsModal();
+        }}
+        type="button"
+      >
+        <Settings2 size={17} />
+        설정
+      </button>
+    </>
+  );
+
+  const summaryEvents = bottomView === "DAY" ? dailyEvents : monthlyEvents;
+  const summaryTitle =
+    bottomView === "DAY" ? formatDayLabel(selectedDate) : formatMonthLabel(month);
+  const SummaryIcon = bottomView === "DAY" ? Clock3 : List;
+  const nextCalendarView: CalendarView =
+    calendarView === "MONTH" ? "WEEK" : calendarView === "WEEK" ? "LIST" : "MONTH";
+  const NextCalendarViewIcon =
+    nextCalendarView === "WEEK" ? CalendarRange : nextCalendarView === "LIST" ? List : CalendarDays;
+  const nextCalendarViewLabel =
+    nextCalendarView === "WEEK" ? "주간 보기" : nextCalendarView === "LIST" ? "리스트 보기" : "월간 보기";
+
+  const defaultStartDate = new Date(selectedDate);
+  const now = new Date();
+  const isSelectedToday = startOfDay(defaultStartDate).getTime() === startOfDay(now).getTime();
+
+  if (isSelectedToday) {
+    defaultStartDate.setHours(now.getHours(), now.getMinutes() < 30 ? 30 : 60, 0, 0);
+  } else {
+    defaultStartDate.setHours(9, 0, 0, 0);
+  }
+
+  const defaultEndDate = new Date(defaultStartDate.getTime() + 60 * 60 * 1000);
+  const defaultStartsAt = toInputValue(defaultStartDate);
+  const defaultEndsAt = toInputValue(defaultEndDate);
+
+  return (
+    <main className="app-shell bg-[var(--background)]">
+      <div className="min-h-screen w-full bg-[var(--background)] pb-28">
+        <section className="flex min-w-0 flex-col">
+          <header className="flex items-center gap-3 bg-transparent px-3 py-3">
+            <div className="flex min-w-0 flex-1 items-center gap-3">
+              {bottomView === "IMPORTANT" ? (
+                <div className="flex h-10 min-w-0 items-center gap-3">
+                  <h1 className="truncate text-xl font-semibold leading-tight">
+                    중요
+                  </h1>
+                  <span className="rounded-full border border-[var(--line)] bg-white px-2.5 py-1 text-xs font-semibold text-[var(--muted)]">
+                    {importantEvents.length}
+                  </span>
                 </div>
-              </div>
-              <div className="space-y-2">
-                {calendarItems.map((calendar) => (
-                  <div
-                    key={calendar.id}
-                    className="flex w-full items-center gap-2 rounded-lg px-3 py-2 hover:bg-[#efeee9]"
-                  >
-                    <label className="flex min-w-0 flex-1 cursor-pointer items-center gap-3 text-left">
-                      <input
-                        checked={selectedCalendarIds.includes(calendar.id)}
-                        className="size-4 accent-[var(--ink)]"
-                        onChange={() => toggleCalendar(calendar.id)}
-                        type="checkbox"
-                      />
-                      <span
-                        className="size-2.5 shrink-0 rounded-full"
-                        style={{ backgroundColor: calendar.color }}
-                      />
-                      <span className="truncate text-sm text-[#34362f]">{calendar.name}</span>
-                    </label>
-                    {canInviteToCalendar(calendar) ? (
+              ) : (
+                <div className="relative flex min-w-0 flex-1 items-center">
+                  {calendarView === "MONTH" ? (
+                    <>
+                    <div className="relative" ref={monthPickerRef}>
                       <button
-                        className="flex h-7 shrink-0 items-center gap-1 rounded-md border border-[var(--line)] bg-white px-2 text-xs font-semibold text-[var(--muted)] hover:text-[var(--ink)]"
-                        aria-label={`${calendar.name} 멤버`}
-                        onClick={() => openInviteModal(calendar.id)}
+                        aria-expanded={isMonthPickerOpen}
+                        aria-haspopup="dialog"
+                        className="flex h-10 items-center gap-1.5 rounded-lg px-1 text-left text-xl font-semibold text-[var(--ink)] transition-colors hover:text-[var(--muted)]"
+                        onClick={() => {
+                          setPickerYear(month.getFullYear());
+                          setIsMonthPickerOpen((open) => !open);
+                        }}
                         type="button"
                       >
-                        <UserPlus size={13} />
-                        멤버
+                        {month.getFullYear()}년 {month.getMonth() + 1}월
+                        <ChevronDown
+                          aria-hidden="true"
+                          className={`size-4 text-[var(--muted)] transition-transform ${isMonthPickerOpen ? "rotate-180" : ""}`}
+                        />
                       </button>
-                    ) : null}
-                  </div>
-                ))}
-              </div>
+
+                      {isMonthPickerOpen ? (
+                        <div
+                          aria-label="연도와 월 선택"
+                          className="absolute left-0 top-[calc(100%+8px)] z-50 w-[280px] rounded-xl border border-[var(--line)] bg-white p-3 shadow-[0_18px_50px_rgba(24,25,22,0.18)]"
+                          role="dialog"
+                        >
+                          <div className="mb-2 grid grid-cols-2 gap-2 px-1 text-center text-xs font-semibold text-[var(--muted)]">
+                            <span>연도</span>
+                            <span>월</span>
+                          </div>
+                          <div className="relative grid grid-cols-2 gap-2 overflow-hidden rounded-lg bg-transparent p-1.5">
+                            <div aria-label="연도 선택" className="scrollbar-hide h-52 snap-y snap-mandatory overflow-y-auto py-20" role="listbox">
+                              {Array.from({ length: 131 }, (_, index) => 1970 + index).map((year) => {
+                                const isSelected = year === pickerYear;
+
+                                return (
+                                  <button
+                                    aria-selected={isSelected}
+                                    className={`flex h-11 w-full snap-center items-center justify-center rounded-lg text-sm transition-colors ${
+                                      isSelected
+                                        ? "font-semibold text-[var(--ink)]"
+                                        : "text-[var(--muted)] hover:text-[var(--ink)]"
+                                    }`}
+                                    key={year}
+                                    onClick={() => setPickerYear(year)}
+                                    ref={isSelected ? selectedYearRef : undefined}
+                                    role="option"
+                                    type="button"
+                                  >
+                                    {year}년
+                                  </button>
+                                );
+                              })}
+                            </div>
+                            <div aria-label="월 선택" className="scrollbar-hide h-52 snap-y snap-mandatory overflow-y-auto py-20" role="listbox">
+                              {Array.from({ length: 12 }, (_, index) => {
+                                const isSelected =
+                                  pickerYear === month.getFullYear() && index === month.getMonth();
+
+                                return (
+                                  <button
+                                    aria-selected={isSelected}
+                                    className={`flex h-11 w-full snap-center items-center justify-center rounded-lg text-sm transition-colors ${
+                                      isSelected
+                                        ? "font-semibold text-[var(--ink)]"
+                                        : "text-[var(--muted)] hover:text-[var(--ink)]"
+                                    }`}
+                                    key={index}
+                                    onClick={() => {
+                                      changeDisplayedMonth(pickerYear, index);
+                                      setIsMonthPickerOpen(false);
+                                    }}
+                                    ref={isSelected ? selectedMonthRef : undefined}
+                                    role="option"
+                                    type="button"
+                                  >
+                                    {index + 1}월
+                                  </button>
+                                );
+                              })}
+                            </div>
+                            <div aria-hidden="true" className="pointer-events-none absolute inset-x-1.5 top-1/2 h-11 -translate-y-1/2 rounded-lg border border-[var(--line)]" />
+                          </div>
+                        </div>
+                      ) : null}
+                    </div>
+                    </>
+                  ) : (
+                    <h1 className="truncate text-center text-lg font-semibold leading-tight">
+                      {calendarView === "WEEK" ? formatWeekLabel(selectedDate) : "전체 일정"}
+                    </h1>
+                  )}
+                </div>
+              )}
             </div>
-          </div>
-        </aside>
-
-        <section className="flex min-w-0 flex-1 flex-col">
-          <header className="mb-4 flex flex-col gap-3 rounded-lg border border-[var(--line)] bg-[#fdfcf9] px-4 py-3 md:flex-row md:items-center md:justify-between">
-            {bottomView === "IMPORTANT" ? (
-              <div className="flex h-10 items-center justify-center gap-3 md:w-full md:max-w-[420px] md:justify-start">
-                <h1 className="text-xl font-semibold leading-tight sm:text-2xl">중요</h1>
-                <span className="rounded-full border border-[var(--line)] bg-white px-2.5 py-1 text-xs font-semibold text-[var(--muted)]">
-                  {importantEvents.length}
-                </span>
-              </div>
-            ) : (
-              <div className="grid grid-cols-[40px_minmax(0,1fr)_40px] items-center gap-3 md:w-full md:max-w-[420px]">
-                <button
-                  className="icon-button"
-                  aria-label="Previous month"
-                  title="Previous month"
-                  onClick={() =>
-                    setMonth(
-                      (current) => new Date(current.getFullYear(), current.getMonth() - 1, 1),
-                    )
-                  }
-                >
-                  <ChevronLeft size={18} />
-                </button>
-                <h1 className="text-center text-xl font-semibold leading-tight sm:text-2xl">
-                  {formatMonthLabel(month)}
-                </h1>
-                <button
-                  className="icon-button"
-                  aria-label="Next month"
-                  title="Next month"
-                  onClick={() =>
-                    setMonth(
-                      (current) => new Date(current.getFullYear(), current.getMonth() + 1, 1),
-                    )
-                  }
-                >
-                  <ChevronRight size={18} />
-                </button>
-              </div>
-            )}
-
-            <div className="hidden items-center justify-end gap-2 md:flex">
+            <div className="flex shrink-0 items-center">
               <button
-                className="icon-button"
-                aria-label="Search"
-                title="Search"
+                className="flex size-10 items-center justify-center rounded-lg text-[var(--muted)] transition-colors hover:bg-[var(--panel-soft)] hover:text-[var(--ink)]"
+                aria-label="검색"
+                title="검색"
                 onClick={openSearchModal}
                 type="button"
               >
-                <Search size={18} />
+                <Search size={19} />
               </button>
               <button
-                className="icon-button relative"
-                aria-label="Notifications"
-                title="Notifications"
+                className="relative flex size-10 items-center justify-center rounded-lg text-[var(--muted)] transition-colors hover:bg-[var(--panel-soft)] hover:text-[var(--ink)]"
+                aria-label="알림"
+                title="알림"
                 onClick={openNotificationPanel}
                 type="button"
               >
                 <Bell size={18} />
                 {hasUnreadNotifications ? (
-                  <span className="absolute right-2 top-2 size-2 rounded-full bg-[#d64f68]" />
+                  <span className="absolute right-1.5 top-1.5 size-2 rounded-full bg-[#d64f68]" />
                 ) : null}
-              </button>
-              <button
-                className="icon-button"
-                aria-label="Settings"
-                title="Settings"
-                onClick={openSettingsModal}
-                type="button"
-              >
-                <Settings2 size={18} />
-              </button>
-              <button
-                className="icon-button"
-                aria-label="Sign out"
-                title="Sign out"
-                onClick={() => signOut({ callbackUrl: "/login" })}
-              >
-                <LogOut size={18} />
               </button>
             </div>
           </header>
 
+          {bottomView !== "IMPORTANT" && calendarItems.length > 0 ? (
+            <div
+              aria-label="표시할 캘린더"
+              className="scrollbar-hide mx-3 mb-3 flex gap-2 overflow-x-auto px-0.5 pb-0.5 sm:mx-4"
+            >
+              {calendarItems.length > 1 ? (
+                <button
+                  aria-pressed={isAllCalendarsSelected}
+                  className={`calendar-filter-chip flex h-8 shrink-0 items-center rounded-full border px-2.5 font-semibold transition-colors ${
+                    isAllCalendarsSelected
+                      ? "border-[var(--ink)] bg-[var(--ink)] text-white"
+                      : "border-transparent bg-[#e9e7e1] text-[var(--muted)] hover:bg-[#dfddd6]"
+                  }`}
+                  onClick={toggleAllCalendars}
+                  style={{ fontSize: "13px", lineHeight: 1 }}
+                  type="button"
+                >
+                  전체
+                </button>
+              ) : null}
+              {calendarItems.map((calendar) => {
+                const isSelected = selectedCalendarIds.includes(calendar.id);
+
+                return (
+                  <button
+                    aria-pressed={isSelected}
+                    className={`calendar-filter-chip flex h-8 max-w-36 shrink-0 items-center gap-1 rounded-full border px-2.5 font-semibold transition-[border-color,background-color,color,box-shadow] ${
+                      isSelected
+                        ? "border-[#b9bbb2] bg-white text-[var(--ink)] shadow-sm"
+                        : "border-transparent bg-[#e9e7e1] text-[var(--muted)] hover:bg-[#dfddd6]"
+                    }`}
+                    key={calendar.id}
+                    onClick={() => toggleCalendar(calendar.id)}
+                    style={{ fontSize: "13px", lineHeight: 1 }}
+                    type="button"
+                  >
+                    <span
+                      aria-hidden="true"
+                      className={`size-1.5 shrink-0 rounded-full ${isSelected ? "" : "opacity-55"}`}
+                      style={{ backgroundColor: calendar.color }}
+                    />
+                    <span className="truncate" style={{ fontSize: "13px", lineHeight: 1 }}>
+                      {calendar.name}
+                    </span>
+                    {isSelected ? <Check aria-hidden="true" className="size-2.5 shrink-0" /> : null}
+                  </button>
+                );
+              })}
+            </div>
+          ) : null}
+
           <div className="flex flex-1 flex-col gap-4">
             {bottomView === "IMPORTANT" ? (
-              <section className="panel min-w-0 overflow-hidden">
-                <div className="hidden border-b border-[var(--line)] bg-[#f9f8f4] px-5 py-3 md:block">
-                  <div className="grid grid-cols-[minmax(0,1.4fr)_180px_160px] gap-4 text-xs font-semibold text-[var(--muted)]">
-                    <span>일정</span>
-                    <span>시간</span>
-                    <span>캘린더</span>
-                  </div>
-                </div>
+              <section className="min-w-0 overflow-hidden bg-transparent">
                 <div className="divide-y divide-[var(--line)]">
                   {importantEvents.length > 0 ? (
                     importantEvents.map((item) => (
                       <button
                         key={item.id}
                         className={[
-                          "flex w-full flex-col gap-2 bg-white px-4 py-4 text-left transition hover:bg-[#faf9f5] md:grid md:grid-cols-[minmax(0,1.4fr)_180px_160px] md:items-center md:gap-4 md:px-5",
+                          "flex w-full flex-col gap-2 bg-white px-4 py-4 text-left transition hover:bg-[#faf9f5]",
                           selectedEventId === item.id
                             ? "shadow-[inset_3px_0_0_#30322d]"
                             : "",
@@ -1325,9 +1816,90 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
                   )}
                 </div>
               </section>
+            ) : calendarView === "WEEK" ? (
+              <section className="min-w-0 overflow-hidden bg-transparent">
+                <div className="divide-y divide-[var(--line)]">
+                  {weeklyEventsByDay.map(({ date, events: dayEvents }) => {
+                    const isToday = startOfDay(date).getTime() === startOfDay(new Date()).getTime();
+
+                    return (
+                      <div className="grid grid-cols-[58px_minmax(0,1fr)] gap-3 px-3 py-3" key={date.toISOString()}>
+                        <button
+                          className="flex flex-col items-center rounded-lg py-1 text-center hover:bg-[#f3f1eb]"
+                          onClick={() => setSelectedDate(date)}
+                          type="button"
+                        >
+                          <span className="text-xs font-semibold text-[var(--muted)]">
+                            {weekDays[date.getDay()]?.label}
+                          </span>
+                          <span className={`mt-1 flex size-8 items-center justify-center rounded-full text-sm font-semibold ${isToday ? "bg-[var(--ink)] text-white" : "text-[var(--ink)]"}`}>
+                            {date.getDate()}
+                          </span>
+                        </button>
+                        <div className="min-w-0 space-y-2">
+                          {dayEvents.length > 0 ? (
+                            dayEvents.map((item) => (
+                              <button
+                                className="flex min-h-11 w-full items-center gap-3 rounded-lg bg-[#eeece6]/70 px-3 py-2 text-left hover:bg-[#e5e2db]"
+                                key={`${date.toISOString()}-${item.id}`}
+                                onClick={() => openEventDetail(item.id)}
+                                type="button"
+                              >
+                                <span className="h-7 w-1 shrink-0 rounded-full" style={{ backgroundColor: item.color }} />
+                                <span className="min-w-0 flex-1">
+                                  <span className="block truncate text-sm font-semibold">{item.title}</span>
+                                  <span className="block text-xs text-[var(--muted)]">
+                                    {item.allDay ? "하루 종일" : timeFormatter.format(new Date(item.startsAt))}
+                                  </span>
+                                </span>
+                              </button>
+                            ))
+                          ) : (
+                            <p className="py-3 text-sm text-[#a2a59b]">일정 없음</p>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </section>
+            ) : calendarView === "LIST" ? (
+              <section className="space-y-3">
+                {listEventGroups.length > 0 ? (
+                  listEventGroups.map(({ date, events: groupedEvents }) => (
+                    <div className="overflow-hidden bg-transparent" key={date.toISOString()}>
+                      <div className="bg-[#eeece6]/70 px-4 py-3">
+                        <h2 className="text-sm font-semibold">{dateFormatter.format(date)}</h2>
+                      </div>
+                      <div className="divide-y divide-[var(--line)]">
+                        {groupedEvents.map((item) => (
+                          <button
+                            className="flex min-h-14 w-full items-center gap-3 bg-transparent px-4 py-3 text-left hover:bg-[#eeece6]/70"
+                            key={item.id}
+                            onClick={() => openEventDetail(item.id)}
+                            type="button"
+                          >
+                            <span className="h-8 w-1 shrink-0 rounded-full" style={{ backgroundColor: item.color }} />
+                            <span className="min-w-0 flex-1">
+                              <span className="block truncate text-sm font-semibold">{item.title}</span>
+                              <span className="mt-0.5 block text-xs text-[var(--muted)]">
+                                {item.allDay ? "하루 종일" : timeFormatter.format(new Date(item.startsAt))} · {item.calendar.name}
+                              </span>
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <div className="panel p-6 text-center text-sm text-[var(--muted)]">
+                    표시할 일정이 없습니다.
+                  </div>
+                )}
+              </section>
             ) : (
-            <div className="panel min-w-0 overflow-hidden">
-              <div className="calendar-grid border-b border-[var(--line)] bg-[#f9f8f4]">
+            <div className="min-w-0 overflow-hidden bg-transparent">
+              <div className="calendar-grid border-b border-[#eeeeec] bg-[#fafafa]">
                 {weekDays.map((day) => (
                   <div
                     key={day.label}
@@ -1343,7 +1915,7 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
                     {week.map((day) => (
                       <button
                         key={day.key}
-                        className="day-cell bg-white/70 text-left"
+                        className="day-cell bg-transparent text-left"
                         onClick={() => selectCalendarDate(day.date)}
                         onDoubleClick={openCreateModal}
                         onDragOver={handleDayDragOver}
@@ -1402,74 +1974,23 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
             </div>
             )}
 
-            {bottomView !== "IMPORTANT" ? (
-            <section className="panel p-4 md:hidden">
+            {bottomView !== "IMPORTANT" && calendarView === "MONTH" ? (
+            <section className="bg-transparent p-4">
               <div className="mb-4 flex items-center justify-between">
-                <h2 className="text-base font-semibold">
-                  {bottomView === "MONTH" ? formatMonthLabel(month) : formatDayLabel(selectedDate)}
-                </h2>
-                {bottomView === "MONTH" ? (
-                  <List size={18} className="text-[var(--muted)]" />
-                ) : (
-                  <CalendarDays size={18} className="text-[var(--muted)]" />
-                )}
-              </div>
-              <div className="space-y-3">
-                {(bottomView === "MONTH" ? monthlyEvents : dailyEvents).length > 0 ? (
-                  (bottomView === "MONTH" ? monthlyEvents : dailyEvents).map((item) => (
-                    <button
-                      key={item.id}
-                      className="flex w-full gap-3 rounded-lg border border-[var(--line)] bg-white p-3 text-left"
-                      onClick={() => openEventDetail(item.id)}
-                      type="button"
-                    >
-                      <div
-                        className="mt-1 size-2.5 rounded-full"
-                        style={{ backgroundColor: item.color }}
-                      />
-                      <div className="min-w-0">
-                        <p className="text-xs font-semibold text-[var(--muted)]">
-                          {bottomView === "MONTH"
-                            ? dateTimeFormatter.format(new Date(item.startsAt))
-                            : timeFormatter.format(new Date(item.startsAt))}
-                        </p>
-                        <p className="truncate text-sm font-semibold">{item.title}</p>
-                        <p className="text-xs text-[var(--muted)]">{item.calendar.name}</p>
-                      </div>
-                    </button>
-                  ))
-                ) : (
-                  <p className="rounded-lg border border-[var(--line)] bg-white p-3 text-sm text-[var(--muted)]">
-                    선택한 캘린더에 표시할 일정이 없습니다.
-                  </p>
-                )}
-              </div>
-            </section>
-            ) : null}
-
-            {bottomView !== "IMPORTANT" ? (
-            <section className="panel hidden p-4 md:block">
-              <div className="mb-4 flex items-center justify-between">
-                <h2 className="text-base font-semibold">
-                  {bottomView === "DAY" ? formatDayLabel(selectedDate) : formatMonthLabel(month)}
-                </h2>
-                {bottomView === "DAY" ? (
-                  <Clock3 size={18} className="text-[var(--muted)]" />
-                ) : (
-                  <List size={18} className="text-[var(--muted)]" />
-                )}
+                <h2 className="text-base font-semibold">{summaryTitle}</h2>
+                <SummaryIcon size={18} className="text-[var(--muted)]" />
               </div>
 
-              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-                {(bottomView === "DAY" ? dailyEvents : monthlyEvents).length > 0 ? (
-                  (bottomView === "DAY" ? dailyEvents : monthlyEvents).map((item) => (
+              <div className="grid gap-3">
+                {summaryEvents.length > 0 ? (
+                  summaryEvents.map((item) => (
                     <button
                       key={item.id}
                       className={[
-                        "flex w-full gap-3 rounded-lg border bg-white p-3 text-left",
+                        "flex w-full gap-3 rounded-lg p-3 text-left transition-colors",
                         selectedEventId === item.id
-                          ? "border-[#9fa598]"
-                          : "border-[var(--line)]",
+                          ? "bg-[#e5e2db]"
+                          : "bg-[#eeece6]/70 hover:bg-[#e5e2db]",
                       ].join(" ")}
                       onClick={() => openEventDetail(item.id)}
                       type="button"
@@ -1490,7 +2011,7 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
                     </button>
                   ))
                 ) : (
-                  <p className="rounded-lg border border-[var(--line)] bg-white p-3 text-sm text-[var(--muted)] md:col-span-2 xl:col-span-3">
+                  <p className="rounded-lg bg-[#fafafa] p-3 text-sm text-[#858980]">
                     선택한 캘린더에 표시할 일정이 없습니다.
                   </p>
                 )}
@@ -1501,159 +2022,49 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
         </section>
       </div>
 
-      <footer className="fixed inset-x-0 bottom-0 z-20 border-t border-[var(--line)] bg-[#fdfcf9]/95 px-3 py-2 shadow-[0_-12px_40px_rgba(31,33,29,0.08)] backdrop-blur md:hidden">
-        <nav className="mx-auto grid max-w-[520px] grid-cols-5 items-center gap-1">
+      <footer className="fixed inset-x-0 bottom-0 z-30 border-t border-[var(--line)] bg-[var(--panel)] px-2 pb-[max(8px,env(safe-area-inset-bottom))] pt-2 shadow-[0_-12px_40px_rgba(31,33,29,0.08)] backdrop-blur">
+        <nav aria-label="주요 동작" className="mx-auto grid max-w-[360px] grid-cols-3 items-end gap-8">
           <button
-            className="flex h-14 items-center justify-center rounded-lg text-[#34362f] hover:bg-[#efeee9]"
-            aria-label={bottomView === "MONTH" ? "일별 보기" : "월별 보기"}
-            title={bottomView === "MONTH" ? "일별 보기" : "월별 보기"}
-            onClick={() => {
-              if (bottomView === "IMPORTANT") {
-                goToMainCalendar();
-                return;
-              }
-
-              setBottomView((current) => (current === "MONTH" ? "DAY" : "MONTH"));
-            }}
+            className="mx-auto flex size-14 items-center justify-center rounded-xl text-[var(--muted)] transition-colors hover:bg-[#efeee9] hover:text-[var(--ink)]"
+            aria-label={nextCalendarViewLabel}
+            title={nextCalendarViewLabel}
+            onClick={() => setCalendarView(nextCalendarView)}
+            type="button"
           >
-            {bottomView === "MONTH" ? <List size={21} /> : <CalendarDays size={21} />}
+            <NextCalendarViewIcon size={23} />
           </button>
           <button
-            className="flex h-14 items-center justify-center rounded-lg text-[#34362f] hover:bg-[#efeee9]"
-            aria-label="중요"
-            title="중요"
-            onClick={() => {
-              setBottomView("IMPORTANT");
-            }}
-          >
-            <Star size={21} />
-          </button>
-          <button
-            className="mx-auto flex size-14 items-center justify-center rounded-full bg-[var(--ink)] text-white shadow-[0_12px_28px_rgba(24,25,22,0.24)]"
+            className="mx-auto flex size-14 -translate-y-2 items-center justify-center rounded-full bg-[var(--action-bg)] text-[var(--action-fg)] shadow-[0_10px_24px_rgba(24,25,22,0.2)] ring-1 ring-[var(--line)] transition-colors"
             aria-label="새 일정"
-            title="새 일정"
             onClick={openCreateModal}
+            type="button"
           >
             <Plus size={25} />
           </button>
           <button
-            className="flex h-14 items-center justify-center rounded-lg text-[#34362f] hover:bg-[#efeee9]"
-            aria-label="검색"
-            title="검색"
-            onClick={openSearchModal}
-            type="button"
-          >
-            <Search size={21} />
-          </button>
-          <button
-            className="flex h-14 items-center justify-center rounded-lg text-[#34362f] hover:bg-[#efeee9]"
+            className="mx-auto flex size-14 items-center justify-center rounded-xl text-[var(--muted)] transition-colors hover:bg-[#efeee9] hover:text-[var(--ink)]"
             aria-label="설정"
             title="설정"
             onClick={openSettingsModal}
             type="button"
           >
-            <Settings2 size={21} />
+            <Settings2 size={22} />
           </button>
         </nav>
       </footer>
 
       {isMobileMenuOpen ? (
-        <div className="fixed inset-0 z-40 bg-black/35 md:hidden">
-          <aside className="mobile-drawer h-full w-[84vw] max-w-[320px] bg-[#fdfcf9] p-4 shadow-[24px_0_60px_rgba(31,33,29,0.18)]">
-            <div className="mb-5 flex items-center justify-between">
-              <button
-                className="mobile-brand-script brand-logo-button"
-                aria-label="메인 달력"
-                onClick={goToMainCalendar}
-                type="button"
-              >
-                Plandit
-              </button>
-              <button
-                className="icon-button"
-                aria-label="Close"
-                onClick={() => setIsMobileMenuOpen(false)}
-                type="button"
-              >
-                <X size={18} />
-              </button>
-            </div>
-
-            <button
-              className="mb-5 flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-[var(--ink)] px-4 text-sm font-semibold text-white"
-              onClick={() => {
-                setIsMobileMenuOpen(false);
-                openCreateModal();
-              }}
-              type="button"
-            >
-              <Plus size={17} />
-              새 일정
-            </button>
-
-            <div>
-              <div className="mb-3 flex items-center justify-between px-3">
-                <p className="text-xs font-semibold uppercase text-[var(--muted)]">
-                  캘린더 목록
-                </p>
-                <div className="flex items-center gap-2">
-                  <button
-                    className="calendar-selection-action"
-                    onClick={toggleAllCalendars}
-                    type="button"
-                  >
-                    {calendarSelectionActionLabel}
-                  </button>
-                  <button
-                    className="flex size-6 items-center justify-center rounded-md border border-[var(--line)] bg-white text-[var(--ink)]"
-                    aria-label="새 캘린더"
-                    onClick={() => {
-                      setIsMobileMenuOpen(false);
-                      openCalendarCreateModal();
-                    }}
-                    type="button"
-                  >
-                    <Plus size={14} />
-                  </button>
-                </div>
-              </div>
-              <div className="space-y-2">
-                {calendarItems.map((calendar) => (
-                  <div
-                    key={calendar.id}
-                    className="flex w-full items-center gap-2 rounded-lg px-3 py-2 hover:bg-[#efeee9]"
-                  >
-                    <label className="flex min-w-0 flex-1 cursor-pointer items-center gap-3 text-left">
-                      <input
-                        checked={selectedCalendarIds.includes(calendar.id)}
-                        className="size-4 accent-[var(--ink)]"
-                        onChange={() => toggleCalendar(calendar.id)}
-                        type="checkbox"
-                      />
-                      <span
-                        className="size-2.5 shrink-0 rounded-full"
-                        style={{ backgroundColor: calendar.color }}
-                      />
-                      <span className="truncate text-sm text-[#34362f]">{calendar.name}</span>
-                    </label>
-                    {canInviteToCalendar(calendar) ? (
-                      <button
-                        className="flex h-7 shrink-0 items-center gap-1 rounded-md border border-[var(--line)] bg-white px-2 text-xs font-semibold text-[var(--muted)] hover:text-[var(--ink)]"
-                        aria-label={`${calendar.name} 멤버`}
-                        onClick={() => {
-                          setIsMobileMenuOpen(false);
-                          openInviteModal(calendar.id);
-                        }}
-                        type="button"
-                      >
-                        <UserPlus size={13} />
-                        멤버
-                      </button>
-                    ) : null}
-                  </div>
-                ))}
-              </div>
-            </div>
+        <div
+          className="fixed inset-x-0 bottom-0 top-16 z-40 bg-black/35"
+          onClick={() => setIsMobileMenuOpen(false)}
+          role="presentation"
+        >
+          <aside
+            aria-label="캘린더 메뉴"
+            className="mobile-drawer mobile-drawer-enter flex h-full w-[84vw] max-w-[320px] flex-col bg-[#fdfcf9] p-4 shadow-[24px_0_60px_rgba(31,33,29,0.18)]"
+            onClick={(event) => event.stopPropagation()}
+          >
+            {navigationPanel}
           </aside>
         </div>
       ) : null}
@@ -1712,8 +2123,8 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
       ) : null}
 
       {isSearchOpen ? (
-        <div className="fixed inset-0 z-40 flex items-end justify-center bg-black/35 px-0 md:items-center md:px-4">
-          <section className="panel mobile-sheet w-full max-w-[560px] p-5">
+        <div className="fixed inset-x-0 bottom-0 top-16 z-40 flex items-start justify-center bg-black/35 px-0">
+          <section className="panel max-h-[calc(100vh-64px)] w-full max-w-[480px] overflow-y-auto rounded-t-none border-t-0 p-5 shadow-[0_24px_60px_rgba(31,33,29,0.2)] scrollbar-hide">
             <div className="mb-4 flex items-center justify-between gap-3">
               <h2 className="text-lg font-semibold">검색</h2>
               <button
@@ -1766,7 +2177,9 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
                 ))
               ) : (
                 <p className="rounded-lg border border-[var(--line)] bg-white p-4 text-sm text-[var(--muted)]">
-                  검색 결과가 없습니다.
+                  {searchQuery.trim()
+                    ? "검색 결과가 없습니다."
+                    : "일정 제목, 장소 또는 메모를 입력해 검색하세요."}
                 </p>
               )}
             </div>
@@ -1775,7 +2188,7 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
       ) : null}
 
       {isSettingsOpen ? (
-        <div className="fixed inset-0 z-40 flex items-end justify-center bg-black/35 px-0 md:items-center md:px-4">
+        <div className="fixed inset-0 z-40 flex items-end justify-center bg-black/35 px-0">
           <section className="panel mobile-sheet w-full max-w-[520px] p-5">
             <div className="mb-5 flex items-center justify-between gap-3">
               <h2 className="text-lg font-semibold">설정</h2>
@@ -1790,6 +2203,37 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
             </div>
 
             <div className="space-y-3">
+              <section className="rounded-lg border border-[var(--line)] bg-white p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-xs font-semibold text-[var(--muted)]">화면 테마</p>
+                    <p className="mt-1 text-sm font-semibold">
+                      {theme === "dark" ? "다크 모드" : "라이트 모드"}
+                    </p>
+                  </div>
+                  <div className="flex rounded-lg bg-[var(--panel-soft)] p-1">
+                    <button
+                      aria-label="라이트 모드"
+                      aria-pressed={theme === "light"}
+                      className={`flex size-10 items-center justify-center rounded-md transition-colors ${theme === "light" ? "bg-white text-[var(--ink)] shadow-sm" : "text-[var(--muted)]"}`}
+                      onClick={() => changeTheme("light")}
+                      type="button"
+                    >
+                      <Sun size={18} />
+                    </button>
+                    <button
+                      aria-label="다크 모드"
+                      aria-pressed={theme === "dark"}
+                      className={`flex size-10 items-center justify-center rounded-md transition-colors ${theme === "dark" ? "bg-[var(--ink)] text-[var(--background)] shadow-sm" : "text-[var(--muted)]"}`}
+                      onClick={() => changeTheme("dark")}
+                      type="button"
+                    >
+                      <Moon size={18} />
+                    </button>
+                  </div>
+                </div>
+              </section>
+
               <section className="rounded-lg border border-[var(--line)] bg-white p-4">
                 <p className="text-xs font-semibold text-[var(--muted)]">계정</p>
                 <p className="mt-2 truncate text-sm font-semibold">{user.name}</p>
@@ -1808,6 +2252,28 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
               </section>
 
               <section className="rounded-lg border border-[var(--line)] bg-white p-4">
+                <div className="mb-3 flex items-center justify-between">
+                  <p className="text-xs font-semibold text-[var(--muted)]">캘린더 관리</p>
+                  <button className="text-xs font-semibold underline" onClick={openCalendarCreateModal} type="button">새 캘린더</button>
+                </div>
+                <div className="space-y-2">
+                  {calendarItems.map((calendar) => (
+                    <button
+                      key={calendar.id}
+                      className="flex w-full items-center gap-3 rounded-lg border border-[var(--line)] px-3 py-2 text-left"
+                      disabled={!(["OWNER", "ADMIN"] as CalendarRole[]).includes(calendar.role)}
+                      onClick={() => { setFormError(null); setEditingCalendarId(calendar.id); }}
+                      type="button"
+                    >
+                      <span className="size-3 rounded-full" style={{ backgroundColor: calendar.color }} />
+                      <span className="min-w-0 flex-1 truncate text-sm font-semibold">{calendar.name}</span>
+                      <Pencil size={14} className="text-[var(--muted)]" />
+                    </button>
+                  ))}
+                </div>
+              </section>
+
+              <section className="rounded-lg border border-[var(--line)] bg-white p-4">
                 <div className="flex items-center justify-between gap-3">
                   <div>
                     <p className="text-xs font-semibold text-[var(--muted)]">시간대</p>
@@ -1817,6 +2283,39 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
                     ko-KR
                   </span>
                 </div>
+              </section>
+
+              <section className="rounded-lg border border-[var(--line)] bg-white p-4">
+                <div className="mb-3 flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-xs font-semibold text-[var(--muted)]">푸시 알림</p>
+                    <p className="mt-2 text-sm font-semibold">Provider: NOOP</p>
+                  </div>
+                  <Bell size={18} className="mt-1 text-[var(--muted)]" />
+                </div>
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                  <button
+                    className="h-11 rounded-lg border border-[var(--line)] bg-[#f9f8f4] text-sm font-semibold disabled:opacity-50"
+                    disabled={isPushSaving}
+                    onClick={handleRegisterPushChannel}
+                    type="button"
+                  >
+                    이 기기 등록
+                  </button>
+                  <button
+                    className="h-11 rounded-lg border border-[var(--line)] bg-white text-sm font-semibold disabled:opacity-50"
+                    disabled={isPushSaving}
+                    onClick={handleSendTestPush}
+                    type="button"
+                  >
+                    테스트 발송
+                  </button>
+                </div>
+                {pushMessage ? (
+                  <p className="mt-3 rounded-lg bg-[#eff8f1] px-3 py-2 text-xs font-semibold text-[#11623b]">
+                    {pushMessage}
+                  </p>
+                ) : null}
               </section>
 
               <button
@@ -1832,8 +2331,31 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
         </div>
       ) : null}
 
+      {editingCalendarId && calendarItems.find((item) => item.id === editingCalendarId) ? (() => {
+        const calendar = calendarItems.find((item) => item.id === editingCalendarId)!;
+        return (
+          <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/35">
+            <section className="panel mobile-sheet w-full max-w-[460px] p-5">
+              <div className="mb-5 flex items-center justify-between">
+                <h2 className="text-lg font-semibold">캘린더 설정</h2>
+                <button className="icon-button" onClick={() => setEditingCalendarId("")} type="button"><X size={18} /></button>
+              </div>
+              <form className="space-y-3" onSubmit={handleUpdateCalendar}>
+                <input className="h-11 w-full rounded-lg border border-[var(--line)] bg-white px-3" defaultValue={calendar.name} name="name" required />
+                <textarea className="min-h-24 w-full rounded-lg border border-[var(--line)] bg-white p-3" defaultValue={calendar.description ?? ""} name="description" placeholder="설명" />
+                <input className="h-11 w-full rounded-lg border border-[var(--line)] bg-white px-3" defaultValue={calendar.timezone ?? "Asia/Seoul"} name="timezone" required />
+                <label className="flex h-11 items-center justify-between rounded-lg border border-[var(--line)] bg-white px-3 text-sm font-semibold">색상<input className="size-8" defaultValue={calendar.color} name="color" type="color" /></label>
+                {formError ? <p className="rounded-lg bg-[#fff3f1] px-3 py-2 text-sm text-[#b33a2f]">{formError}</p> : null}
+                <button className="h-11 w-full rounded-lg bg-[var(--ink)] text-sm font-semibold text-white disabled:opacity-50" disabled={isSaving} type="submit">저장</button>
+                {!calendar.isDefault ? <button className="h-11 w-full rounded-lg border border-[#f0c9d0] bg-[#fff7f8] text-sm font-semibold text-[#b93d53] disabled:opacity-50" disabled={isSaving} onClick={() => void handleDeleteCalendar()} type="button">캘린더 삭제</button> : null}
+              </form>
+            </section>
+          </div>
+        );
+      })() : null}
+
       {isInviteOpen && selectedInviteCalendar ? (
-        <div className="fixed inset-0 z-40 flex items-end justify-center bg-black/35 px-0 md:items-center md:px-4">
+        <div className="fixed inset-0 z-40 flex items-end justify-center bg-black/35 px-0">
           <section className="panel mobile-sheet w-full max-w-[460px] p-5">
             <div className="mb-5 flex items-center justify-between gap-3">
               <div className="min-w-0">
@@ -1967,7 +2489,7 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
       ) : null}
 
       {isCalendarCreateOpen ? (
-        <div className="fixed inset-0 z-40 flex items-end justify-center bg-black/30 px-0 md:items-center md:px-4">
+        <div className="fixed inset-0 z-40 flex items-end justify-center bg-black/30 px-0">
           <section className="panel mobile-sheet w-full max-w-[460px] p-5">
             <div className="mb-5 flex items-center justify-between">
               <h2 className="text-lg font-semibold">새 캘린더</h2>
@@ -2017,7 +2539,7 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
       ) : null}
 
       {isDetailOpen && selectedEvent ? (
-        <div className="fixed inset-0 z-40 flex items-end justify-center bg-black/35 px-0 md:items-center md:px-4">
+        <div className="fixed inset-0 z-40 flex items-end justify-center bg-black/35 px-0">
           <section className="panel mobile-sheet w-full max-w-[520px] p-5">
             <div className="mb-5 flex items-start justify-between gap-4">
               <div className="min-w-0">
@@ -2141,7 +2663,7 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
       ) : null}
 
       {isEditOpen && selectedEvent ? (
-        <div className="fixed inset-0 z-40 flex items-end justify-center bg-black/30 px-0 md:items-center md:px-4">
+        <div className="fixed inset-0 z-40 flex items-end justify-center bg-black/30 px-0">
           <section className="panel mobile-sheet w-full max-w-[460px] p-5">
             <div className="mb-5 flex items-center justify-between">
               <h2 className="text-lg font-semibold">일정 수정</h2>
@@ -2164,18 +2686,12 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
                 placeholder="일정 제목"
                 required
               />
-              <select
-                className="h-11 w-full rounded-lg border border-[var(--line)] bg-white px-3 outline-none focus:border-[#aeb3a6]"
-                name="calendarId"
-                required
+              <CalendarSelect
+                calendars={writableCalendars}
                 defaultValue={selectedEvent.calendarId}
-              >
-                {writableCalendars.map((calendar) => (
-                  <option key={calendar.id} value={calendar.id}>
-                    {calendar.name}
-                  </option>
-                ))}
-              </select>
+                key={selectedEvent.id}
+                name="calendarId"
+              />
               <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                 <input
                   className="h-11 rounded-lg border border-[var(--line)] bg-white px-3 outline-none focus:border-[#aeb3a6]"
@@ -2192,6 +2708,10 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
                   type="datetime-local"
                 />
               </div>
+              <label className="flex h-11 items-center gap-3 rounded-lg border border-[var(--line)] bg-white px-3 text-sm font-semibold">
+                <input defaultChecked={selectedEvent.allDay} name="allDay" type="checkbox" />
+                하루 종일
+              </label>
               <input
                 className="h-11 w-full rounded-lg border border-[var(--line)] bg-white px-3 outline-none focus:border-[#aeb3a6]"
                 defaultValue={selectedEvent.location ?? ""}
@@ -2222,7 +2742,7 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
       ) : null}
 
       {isCreateOpen ? (
-        <div className="fixed inset-0 z-40 flex items-end justify-center bg-black/30 px-0 md:items-center md:px-4">
+        <div className="fixed inset-0 z-40 flex items-end justify-center bg-black/30 px-0">
           <section className="panel mobile-sheet w-full max-w-[460px] p-5">
             <div className="mb-5 flex items-center justify-between">
               <h2 className="text-lg font-semibold">새 일정</h2>
@@ -2244,18 +2764,11 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
                 placeholder="일정 제목"
                 required
               />
-              <select
-                className="h-11 w-full rounded-lg border border-[var(--line)] bg-white px-3 outline-none focus:border-[#aeb3a6]"
-                name="calendarId"
-                required
+              <CalendarSelect
+                calendars={writableCalendars}
                 defaultValue={writableCalendars[0]?.id}
-              >
-                {writableCalendars.map((calendar) => (
-                  <option key={calendar.id} value={calendar.id}>
-                    {calendar.name}
-                  </option>
-                ))}
-              </select>
+                name="calendarId"
+              />
               <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                 <input
                   className="h-11 rounded-lg border border-[var(--line)] bg-white px-3 outline-none focus:border-[#aeb3a6]"
@@ -2272,6 +2785,10 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
                   type="datetime-local"
                 />
               </div>
+              <label className="flex h-11 items-center gap-3 rounded-lg border border-[var(--line)] bg-white px-3 text-sm font-semibold">
+                <input name="allDay" type="checkbox" />
+                하루 종일
+              </label>
               <input
                 className="h-11 w-full rounded-lg border border-[var(--line)] bg-white px-3 outline-none focus:border-[#aeb3a6]"
                 name="location"

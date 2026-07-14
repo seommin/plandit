@@ -60,6 +60,7 @@ This starts:
 - Personal schedules: private calendars and events visible only to the owner
 - Shared calendars: calendar members, roles, and invite tokens
 - Event sharing: public event links for KakaoTalk or copied-link sharing
+- Push notifications: NestJS provider abstraction with a safe `NOOP` default
 - Native signup: email/password account fields on `User`
 - SNS login: Google, Kakao, Naver OAuth through Auth.js
 - Google Calendar sync: provider account plus calendar sync integration model
