@@ -46,16 +46,19 @@
 - **완료 조건**: e2e — MEMBER가 역할 변경 시도 403, ADMIN이 OWNER 부여 시도 403, 비멤버가 워크스페이스 조회 404. 마이그레이션 후 기존 캘린더가 전부 워크스페이스에 연결됨 ✅ (개발 DB: 사용자 3명 → 개인 워크스페이스 3개, 캘린더 3개 연결)
 
 ### PLANDIT-3 · 크레딧 계정·원장 [M]
-- [ ] `LedgerService.append({ accountId, type, amount, refType, refId, idempotencyKey, memo })`
-  - 트랜잭션 안에서 `credit_accounts` 행 `FOR UPDATE` → 원장 INSERT(`balance_after`) → 캐시 갱신
-  - DEBIT 잔액 부족 → `INSUFFICIENT_CREDITS`, 원장에 아무것도 남기지 않음
-  - 같은 `idempotencyKey` 재호출 → 기존 행 반환, 부작용 없음
-- [ ] `credit_ledger` UPDATE/DELETE 차단 트리거(SQL 마이그레이션)
-- [ ] 잔액 조회, 원장 조회(cursor, type 필터), 관리자 수동 조정(ADJUST, memo 필수, 감사 로그)
-- [ ] `LedgerService.recalculate(accountId)`
-- **완료 조건**:
-  - 단위: 잔액 계산, 부족 시 거부, 멱등 재호출
-  - e2e: 동시 DEBIT 50개(잔액 30) → 정확히 30개 성공, 원장 30행, `balance_after` 단조 감소, 캐시 = 원장 합계
+- [x] `LedgerService.append(input, tx?)` — 호출자 트랜잭션 합류 가능(웹훅 이벤트 + 원장 한 커밋용)
+  - 트랜잭션 안에서 계정 행 `FOR UPDATE` → 멱등키 재확인 → `UPDATE … SET balance = balance + amount WHERE balance + amount >= 0 RETURNING` → 원장 INSERT(`balanceAfter` = 반환값). 잔액 계산은 SQL에서만
+  - 잔액 부족 → `INSUFFICIENT_CREDITS`(409), 원장·캐시 변화 없음
+  - 같은 `idempotencyKey` 재호출 → 기존 행 반환(`replayed: true`). 같은 키로 다른 금액·대상 → `IDEMPOTENCY_CONFLICT`
+  - 타입별 부호 검증(CHARGE/REFUND > 0, DEBIT < 0, ADJUST ≠ 0)
+- [x] `CreditLedger` UPDATE/DELETE 차단 트리거(SQL 마이그레이션). TRUNCATE는 테스트 DB 초기화용으로 허용
+- [x] 잔액 조회(MEMBER), 원장 조회(ADMIN+, id cursor, type 필터, 기본 최신순)
+- [x] 수동 조정: **플랫폼 운영자**(`PLATFORM_ADMIN_EMAILS`)만 — 워크스페이스 ADMIN이 스스로 크레딧을 만들 수 없게. memo·`Idempotency-Key` 헤더 필수. 감사 로그는 PLANDIT-8에서 연결
+- [x] `LedgerService.recalculate(accountId)`: 원장 합계로 캐시 재계산
+- **완료 조건**: ✅
+  - 단위: 타입별 부호 검증
+  - e2e: 잔액 계산·캐시 동기화, 부족 시 거부(원장 변화 없음), 멱등 재호출, 키 충돌, 트리거 차단, 캐시 복구
+  - e2e: 동시 DEBIT 50개(잔액 30) → 정확히 30개 성공, 원장 30행, `balanceAfter` 29→0 단조 감소, 캐시 = 원장 합계
 
 ### PLANDIT-4 · 모의 외부 서버 (`apps/mocks`) [M]
 - PG (`/pg`)

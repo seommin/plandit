@@ -7,6 +7,9 @@ import { LoggerModule } from "nestjs-pino";
 import { AuthController } from "./auth/auth.controller";
 import { CalendarController } from "./calendar/calendar.controller";
 import { ApiExceptionFilter } from "./common/api-exception.filter";
+import { CreditController } from "./credit/credit.controller";
+import { CreditService } from "./credit/credit.service";
+import { LedgerService } from "./credit/ledger.service";
 import { EventsController } from "./events/events.controller";
 import { HealthController } from "./health/health.controller";
 import { InternalApiGuard } from "./internal-api.guard";
@@ -44,9 +47,12 @@ const TRACE_ID = /^[\w-]{1,128}$/;
     PushController,
     SharesController,
     WorkspaceController,
+    CreditController,
   ],
   providers: [
     WorkspaceService,
+    LedgerService,
+    CreditService,
     // Order matters: internal-secret check first, then workspace role check.
     { provide: APP_GUARD, useClass: InternalApiGuard },
     { provide: APP_GUARD, useClass: RolesGuard },
