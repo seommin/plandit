@@ -1,0 +1,35 @@
+export enum ErrorCode {
+  BAD_REQUEST = "BAD_REQUEST",
+  VALIDATION_FAILED = "VALIDATION_FAILED",
+  UNAUTHORIZED = "UNAUTHORIZED",
+  FORBIDDEN = "FORBIDDEN",
+  NOT_FOUND = "NOT_FOUND",
+  CONFLICT = "CONFLICT",
+  INTERNAL_ERROR = "INTERNAL_ERROR",
+  SERVICE_UNAVAILABLE = "SERVICE_UNAVAILABLE",
+}
+
+export const ERROR_STATUS: Record<ErrorCode, number> = {
+  [ErrorCode.BAD_REQUEST]: 400,
+  [ErrorCode.VALIDATION_FAILED]: 400,
+  [ErrorCode.UNAUTHORIZED]: 401,
+  [ErrorCode.FORBIDDEN]: 403,
+  [ErrorCode.NOT_FOUND]: 404,
+  [ErrorCode.CONFLICT]: 409,
+  [ErrorCode.INTERNAL_ERROR]: 500,
+  [ErrorCode.SERVICE_UNAVAILABLE]: 503,
+};
+
+export class ApiError extends Error {
+  constructor(
+    readonly code: ErrorCode,
+    message: string,
+    readonly details?: unknown,
+  ) {
+    super(message);
+  }
+
+  get status() {
+    return ERROR_STATUS[this.code];
+  }
+}

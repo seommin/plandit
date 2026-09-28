@@ -4,7 +4,7 @@
   "private": true,
   "packageManager": "pnpm@11.5.2",
   "engines": {
-    "node": "24.16.0",
+    "node": ">=24.16.0",
     "pnpm": "11.5.2"
   },
   "scripts": {
@@ -15,11 +15,14 @@
     "start:web": "pnpm --filter @plandit/web start",
     "start:api": "pnpm --filter @plandit/api start",
     "typecheck": "pnpm -r --filter @plandit/shared --filter @plandit/database --filter @plandit/api --filter @plandit/web typecheck",
-    "docker:up": "docker compose up --build",
-    "docker:down": "docker compose down",
     "prisma:generate": "pnpm --filter @plandit/database prisma:generate",
     "prisma:migrate": "pnpm --filter @plandit/database prisma:migrate",
-    "prisma:studio": "pnpm --filter @plandit/database prisma:studio"
+    "prisma:studio": "pnpm --filter @plandit/database prisma:studio",
+    "lint": "pnpm --filter @plandit/api lint",
+    "test": "pnpm --filter @plandit/api test",
+    "test:e2e": "pnpm --filter @plandit/api test:e2e",
+    "docker:up": "docker compose up -d",
+    "docker:down": "docker compose down"
   },
   "devDependencies": {
     "typescript": "6.0.3"

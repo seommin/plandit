@@ -25,7 +25,7 @@
 
 - 새 도메인은 모듈 단위: `workspace`, `credit`, `payment`, `reminder`, `ai`, `audit`, `common`. 모듈 안은 `controller → service`, Prisma 호출은 service에서.
 - 기존 컨트롤러(`calendar`, `events`, `shares`, `push`, `auth`)는 Prisma를 직접 부른다. 손대는 이슈에서만 service로 옮기고, 일부러 대규모 리팩터링하지 않는다.
-- 입력 검증은 `packages/shared`의 zod 스키마(기존 방식 유지). Swagger 스키마는 zod에서 생성한다(PLANDIT-1에서 방식 확정).
+- 입력 검증은 `packages/shared`의 zod 스키마(기존 방식 유지). Swagger는 `ApiZodBody(schema)`(zod → `z.toJSONSchema`), 검증은 `ZodPipe(schema)`.
 - 외부 서비스(PG·중계사·LLM)는 인터페이스(`PaymentGateway`, `MessageProvider`, `LlmClient`) 뒤에 둔다. 구현체는 환경변수로 고른다. 실제 PG를 붙여도 service 코드는 바뀌지 않아야 한다.
 - 오류 응답은 `common`의 `ApiError` 하나(`{ code, message, details?, traceId }`). 새 오류 유형은 `ErrorCode` enum에 추가.
 - 스키마 변경은 Prisma 마이그레이션으로만. 운영 데이터를 지우는 마이그레이션은 만들지 않는다.

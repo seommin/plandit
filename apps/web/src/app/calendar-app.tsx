@@ -774,12 +774,12 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
     try {
       const response = await fetch(`/api/calendars/${calendarId}/members`);
       const result = (await response.json()) as {
-        error?: string;
+        error?: string; message?: string;
         members?: CalendarMember[];
       };
 
       if (!response.ok) {
-        throw new Error(result.error ?? "멤버 목록을 불러오지 못했습니다.");
+        throw new Error(result.message ?? result.error ?? "멤버 목록을 불러오지 못했습니다.");
       }
 
       setInviteMembers(result.members ?? []);
@@ -840,12 +840,12 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
         method: "PATCH",
       });
       const result = (await response.json()) as {
-        error?: string;
+        error?: string; message?: string;
         isImportant?: boolean;
       };
 
       if (!response.ok || typeof result.isImportant !== "boolean") {
-        throw new Error(result.error ?? "중요 일정을 변경하지 못했습니다.");
+        throw new Error(result.message ?? result.error ?? "중요 일정을 변경하지 못했습니다.");
       }
 
       const isImportant = result.isImportant;
@@ -930,7 +930,7 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
       const result = await response.json();
 
       if (!response.ok) {
-        throw new Error(result.error ?? "일정을 이동하지 못했습니다.");
+        throw new Error(result.message ?? result.error ?? "일정을 이동하지 못했습니다.");
       }
 
       const movedEvent = buildCalendarEvent(
@@ -1014,7 +1014,7 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
       const result = await response.json();
 
       if (!response.ok) {
-        throw new Error(result.error ?? "일정을 저장하지 못했습니다.");
+        throw new Error(result.message ?? result.error ?? "일정을 저장하지 못했습니다.");
       }
 
       const createdEvent = buildCalendarEvent(result.event, result.event.calendarId);
@@ -1057,7 +1057,7 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
       const result = await response.json();
 
       if (!response.ok) {
-        throw new Error(result.error ?? "캘린더를 만들지 못했습니다.");
+        throw new Error(result.message ?? result.error ?? "캘린더를 만들지 못했습니다.");
       }
 
       const createdCalendar = result.calendar as CalendarAppCalendar;
@@ -1092,7 +1092,7 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
         }),
       });
       const result = await response.json();
-      if (!response.ok) throw new Error(result.error ?? "캘린더를 수정하지 못했습니다.");
+      if (!response.ok) throw new Error(result.message ?? result.error ?? "캘린더를 수정하지 못했습니다.");
 
       const updated = result.calendar as CalendarAppCalendar;
       setCalendarItems((current) => current.map((item) => item.id === updated.id ? updated : item));
@@ -1118,7 +1118,7 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
     try {
       const response = await fetch(`/api/calendars/${calendar.id}`, { method: "DELETE" });
       const result = await response.json();
-      if (!response.ok) throw new Error(result.error ?? "캘린더를 삭제하지 못했습니다.");
+      if (!response.ok) throw new Error(result.message ?? result.error ?? "캘린더를 삭제하지 못했습니다.");
 
       setCalendarItems((current) => current.filter((item) => item.id !== calendar.id));
       setSelectedCalendarIds((current) => current.filter((id) => id !== calendar.id));
@@ -1157,13 +1157,13 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
         }),
       });
       const result = (await response.json()) as {
-        error?: string;
+        error?: string; message?: string;
         status?: "member" | "invited";
         url?: string;
       };
 
       if (!response.ok) {
-        throw new Error(result.error ?? "초대를 처리하지 못했습니다.");
+        throw new Error(result.message ?? result.error ?? "초대를 처리하지 못했습니다.");
       }
 
       setInviteMessage(
@@ -1209,12 +1209,12 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
         },
       );
       const result = (await response.json()) as {
-        error?: string;
+        error?: string; message?: string;
         member?: CalendarMember;
       };
 
       if (!response.ok || !result.member) {
-        throw new Error(result.error ?? "멤버 권한을 변경하지 못했습니다.");
+        throw new Error(result.message ?? result.error ?? "멤버 권한을 변경하지 못했습니다.");
       }
 
       setInviteMembers((current) =>
@@ -1240,11 +1240,11 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
         },
       );
       const result = (await response.json()) as {
-        error?: string;
+        error?: string; message?: string;
       };
 
       if (!response.ok) {
-        throw new Error(result.error ?? "멤버를 내보내지 못했습니다.");
+        throw new Error(result.message ?? result.error ?? "멤버를 내보내지 못했습니다.");
       }
 
       setInviteMembers((current) => current.filter((member) => member.id !== memberId));
@@ -1278,7 +1278,7 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
       const result = await response.json();
 
       if (!response.ok) {
-        throw new Error(result.error ?? "일정을 수정하지 못했습니다.");
+        throw new Error(result.message ?? result.error ?? "일정을 수정하지 못했습니다.");
       }
 
       const updatedEvent = buildCalendarEvent(result.event, result.event.calendarId);
@@ -1317,7 +1317,7 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
       const result = await response.json();
 
       if (!response.ok) {
-        throw new Error(result.error ?? "일정을 삭제하지 못했습니다.");
+        throw new Error(result.message ?? result.error ?? "일정을 삭제하지 못했습니다.");
       }
 
       setEventItems((current) => {
@@ -1355,14 +1355,14 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
           includeLocation: true,
         }),
       });
-      const result = (await response.json()) as { error?: string; url?: string };
+      const result = (await response.json()) as { error?: string; message?: string; url?: string };
 
       if (!response.ok || !result.url) {
         if (response.status === 404 || response.status === 403) {
           throw new Error("이 일정을 공유할 권한이 없습니다.");
         }
 
-        throw new Error(result.error ?? "공유 링크를 생성하지 못했습니다.");
+        throw new Error(result.message ?? result.error ?? "공유 링크를 생성하지 못했습니다.");
       }
 
       setShareUrl(result.url);
@@ -1417,10 +1417,10 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
           },
         }),
       });
-      const result = (await response.json()) as { error?: string };
+      const result = (await response.json()) as { error?: string; message?: string };
 
       if (!response.ok) {
-        throw new Error(result.error ?? "알림 채널을 등록하지 못했습니다.");
+        throw new Error(result.message ?? result.error ?? "알림 채널을 등록하지 못했습니다.");
       }
 
       setPushMessage("이 브라우저의 실제 푸시 알림을 등록했습니다.");
@@ -1448,14 +1448,14 @@ export default function CalendarApp({ calendars, events, user }: CalendarAppProp
         }),
       });
       const result = (await response.json()) as {
-        error?: string;
+        error?: string; message?: string;
         failed?: number;
         sent?: number;
         total?: number;
       };
 
       if (!response.ok) {
-        throw new Error(result.error ?? "테스트 알림을 보내지 못했습니다.");
+        throw new Error(result.message ?? result.error ?? "테스트 알림을 보내지 못했습니다.");
       }
 
       setPushMessage(
