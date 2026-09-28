@@ -11,7 +11,7 @@
 
 - Node 24, pnpm 11 워크스페이스, TypeScript 6, NestJS 11, Next.js 16, Prisma 7(adapter-pg), PostgreSQL 18(pgvector), Redis 7, BullMQ
 - 구조: `apps/web`(Next.js·Auth.js), `apps/api`(NestJS, HTTP 진입점 `main.ts` + 워커 진입점 `worker.ts`), `apps/mocks`(모의 PG·중계사), `packages/database`(Prisma), `packages/shared`(zod 스키마·상수)
-- 실행: `docker compose up -d` → `pnpm prisma:migrate` → `pnpm dev`(web :3000, api :4000, mocks :4100). 모의 서버 사용법은 `apps/mocks/README.md`
+- 실행: `docker compose up -d` → `pnpm prisma:migrate` → `pnpm dev`(web :3000, api :4000, worker, mocks :4100). 모의 서버 사용법은 `apps/mocks/README.md`
 - Swagger: http://localhost:4000/docs
 - 검증: `pnpm lint && pnpm typecheck && pnpm test && pnpm test:e2e`. 넷 다 통과해야 커밋한다.
 - `.env`는 커밋하지 않는다. `.env.example`에 키를 추가하면 설명을 함께 적는다.

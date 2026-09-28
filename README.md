@@ -37,7 +37,7 @@ pnpm install
 cp .env.example .env
 docker compose up -d          # postgres(pgvector) :5432, redis :6379
 pnpm prisma:migrate
-pnpm dev                      # web :3000, api :4000
+pnpm dev                      # web :3000, api :4000, worker(BullMQ), mocks :4100
 ```
 
 - API 문서(Swagger): http://localhost:4000/docs

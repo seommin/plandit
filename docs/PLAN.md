@@ -92,9 +92,16 @@
 - **완료 조건**: ✅ e2e(실제 모의 PG 프로세스를 띄워서 실행) — 정상(원장 1행, APPROVED) / 시나리오 `03` 중복(이벤트 1행, 원장 1행) / 잘못된 서명 401·변화 없음 / 다른 eventId로 APPROVED 재수신 → 이벤트 저장, 원장 1행 유지 / 금액 불일치 미반영 / `01` 실패 / PG 다운 → 502 + UNKNOWN / 권한·입력 검증. 개발 서버에서도 10,000원 충전 → 결제 페이지 승인 → 1,000크레딧 확인
 
 ### PLANDIT-6 · 미확정 결제 재조회 (worker) [M]
-- [ ] `apps/api/src/worker.ts` 진입점 + BullMQ 반복 작업(1분): RESERVE 5분 경과·UNKNOWN 건을 PG 재조회로 확정, 승인이면 PLANDIT-5 승인 처리를 **같은 멱등키로** 호출
-- [ ] 24시간 미확정 → FAILED + 감사 로그
-- **완료 조건**: e2e — 시나리오 `05` 충전 → 작업 강제 실행 → APPROVED, 원장 1행. 이후 늦은 웹훅에도 원장 1행
+- [x] `apps/api/src/worker.ts` 진입점(Nest 애플리케이션 컨텍스트, HTTP 없음) + `WorkerModule`. api와 같은 서비스를 모듈 단위로 공유(`CreditModule`, `PaymentModule`로 분리)
+- [x] BullMQ Job Scheduler(`RECONCILE_EVERY_MS`, 기본 1분). 여러 워커가 떠도 주기당 작업은 1개, concurrency 1
+- [x] 대상: RESERVE·UNKNOWN 중 `RECONCILE_MIN_AGE_MS`(기본 5분) 지난 건, 한 번에 100건. PG 재조회(`PaymentGateway.lookup`, tradeId 기준 → reserve 응답이 유실돼도 조회 가능)는 트랜잭션 밖에서, 반영은 결제 행 `FOR UPDATE` 후
+  - PG 승인 → 웹훅과 **같은 `applyApproval()`·같은 멱등키**로 APPROVED + CHARGE
+  - PG 실패·취소 → FAILED/CANCELED
+  - PG가 모르는 거래(우리 reserve가 도달 못 함) → FAILED `PG_NOT_FOUND`(아무도 결제할 수 없으므로 안전)
+  - PG에서 아직 미결제 → 대기, `PAYMENT_EXPIRE_AFTER_MS`(24시간) 지나면 FAILED `EXPIRED`
+  - 그사이 웹훅이 먼저 처리했으면 손대지 않음(`settled`), 금액 불일치는 반영하지 않고 오류 로그
+- 감사 로그(만료)는 PLANDIT-8에서 연결
+- **완료 조건**: ✅ e2e — 시나리오 `05` 충전 → 재조회 → APPROVED, 원장 1행 → 늦은 웹훅(원 이벤트 재전송) → `ALREADY_APPLIED`, 원장 1행 유지 / PG 미도달 UNKNOWN → FAILED / 미결제 대기 → 25시간 후 만료 / 웹훅이 먼저 처리한 건 무시 / 최소 경과 시간 / **실제 BullMQ 워커가 스케줄로 스스로 실행**해 승인. `pnpm dev`에 워커 포함
 
 ### PLANDIT-7 · 리마인더 발송 큐 [M]
 - [ ] `event_reminders`(event_id, minutes_before, channel PUSH/SMS/ALIMTALK, recipient 범위) + 사용자 `phone`

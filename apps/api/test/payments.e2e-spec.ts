@@ -1,27 +1,21 @@
-import { type ChildProcess, spawn } from "child_process";
 import { createHmac } from "crypto";
-import type { AddressInfo } from "net";
-import path from "path";
 
 import type { INestApplication } from "@nestjs/common";
 import request from "supertest";
 
 import { prisma } from "@plandit/database/prisma";
 
-import { as, closeTestApp, createTestApp, registerUser, resetDatabase } from "./helpers";
-
-const SECRET = "e2e-mock-pg-secret";
-const MOCKS_PORT = 4199;
-
-const waitFor = async <T>(check: () => Promise<T | undefined | null | false>, timeoutMs = 5_000) => {
-  const deadline = Date.now() + timeoutMs;
-  for (;;) {
-    const value = await check();
-    if (value) return value;
-    if (Date.now() > deadline) throw new Error("waitFor timed out");
-    await new Promise((resolve) => setTimeout(resolve, 50));
-  }
-};
+import {
+  approveAtPg as approveAt,
+  as,
+  closeTestApp,
+  createTestApp,
+  MOCK_PG_SECRET as SECRET,
+  registerUser,
+  resetDatabase,
+  startMocksFor,
+  waitFor,
+} from "./helpers";
 
 /** Signs like the mock PG does, to craft webhooks the PG itself wouldn't send in these scenarios. */
 const signedWebhook = (app: INestApplication, payload: object, secret = SECRET) => {
@@ -35,48 +29,25 @@ const signedWebhook = (app: INestApplication, payload: object, secret = SECRET) 
 
 describe("PLANDIT-5 charge flow (e2e, with the real mock PG process)", () => {
   let app: INestApplication;
-  let mocks: ChildProcess;
+  let mocks: { base: string; stop: () => void };
+  let mocksBase: string;
   let owner: { id: string; email: string };
   let member: { id: string; email: string };
   let workspaceId: string;
   let accountId: string;
-  const mocksBase = `http://127.0.0.1:${MOCKS_PORT}`;
 
   const charge = async (amount: number) => {
     const response = await as(app, owner.id).post(`/workspaces/${workspaceId}/payments/charge`).send({ amount }).expect(201);
     return response.body.payment as { id: string; tradeId: string; status: string; paymentPageUrl: string; credits: number };
   };
-  /** The user pressing "approve" on the PG page. */
-  const approveAtPg = async (paymentId: string) => {
-    const { providerTxId } = await prisma.payment.findUniqueOrThrow({ where: { id: paymentId } });
-    const response = await fetch(`${mocksBase}/pg/v1/payments/${providerTxId}/confirm`, { method: "POST" });
-    expect(response.ok).toBe(true);
-  };
+  const approveAtPg = (paymentId: string) => approveAt(mocksBase, paymentId);
   const statusOf = async (paymentId: string) => (await prisma.payment.findUniqueOrThrow({ where: { id: paymentId } })).status;
   const chargeRows = (paymentId: string) => prisma.creditLedger.count({ where: { refType: "PAYMENT", refId: paymentId } });
 
   beforeAll(async () => {
     app = await createTestApp();
-    await app.listen(0, "127.0.0.1");
-    const apiPort = (app.getHttpServer().address() as AddressInfo).port;
-
-    process.env.MOCK_PG_BASE_URL = `${mocksBase}/pg`;
-    process.env.MOCK_PG_WEBHOOK_SECRET = SECRET;
-    process.env.PAYMENT_WEBHOOK_URL = `http://127.0.0.1:${apiPort}/webhooks/payments/mock`;
-
-    mocks = spawn(process.execPath, ["src/main.ts"], {
-      cwd: path.resolve(__dirname, "../../mocks"),
-      env: {
-        ...process.env,
-        MOCKS_PORT: String(MOCKS_PORT),
-        MOCKS_PUBLIC_URL: mocksBase,
-        MOCK_PG_WEBHOOK_SECRET: SECRET,
-        MOCK_PG_WEBHOOK_DELAY_MS: "100",
-        MOCK_PG_SLOW_MS: "200",
-      },
-      stdio: "ignore",
-    });
-    await waitFor(() => fetch(`${mocksBase}/health`).then((r) => r.ok).catch(() => false), 15_000);
+    mocks = await startMocksFor(app, 4199);
+    mocksBase = mocks.base;
 
     await resetDatabase();
     [owner, member] = await Promise.all(["owner", "member"].map((name) => registerUser(app, name)));
@@ -87,7 +58,7 @@ describe("PLANDIT-5 charge flow (e2e, with the real mock PG process)", () => {
   }, 30_000);
 
   afterAll(async () => {
-    mocks?.kill();
+    mocks?.stop();
     await closeTestApp(app);
   });
 
