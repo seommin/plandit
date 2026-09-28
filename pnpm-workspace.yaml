@@ -8,6 +8,7 @@ allowBuilds:
   "@prisma/engines": true
   "@scarf/scarf": false
   "@swc/core": true
+  msgpackr-extract: set this to true or false
   prisma: true
   sharp: true
   unrs-resolver: false

@@ -4,7 +4,12 @@ import { z } from "zod";
 
 import { ApiError, ErrorCode } from "../common/api-error";
 import { safeEqual } from "../common/safe-equal";
-import { type PaymentGateway, PaymentGatewayError, type PaymentWebhookEvent } from "./payment-gateway";
+import {
+  type PaymentGateway,
+  PaymentGatewayError,
+  type PaymentLookup,
+  type PaymentWebhookEvent,
+} from "./payment-gateway";
 
 const webhookSchema = z.object({
   eventId: z.string().min(1),
@@ -50,6 +55,36 @@ export class MockPgAdapter implements PaymentGateway {
     }
     const body = (await response.json()) as { txId: string; paymentPageUrl: string };
     return { providerTxId: body.txId, paymentPageUrl: body.paymentPageUrl };
+  }
+
+  async lookup(tradeId: string): Promise<PaymentLookup | null> {
+    let response: Response;
+    try {
+      response = await fetch(`${this.baseUrl}/v1/payments?merchantTradeId=${encodeURIComponent(tradeId)}`, {
+        signal: AbortSignal.timeout(5_000),
+      });
+    } catch (error) {
+      throw new PaymentGatewayError(`PG unreachable: ${(error as Error).message}`, true);
+    }
+    if (response.status === 404) return null;
+    if (!response.ok) throw new PaymentGatewayError(`PG lookup failed with ${response.status}`, true);
+
+    const body = (await response.json()) as {
+      txId: string;
+      status: PaymentLookup["status"];
+      amount: number;
+      method: string | null;
+      failureCode: string | null;
+      approvedAt: string | null;
+    };
+    return {
+      status: body.status,
+      providerTxId: body.txId,
+      amount: body.amount,
+      method: body.method,
+      failureCode: body.failureCode,
+      approvedAt: body.approvedAt ? new Date(body.approvedAt) : null,
+    };
   }
 
   parseWebhook(rawBody: Buffer, headers: Record<string, string | string[] | undefined>): PaymentWebhookEvent | null {

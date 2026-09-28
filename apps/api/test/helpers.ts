@@ -1,5 +1,9 @@
 import "reflect-metadata";
 
+import { spawn } from "child_process";
+import type { AddressInfo } from "net";
+import path from "path";
+
 import type { INestApplication } from "@nestjs/common";
 import { Test } from "@nestjs/testing";
 import request from "supertest";
@@ -45,6 +49,55 @@ export function as(app: INestApplication, userId: string) {
     patch: (url: string) => withHeaders(request(server).patch(url)),
     delete: (url: string) => withHeaders(request(server).delete(url)),
   };
+}
+
+export const waitFor = async <T>(check: () => Promise<T | undefined | null | false>, timeoutMs = 5_000) => {
+  const deadline = Date.now() + timeoutMs;
+  for (;;) {
+    const value = await check();
+    if (value) return value;
+    if (Date.now() > deadline) throw new Error("waitFor timed out");
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+};
+
+export const MOCK_PG_SECRET = "e2e-mock-pg-secret";
+
+/**
+ * Starts the real apps/mocks server as a child process (it never shares code with the api) and points the api
+ * at it: the api listens on a random port so the mock PG can deliver webhooks back to it.
+ */
+export async function startMocksFor(app: INestApplication, port: number, env: Record<string, string> = {}) {
+  await app.listen(0, "127.0.0.1");
+  const apiPort = (app.getHttpServer().address() as AddressInfo).port;
+  const base = `http://127.0.0.1:${port}`;
+
+  process.env.MOCK_PG_BASE_URL = `${base}/pg`;
+  process.env.MOCK_PG_WEBHOOK_SECRET = MOCK_PG_SECRET;
+  process.env.PAYMENT_WEBHOOK_URL = `http://127.0.0.1:${apiPort}/webhooks/payments/mock`;
+
+  const child = spawn(process.execPath, ["src/main.ts"], {
+    cwd: path.resolve(__dirname, "../../mocks"),
+    env: {
+      ...process.env,
+      MOCKS_PORT: String(port),
+      MOCKS_PUBLIC_URL: base,
+      MOCK_PG_WEBHOOK_SECRET: MOCK_PG_SECRET,
+      MOCK_PG_WEBHOOK_DELAY_MS: "100",
+      MOCK_PG_SLOW_MS: "200",
+      ...env,
+    },
+    stdio: "ignore",
+  });
+  await waitFor(() => fetch(`${base}/health`).then((r) => r.ok).catch(() => false), 15_000);
+  return { base, stop: () => child.kill() };
+}
+
+/** The end user pressing "approve" on the mock PG's payment page. */
+export async function approveAtPg(mocksBase: string, paymentId: string) {
+  const { providerTxId } = await prisma.payment.findUniqueOrThrow({ where: { id: paymentId } });
+  const response = await fetch(`${mocksBase}/pg/v1/payments/${providerTxId}/confirm`, { method: "POST" });
+  if (!response.ok) throw new Error(`confirm failed: ${response.status}`);
 }
 
 export async function registerUser(app: INestApplication, name: string) {

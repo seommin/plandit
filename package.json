@@ -8,7 +8,7 @@
     "pnpm": "11.5.2"
   },
   "scripts": {
-    "dev": "pnpm --parallel --filter @plandit/api --filter @plandit/web --filter @plandit/mocks dev",
+    "dev": "pnpm run \"/^dev:(web|api|worker|mocks)$/\"",
     "dev:web": "pnpm --filter @plandit/web dev",
     "dev:api": "pnpm --filter @plandit/api dev",
     "build": "pnpm --filter @plandit/database prisma:generate && pnpm -r --filter @plandit/shared --filter @plandit/database --filter @plandit/api --filter @plandit/web build",
@@ -23,7 +23,9 @@
     "test:e2e": "pnpm --filter @plandit/api test:e2e && pnpm --filter @plandit/mocks test:e2e",
     "docker:up": "docker compose up -d",
     "docker:down": "docker compose down",
-    "dev:mocks": "pnpm --filter @plandit/mocks dev"
+    "dev:mocks": "pnpm --filter @plandit/mocks dev",
+    "dev:worker": "pnpm --filter @plandit/api dev:worker",
+    "start:worker": "pnpm --filter @plandit/api start:worker"
   },
   "devDependencies": {
     "typescript": "6.0.3"
