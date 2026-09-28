@@ -8,7 +8,6 @@ import { PrismaAdapter } from "@auth/prisma-adapter";
 import { compare } from "bcryptjs";
 import { z } from "zod";
 
-import { authPrisma } from "@plandit/database/auth-prisma";
 import { prisma } from "@plandit/database/prisma";
 
 const credentialsSchema = z.object({
@@ -89,7 +88,7 @@ if (process.env.AUTH_NAVER_ID && process.env.AUTH_NAVER_SECRET) {
 }
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
-  adapter: PrismaAdapter(authPrisma),
+  adapter: PrismaAdapter(prisma),
   providers,
   session: {
     strategy: "jwt",
