@@ -103,6 +103,7 @@ model User {
   workspaceMemberships WorkspaceMember[]
   personalWorkspace Workspace? @relation("PersonalWorkspace")
   ledgerEntries  CreditLedger[] @relation("LedgerCreatedBy")
+  paymentsRequested Payment[] @relation("PaymentRequestedBy")
 }
 
 model Account {
@@ -176,6 +177,7 @@ model Workspace {
   members       WorkspaceMember[]
   calendars     Calendar[]
   creditAccount CreditAccount?
+  payments      Payment[]
 }
 
 model WorkspaceMember {
@@ -201,6 +203,7 @@ model CreditAccount {
 
   workspace Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
   ledger    CreditLedger[]
+  payments  Payment[]
 }
 
 enum LedgerType {
@@ -234,9 +237,77 @@ model CreditLedger {
 
   account   CreditAccount @relation(fields: [accountId], references: [id], onDelete: Restrict)
   createdBy User?         @relation("LedgerCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  payment   Payment?
 
   @@index([accountId, id(sort: Desc)])
   @@index([refType, refId])
+}
+
+enum PaymentProvider {
+  MOCK_PG
+}
+
+enum PaymentStatus {
+  RESERVE
+  APPROVED
+  FAILED
+  CANCELED
+  UNKNOWN
+}
+
+/// A credit top-up. Saved as RESERVE *before* the PG is called, so a lost response never leaves an untracked charge.
+/// Credits are granted only by the PG webhook (or the re-query job), never by the browser redirect.
+model Payment {
+  id             String          @id @default(cuid())
+  workspaceId    String
+  accountId      String
+  /// Our trade number sent to the PG: P{yyMMdd}-{seq}, seq from the payment_trade_seq sequence.
+  tradeId        String          @unique
+  provider       PaymentProvider
+  /// KRW charged
+  amount         Int
+  /// Credits granted on approval
+  credits        BigInt
+  status         PaymentStatus   @default(RESERVE)
+  providerTxId   String?         @unique
+  paymentPageUrl String?
+  method         String?
+  failureCode    String?
+  failureMessage String?
+  requestedById  String
+  /// = when the RESERVE row was written
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  approvedAt     DateTime?
+  failedAt       DateTime?
+  canceledAt     DateTime?
+  /// The CHARGE ledger row written on approval
+  ledgerId       BigInt?         @unique
+
+  workspace   Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+  account     CreditAccount  @relation(fields: [accountId], references: [id], onDelete: Restrict)
+  requestedBy User           @relation("PaymentRequestedBy", fields: [requestedById], references: [id], onDelete: Restrict)
+  ledger      CreditLedger?  @relation(fields: [ledgerId], references: [id], onDelete: Restrict)
+  events      PaymentEvent[]
+
+  @@index([workspaceId, createdAt])
+  @@index([status, createdAt])
+}
+
+/// Every PG webhook we accepted (signature valid). eventId is the dedupe key for repeated deliveries.
+model PaymentEvent {
+  id         BigInt   @id @default(autoincrement())
+  paymentId  String?
+  eventId    String   @unique
+  eventType  String
+  payload    Json
+  /// What processing did: APPLIED, ALREADY_APPLIED, UNKNOWN_PAYMENT, AMOUNT_MISMATCH, CONFLICT_STATE, UNHANDLED
+  result     String
+  receivedAt DateTime @default(now())
+
+  payment Payment? @relation(fields: [paymentId], references: [id], onDelete: Restrict)
+
+  @@index([paymentId])
 }
 
 model CalendarMember {

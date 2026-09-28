@@ -5,15 +5,9 @@ import {
   UnauthorizedException,
 } from "@nestjs/common";
 import { Reflector } from "@nestjs/core";
-import { timingSafeEqual } from "crypto";
 
 import { IS_PUBLIC } from "./common/public.decorator";
-
-function safeEqual(a: string, b: string) {
-  const left = Buffer.from(a);
-  const right = Buffer.from(b);
-  return left.length === right.length && timingSafeEqual(left, right);
-}
+import { safeEqual } from "./common/safe-equal";
 
 @Injectable()
 export class InternalApiGuard implements CanActivate {
