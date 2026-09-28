@@ -1,6 +1,6 @@
 # Plandit 확장 작업 계획
 
-목표: 타임리 백엔드 포지션(TypeScript/NestJS, PostgreSQL/Prisma, Redis/Queue, 크레딧·결제·권한, LLM/RAG/Tool Calling) 지원용 포트폴리오.
+목표: [타임리 백엔드 포지션](https://timelyai.io/main/careers/backend-engineer)(TypeScript/NestJS, PostgreSQL/Prisma, Redis/Queue, 크레딧·결제·권한, LLM/RAG/Tool Calling) 지원용 포트폴리오.
 기존 캘린더 제품(62커밋) 위에 백엔드 깊이를 얹는다. **1주차가 끝나면 지원하고, 2·3주차는 지원 후 이어 붙인다.**
 
 이슈 하나 = 브랜치 하나(`feat/PLANDIT-<번호>-<요약>`). 완료 조건을 전부 만족하고 `lint / typecheck / test / test:e2e`가 통과하면 체크한다.
@@ -122,6 +122,7 @@
 ### PLANDIT-10 · Swagger·README·ADR [M]
 - [ ] 새 API 전부 Swagger 예시·오류 스키마·태그
 - [ ] README: 한 줄 소개("웹훅이 두 번 와도, 안 와도, 잔액은 한 번만 바뀝니다"), 아키텍처 다이어그램(mermaid), 실행 3줄, 시나리오 표, 설계 결정 링크, 테스트 실행법
+- [ ] README: 공고 용어 대응표(조직 = 워크스페이스, 스페이스 = 캘린더, 권한 = 워크스페이스 역할 + 캘린더 역할), AI 개발 도구(Claude Code + CLAUDE.md 규칙)로 일한 방식 한 단락
 - [ ] `docs/adr/0001-ledger-append-only.md`, `0002-reserve-before-external-call.md`, `0003-webhook-idempotency.md`, `0004-reminder-job-versioning.md`
 - **완료 조건**: 처음 보는 사람이 README만 읽고 10분 안에 충전·리마인더 시나리오를 재현
 
@@ -136,17 +137,37 @@
 - [ ] `pnpm check:ledger`: 계정별 원장 합계 = 캐시, `balance_after` 연속성 검사. 불일치 시 종료 코드 1
 - [ ] 워커에서 하루 1회 실행, 불일치 시 경고 로그
 
+### PLANDIT-13 · API 키 인증 + 요청 수 제한 [M]
+채용공고의 "인증/권한"을 API 쪽에서 직접 보여주는 이슈. 2주차 MCP 서버와 외부 연동의 전제.
+- [ ] `ApiKey`: workspace_id, user_id(발급자), name, prefix(표시용 앞 8자), key_hash(SHA-256, **원문은 발급 응답에서 한 번만** 노출), scopes(`events:read`, `events:write`, `credits:read`), expires_at, last_used_at, revoked_at
+- [ ] 발급·목록·폐기 API: 본인 키는 본인이, 워크스페이스의 모든 키는 ADMIN 이상이 조회·폐기. 발급 스코프는 발급자 권한을 넘을 수 없음
+- [ ] 공개 API `/v1/*`(일정 조회·생성, 크레딧 잔액): `Authorization: Bearer pk_…` → `ApiKeyGuard`(해시 조회, 만료·폐기 확인, 스코프 검사). 내부 시크릿 경로와 분리
+- [ ] 요청 수 제한: 키별 Redis 카운터(`INCR` + `EXPIRE`), 초과 시 429 + `Retry-After`, 응답 헤더 `X-RateLimit-Limit/Remaining`
+- [ ] 감사 로그 `api_key.created`, `api_key.revoked`
+- **완료 조건**: e2e — 폐기·만료·잘못된 키 401(같은 본문), 스코프 없는 요청 403, 다른 워크스페이스 리소스 404, 한도 초과 429 + Retry-After, DB에 키 원문이 없음
+
+### PLANDIT-14 · 모니터링 + 장애 대응 런북 [M]
+채용공고의 "로깅, 모니터링, 장애 대응"에 대응.
+- [ ] `/metrics`(Prometheus 형식, `prom-client`): 라우트·상태별 요청 수와 지연, BullMQ 큐 적체·실패 수, 웹훅 수신 결과(처리/중복/서명 실패), 원장 append 결과(성공/잔액 부족/멱등 재호출), 미확정 결제 수. 외부 비공개
+- [ ] traceId를 큐 작업까지 전파(작업 payload에 포함) → 요청 하나를 api·worker 로그에서 끝까지 추적
+- [ ] `docs/runbook.md`: 증상별 대응 — 웹훅 서명 실패 급증, 큐 적체, 원장·캐시 불일치, PG 응답 지연. 볼 지표, 로그 검색어, 복구 명령(재조회 강제 실행, `recalculate`, 웹훅 재전송)
+- [ ] `docs/troubleshooting.md`: 개발 중 실제로 겪은 문제의 증상·원인·해결·재발 방지
+- **완료 조건**: 시나리오 `05`(웹훅 유실) 재현 → 지표에서 미확정 결제 증가 확인 → 런북 절차대로 복구 → 지표 정상화
+
+### 진행 순서
+번호는 한 번 정하면 바꾸지 않는다. 1주차 진행 순서: 5 → 6 → 7 → 8 → 13 → 14 → 9 → 10 → 11 → 12
+
 ### 1주차 종료 기준
-- PLANDIT-1~10 완료. e2e: 정상 충전 / 웹훅 중복 / 서명 오류 / 웹훅 유실 → 재조회 복구 / 동시 차감 50건 / 권한 403·404 / 리마인더 실패 환불 불변식
+- PLANDIT-1~10, 13, 14 완료. e2e: 정상 충전 / 웹훅 중복 / 서명 오류 / 웹훅 유실 → 재조회 복구 / 동시 차감 50건 / 권한 403·404 / 리마인더 실패 환불 불변식 / API 키 401·403·429
 - 이 시점에 지원
 
 ---
 
 ## 2주차 — AI 일정 비서 (개요)
 
-- PLANDIT-20 `LlmClient` + Claude 어댑터, 토큰→크레딧 환산표, 예상 선차감(DEBIT) → 실사용 정산(ADJUST), `ai_usages`
-- PLANDIT-21 자연어 일정 등록 **Tool Calling**: 도구 `list_events`, `find_free_slots`, `create_event`, `update_event`. 쓰기 도구는 사용자 확인 후 실행. 대화·도구 호출 기록 저장
-- PLANDIT-22 **RAG**: 일정 제목·설명·메모 청킹·임베딩(pgvector) → "지난달 A사 미팅에서 뭐 정했지?" 질의에 근거 일정 링크와 함께 답변. 권한 범위 밖 일정은 검색 대상에서 제외
+- PLANDIT-20 `LlmClient` + Claude 어댑터, 토큰→크레딧 환산표, 예상 선차감(DEBIT) → 실사용 정산(ADJUST), `ai_usages`. 임베딩은 Anthropic API에 없으므로 별도 제공자(예: Voyage AI)를 `EmbeddingClient` 인터페이스 뒤에 둔다
+- PLANDIT-21 **AI 에이전트(Tool Calling 루프)**: "다음 주에 팀 전원이 되는 시간에 회의 잡아줘" → 모델이 도구를 여러 단계 호출(`list_events` → `find_free_slots` → `create_event`). 최대 단계 수·크레딧 한도·타임아웃, 쓰기 도구는 **사용자 승인 후 실행**(승인 대기 상태 저장), 단계별 도구 호출·결과 기록
+- PLANDIT-22 **RAG**: 일정(제목·설명·장소) + **회의록 파일(PDF·TXT) 업로드** → 텍스트 추출·청킹·임베딩(pgvector)은 큐 작업으로 비동기 처리(진행 상태 표시, 크기·형식 검증) → "지난달 A사 미팅에서 뭐 정했지?"에 근거 인용과 함께 답변. 권한 범위 밖 문서·일정은 검색 대상에서 제외
 - PLANDIT-23 같은 도구를 **MCP 서버**로 노출(사용자 토큰 기반)
 - PLANDIT-24 AI 권한·한도: 워크스페이스별 월 AI 크레딧 상한, LLM 실패 시 환불
 - PLANDIT-25 README에 AI 데모 GIF
@@ -157,3 +178,6 @@
 - PLANDIT-31 결제 취소·환불(APPROVED만, 잔액 ≥ 지급 크레딧일 때)
 - PLANDIT-32 월 정산 배치 + 워크스페이스별 사용량 통계 API
 - PLANDIT-33 잔액 기준 자동충전(빌링키, 모의 PG billing API)
+- PLANDIT-34 파일 업로드 인프라(MinIO presigned URL) + 대용량 CSV·ICS 일정 가져오기(스트리밍 파싱, 10만 행 기준 메모리 상한 측정, 행별 오류 리포트)
+- PLANDIT-35 OpenAPI로 타입 SDK(`packages/sdk`) 생성, web이 SDK로 API 호출
+- PLANDIT-36 Google 캘린더 실제 연동: OAuth 토큰 갱신, `syncToken` 증분 동기화, 변경 알림(푸시 채널) 웹훅
