@@ -10,6 +10,11 @@ import { ApiExceptionFilter } from "./common/api-exception.filter";
 import { CreditController } from "./credit/credit.controller";
 import { CreditService } from "./credit/credit.service";
 import { LedgerService } from "./credit/ledger.service";
+import { MockPgAdapter } from "./payment/mock-pg.adapter";
+import { PAYMENT_GATEWAY } from "./payment/payment-gateway";
+import { PaymentController, PaymentWebhookController } from "./payment/payment.controller";
+import { PaymentWebhookService } from "./payment/payment-webhook.service";
+import { PaymentService } from "./payment/payment.service";
 import { EventsController } from "./events/events.controller";
 import { HealthController } from "./health/health.controller";
 import { InternalApiGuard } from "./internal-api.guard";
@@ -48,11 +53,23 @@ const TRACE_ID = /^[\w-]{1,128}$/;
     SharesController,
     WorkspaceController,
     CreditController,
+    PaymentController,
+    PaymentWebhookController,
   ],
   providers: [
     WorkspaceService,
     LedgerService,
     CreditService,
+    PaymentService,
+    PaymentWebhookService,
+    {
+      provide: PAYMENT_GATEWAY,
+      useFactory: () => {
+        const provider = process.env.PAYMENT_PROVIDER ?? "mock";
+        if (provider === "mock") return new MockPgAdapter();
+        throw new Error(`Unknown PAYMENT_PROVIDER: ${provider}`);
+      },
+    },
     // Order matters: internal-secret check first, then workspace role check.
     { provide: APP_GUARD, useClass: InternalApiGuard },
     { provide: APP_GUARD, useClass: RolesGuard },

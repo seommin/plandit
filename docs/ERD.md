@@ -89,15 +89,17 @@ erDiagram
 |---|---|---|
 | id | cuid PK | |
 | workspace_id, account_id | FK | |
-| trade_id | text unique | `P{yyMMdd}-{seq}`, PG에 넘기는 값 |
+| trade_id | text unique | `P{yyMMdd}-{seq}`, PG에 넘기는 값. seq는 DB 시퀀스 `payment_trade_seq` |
 | provider | enum MOCK_PG | 확장: TOSS 등 |
 | amount | int | 결제 금액(원) |
 | credits | bigint | 지급 크레딧 |
 | status | enum RESERVE / APPROVED / FAILED / CANCELED / UNKNOWN | |
-| provider_tx_id, method | text null | |
+| provider_tx_id | text unique null | PG 거래번호 |
+| payment_page_url, method | text null | |
 | failure_code, failure_message | text null | |
 | requested_by | FK users | |
-| reserved_at, approved_at, canceled_at | timestamptz | |
+| created_at | timestamptz | = RESERVE 기록 시각(PG 호출 전) |
+| approved_at, failed_at, canceled_at | timestamptz null | |
 | ledger_id | FK credit_ledger null | 승인 시 CHARGE 행 |
 
 상태 전이: RESERVE → APPROVED / FAILED / UNKNOWN; UNKNOWN → APPROVED / FAILED; APPROVED → CANCELED.
@@ -110,10 +112,10 @@ erDiagram
 | event_id | text unique | 중복 수신 차단 키 |
 | event_type | text | APPROVED / FAILED / CANCELED |
 | payload | jsonb | 원문 |
-| processed | bool | 원장 반영 여부 |
+| result | text | 처리 결과: APPLIED / ALREADY_APPLIED / UNKNOWN_PAYMENT / AMOUNT_MISMATCH / CONFLICT_STATE / UNHANDLED |
 | received_at | | |
 
-서명 실패 요청은 저장하지 않고 401(로그만).
+서명 실패 요청은 저장하지 않고 401(로그만). 같은 event_id 재수신은 INSERT가 무시되어 아무 처리도 하지 않는다.
 
 ### event_reminders — 일정별 리마인더 설정
 | 컬럼 | 타입 | 비고 |
