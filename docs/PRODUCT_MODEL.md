@@ -1,38 +1,41 @@
-# Product Model
+# 제품 모델
 
-Plandit should support two planning modes in one account.
+Plandit은 한 계정 안에서 두 가지 일정 관리 방식을 함께 지원합니다.
 
-## Calendar Types
+## 캘린더 유형
 
-- `PERSONAL`: private calendar for schedules that only the owner can see.
-- `SHARED`: collaborative calendar with invited members and roles.
-- `SUBSCRIBED`: external or read-only calendar feed, such as imported Google Calendar data.
+- `PERSONAL`: 소유자만 볼 수 있는 개인 캘린더
+- `SHARED`: 멤버를 초대하고 역할을 주는 협업 캘린더
+- `SUBSCRIBED`: 가져온 Google 캘린더처럼 외부에서 들어오는 읽기 전용 캘린더
 
-## Event Visibility
+모든 캘린더는 워크스페이스 하나에 속합니다(개인 워크스페이스 또는 팀 워크스페이스). 워크스페이스는 결제·크레딧·멤버 관리의 단위이고,
+캘린더 안에서 누가 무엇을 볼 수 있는지는 캘린더 역할이 정합니다. 두 역할 체계는 섞지 않습니다.
 
-- `PRIVATE`: visible only to the creator.
-- `CALENDAR`: visible to calendar members according to their calendar role.
-- `PUBLIC_LINK`: visible to anyone with a generated share link, subject to expiry or revocation.
+## 일정 공개 범위
 
-## Sharing Direction
+- `PRIVATE`: 만든 사람만 볼 수 있음
+- `CALENDAR`: 캘린더 멤버가 캘린더 역할에 따라 볼 수 있음
+- `PUBLIC_LINK`: 공유 링크를 가진 누구나 볼 수 있음(만료·회수 가능)
 
-Calendar sharing and event sharing are separate concepts.
+## 공유 방식
 
-- Calendar sharing invites people into a calendar and grants a role: owner, admin, editor, or viewer.
-- Event sharing creates a lightweight public page for one event.
+캘린더 공유와 일정 공유는 별개입니다.
 
-This lets a user keep a personal calendar private while still sharing a single event through KakaoTalk or a copied link.
+- 캘린더 공유: 사람을 캘린더에 초대하고 역할(owner, admin, editor, viewer)을 줍니다.
+- 일정 공유: 일정 하나에 대한 가벼운 공개 페이지를 만듭니다.
 
-## Kakao / Link Share
+그래서 개인 캘린더는 비공개로 두면서도 일정 하나만 카카오톡이나 링크로 공유할 수 있습니다.
 
-Kakao sharing should use a generated public event URL backed by `EventShare`.
+## 카카오톡·링크 공유
 
-Recommended flow:
+카카오톡 공유는 `EventShare`로 만든 공개 일정 URL을 사용합니다.
 
-1. User opens an event.
-2. User taps `Share`.
-3. App creates an `EventShare` row with a short `slug`.
-4. App opens Kakao Share or copies the URL.
-5. Anyone with the URL can view the event page until it expires or is revoked.
+흐름:
 
-Public event pages should only expose fields allowed by the share options, such as whether to include location or description.
+1. 사용자가 일정을 엽니다.
+2. `공유`를 누릅니다.
+3. 앱이 짧은 `slug`를 가진 `EventShare` 행을 만듭니다.
+4. 카카오톡 공유를 열거나 URL을 복사합니다.
+5. URL을 가진 사람은 만료되거나 회수되기 전까지 일정 페이지를 볼 수 있습니다.
+
+공개 일정 페이지는 공유 옵션에서 허용한 항목(장소·설명 포함 여부 등)만 보여줍니다.
