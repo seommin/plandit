@@ -1,49 +1,22 @@
-import { randomUUID } from "crypto";
-
 import { Module } from "@nestjs/common";
 import { APP_FILTER, APP_GUARD } from "@nestjs/core";
-import { LoggerModule } from "nestjs-pino";
 
 import { AuthController } from "./auth/auth.controller";
 import { CalendarController } from "./calendar/calendar.controller";
 import { ApiExceptionFilter } from "./common/api-exception.filter";
-import { CreditController } from "./credit/credit.controller";
-import { CreditService } from "./credit/credit.service";
-import { LedgerService } from "./credit/ledger.service";
-import { MockPgAdapter } from "./payment/mock-pg.adapter";
-import { PAYMENT_GATEWAY } from "./payment/payment-gateway";
-import { PaymentController, PaymentWebhookController } from "./payment/payment.controller";
-import { PaymentWebhookService } from "./payment/payment-webhook.service";
-import { PaymentService } from "./payment/payment.service";
+import { loggerModule } from "./common/logger";
+import { CreditModule } from "./credit/credit.module";
 import { EventsController } from "./events/events.controller";
 import { HealthController } from "./health/health.controller";
 import { InternalApiGuard } from "./internal-api.guard";
+import { PaymentModule } from "./payment/payment.module";
 import { PushController } from "./push/push.controller";
 import { SharesController } from "./shares/shares.controller";
 import { RolesGuard } from "./workspace/roles";
-import { WorkspaceController } from "./workspace/workspace.controller";
-import { WorkspaceService } from "./workspace/workspace.service";
-
-const TRACE_ID = /^[\w-]{1,128}$/;
+import { WorkspaceModule } from "./workspace/workspace.module";
 
 @Module({
-  imports: [
-    LoggerModule.forRoot({
-      pinoHttp: {
-        level: process.env.LOG_LEVEL ?? (process.env.NODE_ENV === "test" ? "silent" : "info"),
-        genReqId(request, response) {
-          const incoming = request.headers["x-trace-id"];
-          const traceId = typeof incoming === "string" && TRACE_ID.test(incoming) ? incoming : randomUUID();
-          response.setHeader("x-trace-id", traceId);
-          return traceId;
-        },
-        redact: ['req.headers["x-api-secret"]', "req.headers.cookie", "req.headers.authorization"],
-        transport:
-          process.env.NODE_ENV === "production" || process.env.NODE_ENV === "test"
-            ? undefined : { target: "pino-pretty", options: { singleLine: true } },
-      },
-    }),
-  ],
+  imports: [loggerModule, WorkspaceModule, CreditModule, PaymentModule],
   controllers: [
     AuthController,
     CalendarController,
@@ -51,25 +24,8 @@ const TRACE_ID = /^[\w-]{1,128}$/;
     HealthController,
     PushController,
     SharesController,
-    WorkspaceController,
-    CreditController,
-    PaymentController,
-    PaymentWebhookController,
   ],
   providers: [
-    WorkspaceService,
-    LedgerService,
-    CreditService,
-    PaymentService,
-    PaymentWebhookService,
-    {
-      provide: PAYMENT_GATEWAY,
-      useFactory: () => {
-        const provider = process.env.PAYMENT_PROVIDER ?? "mock";
-        if (provider === "mock") return new MockPgAdapter();
-        throw new Error(`Unknown PAYMENT_PROVIDER: ${provider}`);
-      },
-    },
     // Order matters: internal-secret check first, then workspace role check.
     { provide: APP_GUARD, useClass: InternalApiGuard },
     { provide: APP_GUARD, useClass: RolesGuard },

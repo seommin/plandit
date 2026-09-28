@@ -9,7 +9,9 @@
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "test": "jest",
-    "test:e2e": "node ../../scripts/with-root-env.mjs jest -c test/jest-e2e.config.js --runInBand"
+    "test:e2e": "node ../../scripts/with-root-env.mjs jest -c test/jest-e2e.config.js --runInBand",
+    "dev:worker": "node ../../scripts/with-root-env.mjs ts-node -r tsconfig-paths/register src/worker.ts",
+    "start:worker": "node dist/apps/api/src/worker.js"
   },
   "dependencies": {
     "@nestjs/common": "11.1.9",
@@ -19,6 +21,7 @@
     "@plandit/database": "workspace:*",
     "@plandit/shared": "workspace:*",
     "bcryptjs": "3.0.3",
+    "bullmq": "6.3.9",
     "ioredis": "6.0.0",
     "nestjs-pino": "5.2.1",
     "pino-http": "11.0.0",
