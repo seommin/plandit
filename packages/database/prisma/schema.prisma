@@ -102,6 +102,7 @@ model User {
   pushDeliveries PushNotificationDelivery[]
   workspaceMemberships WorkspaceMember[]
   personalWorkspace Workspace? @relation("PersonalWorkspace")
+  ledgerEntries  CreditLedger[] @relation("LedgerCreatedBy")
 }
 
 model Account {
@@ -191,14 +192,51 @@ model WorkspaceMember {
   @@index([userId])
 }
 
-/// One per workspace. `balance` is a cache derived from the credit ledger (PLANDIT-3); never update it directly.
+/// One per workspace. `balance` is a cache derived from CreditLedger; only LedgerService.append() changes it.
 model CreditAccount {
   id          String   @id @default(cuid())
   workspaceId String   @unique
   balance     BigInt   @default(0)
   updatedAt   DateTime @updatedAt
 
-  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+  workspace Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+  ledger    CreditLedger[]
+}
+
+enum LedgerType {
+  CHARGE
+  DEBIT
+  REFUND
+  ADJUST
+}
+
+enum LedgerRefType {
+  PAYMENT
+  REMINDER_DELIVERY
+  AI_USAGE
+  MANUAL
+}
+
+/// Append-only. UPDATE/DELETE are rejected by a DB trigger; corrections are new ADJUST rows.
+model CreditLedger {
+  id             BigInt        @id @default(autoincrement())
+  accountId      String
+  type           LedgerType
+  /// Signed: CHARGE/REFUND > 0, DEBIT < 0, ADJUST either way.
+  amount         BigInt
+  balanceAfter   BigInt
+  refType        LedgerRefType
+  refId          String
+  idempotencyKey String        @unique
+  memo           String?
+  createdById    String?
+  createdAt      DateTime      @default(now())
+
+  account   CreditAccount @relation(fields: [accountId], references: [id], onDelete: Restrict)
+  createdBy User?         @relation("LedgerCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@index([accountId, id(sort: Desc)])
+  @@index([refType, refId])
 }
 
 model CalendarMember {
