@@ -15,6 +15,7 @@ import { DEFAULT_PERSONAL_CALENDAR_NAME } from "@plandit/shared/calendar-default
 import { forgotPasswordSchema, registerSchema, resetPasswordSchema } from "@plandit/shared/auth";
 
 import { ApiZodBody, ZodPipe } from "../common/zod";
+import { ensurePersonalWorkspace } from "../workspace/personal-workspace";
 
 const RESET_TOKEN_PREFIX = "password-reset:";
 const RESET_TOKEN_TTL_MS = 30 * 60 * 1000;
@@ -57,29 +58,22 @@ export class AuthController {
     }
 
     const passwordHash = await hash(payload.password, 12);
-    const user = await prisma.user.create({
-      data: {
-        name: payload.name,
-        email,
-        passwordHash,
-        calendars: {
-          create: {
-            role: "OWNER",
-            calendar: {
-              create: {
-                name: DEFAULT_PERSONAL_CALENDAR_NAME,
-                type: "PERSONAL",
-                isDefault: true,
-              },
-            },
-          },
+    const user = await prisma.$transaction(async (tx) => {
+      const created = await tx.user.create({
+        data: { name: payload.name, email, passwordHash },
+        select: { id: true, name: true, email: true },
+      });
+      const workspace = await ensurePersonalWorkspace(created.id, tx);
+      await tx.calendar.create({
+        data: {
+          workspaceId: workspace.id,
+          name: DEFAULT_PERSONAL_CALENDAR_NAME,
+          type: "PERSONAL",
+          isDefault: true,
+          members: { create: { userId: created.id, role: "OWNER" } },
         },
-      },
-      select: {
-        id: true,
-        name: true,
-        email: true,
-      },
+      });
+      return created;
     });
 
     return { user };

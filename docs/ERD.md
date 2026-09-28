@@ -44,6 +44,7 @@ erDiagram
 | id | cuid PK | |
 | name | text | |
 | type | enum PERSONAL / TEAM | 가입 시 PERSONAL 1개 자동 생성 |
+| personal_owner_id | FK users unique null | PERSONAL일 때만. 사용자당 개인 워크스페이스 1개를 DB가 보장 |
 | created_at, updated_at | | |
 
 ### workspace_members

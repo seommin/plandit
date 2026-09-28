@@ -42,7 +42,7 @@
 
 ## 권한 규칙
 
-- 워크스페이스 역할 `OWNER > ADMIN > MEMBER`(`WorkspaceRole.covers`). 역할 게이트는 `@Roles()` + `RolesGuard`, 경로는 `/workspaces/:workspaceId/...`로 통일.
+- 워크스페이스 역할 `OWNER > ADMIN > MEMBER`(`roleCovers()`, `packages/shared/workspaces`). 역할 게이트는 `@Roles()` + `RolesGuard`, 경로는 `/workspaces/:workspaceId/...`로 통일.
 - 캘린더 역할(`OWNER/ADMIN/EDITOR/VIEWER`)은 기존대로 캘린더 단위 데이터 권한이다. 워크스페이스 역할은 결제·크레딧·멤버 관리 권한이다. 둘을 섞지 않는다.
 - 권한 없는 리소스 조회는 404(존재 여부 노출 안 함), 권한 부족 행위는 403.
 - 워크스페이스 멤버·역할·결제·크레딧 변경은 `AuditService.record()`로 감사 로그를 남긴다.
@@ -56,7 +56,7 @@
 ## 테스트 규칙
 
 - 단위: 원장 계산, 서명 검증, 역할 판정, 상태 전이, 리마인더 시각 계산. 외부 의존은 mock.
-- e2e: 실제 Postgres·Redis(docker). 필수 시나리오는 `docs/PLAN.md` 각 이슈의 완료 조건에 있다.
+- e2e: 실제 Postgres·Redis(docker). 별도 DB `plandit_test`·Redis DB 1을 쓰고 각 파일이 `resetDatabase()`로 비운다(`apps/api/test/helpers.ts`). 필수 시나리오는 `docs/PLAN.md` 각 이슈의 완료 조건에 있다.
 - 실패 시나리오(웹훅 중복, 응답 유실, 잔액 부족, 권한 없음)는 성공 시나리오만큼 중요하다.
 
 ## 브랜치·커밋

@@ -6,13 +6,17 @@ import {
   Logger,
 } from "@nestjs/common";
 
-import { ApiError, ERROR_STATUS, ErrorCode } from "./api-error";
+import { ApiError, ErrorCode } from "./api-error";
 
-const CODE_BY_STATUS: Record<number, ErrorCode> = Object.fromEntries(
-  Object.entries(ERROR_STATUS)
-    .filter(([code]) => code !== ErrorCode.VALIDATION_FAILED)
-    .map(([code, status]) => [status, code as ErrorCode]),
-);
+/** Generic codes for plain Nest HttpExceptions (thrown by older controllers). */
+const CODE_BY_STATUS: Record<number, ErrorCode> = {
+  400: ErrorCode.BAD_REQUEST,
+  401: ErrorCode.UNAUTHORIZED,
+  403: ErrorCode.FORBIDDEN,
+  404: ErrorCode.NOT_FOUND,
+  409: ErrorCode.CONFLICT,
+  503: ErrorCode.SERVICE_UNAVAILABLE,
+};
 
 export type ErrorBody = { code: ErrorCode; message: string; details?: unknown };
 
