@@ -61,18 +61,22 @@
   - e2e: 동시 DEBIT 50개(잔액 30) → 정확히 30개 성공, 원장 30행, `balanceAfter` 29→0 단조 감소, 캐시 = 원장 합계
 
 ### PLANDIT-4 · 모의 외부 서버 (`apps/mocks`) [M]
+- 구현: Express 5 + `pg`, Node 24 네이티브 TypeScript 실행(빌드 단계 없음). 테이블은 기동 시 `mock` 스키마에 생성(제품 Prisma 스키마와 분리)
 - PG (`/pg`)
-  - [ ] `POST /pg/v1/payments/reserve`(merchantTradeId, amount, returnUrl) → `txId`, `paymentPageUrl`
-  - [ ] 결제 페이지(단순 HTML) "승인"/"취소". 승인 시 returnUrl 리다이렉트 + **비동기 웹훅**
-  - [ ] `POST …/{txId}/confirm`, `POST …/{txId}/cancel`, `GET …/{txId}`(재조회)
-  - [ ] 웹훅 body `{ eventId, txId, merchantTradeId, type, amount, method, occurredAt }`, 헤더 `X-Mock-Signature: HMAC-SHA256(secret, rawBody)`
-  - [ ] 시나리오(금액 끝 두 자리): `00` 정상 / `01` 승인 실패 / `02` confirm 30초 지연 / `03` 웹훅 2회(같은 eventId) / `04` 웹훅 10초 지연 / `05` 웹훅 안 보냄
+  - [x] `POST /pg/v1/payments/reserve`(merchantTradeId, amount, returnUrl, webhookUrl?) → `txId`, `paymentPageUrl`. 같은 merchantTradeId 재호출은 기존 거래 반환, 금액이 다르면 409
+  - [x] 결제 페이지(모바일 폭 HTML) "승인"/"취소". 승인 시 returnUrl로 303 리다이렉트 + **비동기 웹훅**
+  - [x] `POST …/{txId}/confirm`(한 번만 승인), `POST …/{txId}/cancel`(APPROVED만), `GET …/{txId}`, `GET …?merchantTradeId=`(reserve 응답 유실 대비)
+  - [x] 웹훅 body `{ eventId, txId, merchantTradeId, type, amount, method, failureCode, occurredAt }`, 헤더 `X-Mock-Signature: HMAC-SHA256(secret, rawBody)`
+  - [x] 시나리오(금액 끝 두 자리): `00` 정상 / `01` 승인 실패 / `02` confirm 응답 지연(승인은 즉시 기록) / `03` 웹훅 2회(같은 eventId) / `04` 웹훅 지연 / `05` 웹훅 안 보냄. 지연 시간은 환경변수
+  - [x] 거래 목록 페이지 `GET /pg/admin`
 - 중계사 (`/relay`)
-  - [ ] `POST /relay/v1/messages`(to, body, kind) → 즉시 `msgId` 접수, N초 뒤 결과 웹훅(DELIVERED/FAILED)
-  - [ ] 시나리오: 수신번호 끝자리 `9` → 번호 오류 실패. 환경변수 `RELAY_FAIL_RATE`, `RELAY_DELAY_MS`, `RELAY_RPS`(초과 시 429)
-  - [ ] **가상 수신함** 페이지: 전화번호별 받은 문자 목록
-- [ ] `mock_pg_transactions`, `mock_relay_messages` 테이블(`mock` 스키마), `POST /…/admin/webhooks/{eventId}/resend`
-- **완료 조건**: curl만으로 reserve→confirm→웹훅, 문자 접수→결과 웹훅을 재현하는 절차가 `apps/mocks/README.md`에 있다
+  - [x] `POST /relay/v1/messages`(to, body, kind, clientRef?, callbackUrl?) → `202 msgId`, `RELAY_DELAY_MS` 뒤 결과 웹훅(DELIVERED/FAILED), `GET …/{msgId}` 재조회
+  - [x] 시나리오: 수신번호 끝자리 `9` → `INVALID_NUMBER`. 환경변수 `RELAY_FAIL_RATE`(`CARRIER_ERROR`), `RELAY_DELAY_MS`, `RELAY_RPS`(초과 시 429 + Retry-After)
+  - [x] **가상 수신함** `GET /inbox?phone=`: 번호별로 도착한 문자 목록
+- [x] `mock.pg_transactions`, `mock.pg_events`, `mock.relay_messages` 테이블, `POST /…/admin/webhooks/{eventId}/resend`
+- [x] 테스트 11개(Node 내장 테스트 러너): 서명 검증, 시나리오 00~05, 결제 페이지 리다이렉트, 환불, 재전송, 중계사 결과·수신함·429. 루트 `pnpm test:e2e`에 포함
+- 알려진 한계: 웹훅·결과 타이머가 프로세스 메모리에 있어 재시작 시 대기 중인 웹훅은 사라짐 → 재조회 API와 재전송 API로 복구(이것 자체가 PLANDIT-6·7 재조회 스케줄러의 존재 이유)
+- **완료 조건**: curl만으로 reserve→confirm→웹훅, 문자 접수→결과 웹훅을 재현하는 절차가 `apps/mocks/README.md`에 있다 ✅ (절차대로 실행해 확인)
 
 ### PLANDIT-5 · 충전 흐름 [M]
 - [ ] `PaymentGateway` + `MockPgAdapter`(`PAYMENT_PROVIDER=mock`)
