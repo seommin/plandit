@@ -7,10 +7,14 @@ import {
 } from "@nestjs/common";
 import { createHash, randomBytes } from "crypto";
 import { hash } from "bcryptjs";
+import { ApiTags } from "@nestjs/swagger";
+import type { z } from "zod";
 
 import { prisma } from "@plandit/database/prisma";
 import { DEFAULT_PERSONAL_CALENDAR_NAME } from "@plandit/shared/calendar-defaults";
 import { forgotPasswordSchema, registerSchema, resetPasswordSchema } from "@plandit/shared/auth";
+
+import { ApiZodBody, ZodPipe } from "../common/zod";
 
 const RESET_TOKEN_PREFIX = "password-reset:";
 const RESET_TOKEN_TTL_MS = 30 * 60 * 1000;
@@ -39,27 +43,23 @@ async function sendPasswordResetEmail(email: string, resetUrl: string) {
   return response.ok;
 }
 
+@ApiTags("auth")
 @Controller("auth")
 export class AuthController {
   @Post("register")
-  async register(@Body() payload: unknown) {
-    const parsed = registerSchema.safeParse(payload);
-
-    if (!parsed.success) {
-      throw new BadRequestException("Invalid registration payload.");
-    }
-
-    const email = parsed.data.email.toLowerCase();
+  @ApiZodBody(registerSchema)
+  async register(@Body(new ZodPipe(registerSchema)) payload: z.infer<typeof registerSchema>) {
+    const email = payload.email.toLowerCase();
     const existingUser = await prisma.user.findUnique({ where: { email } });
 
     if (existingUser) {
       throw new ConflictException("This email is already registered.");
     }
 
-    const passwordHash = await hash(parsed.data.password, 12);
+    const passwordHash = await hash(payload.password, 12);
     const user = await prisma.user.create({
       data: {
-        name: parsed.data.name,
+        name: payload.name,
         email,
         passwordHash,
         calendars: {

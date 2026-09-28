@@ -38,7 +38,7 @@ export default function SignupPage() {
 
       if (!response.ok) {
         const result = await response.json();
-        throw new Error(result.error ?? "회원가입에 실패했습니다.");
+        throw new Error(result.message ?? result.error ?? "회원가입에 실패했습니다.");
       }
 
       const result = await signIn("credentials", {

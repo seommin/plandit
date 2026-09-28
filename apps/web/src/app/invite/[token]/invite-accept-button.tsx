@@ -21,11 +21,11 @@ export default function InviteAcceptButton({ token }: InviteAcceptButtonProps) {
         method: "POST",
       });
       const result = (await response.json()) as {
-        error?: string;
+        error?: string; message?: string;
       };
 
       if (!response.ok) {
-        throw new Error(result.error ?? "초대를 수락하지 못했습니다.");
+        throw new Error(result.message ?? result.error ?? "초대를 수락하지 못했습니다.");
       }
 
       router.push("/");
