@@ -19,11 +19,11 @@
 ## 인증 흐름 (기존 유지)
 
 - 로그인은 `apps/web`의 Auth.js. web 서버가 `x-api-secret` + `x-user-id` 헤더로 api를 호출한다(`InternalApiGuard`).
-- 외부에서 api로 직접 들어오는 경로는 웹훅(`/webhooks/*`)뿐이며 `@Public()`으로 내부 시크릿 검사를 건너뛰고 **서명으로** 인증한다.
+- 외부에서 api로 직접 들어오는 경로는 두 가지뿐이다. 웹훅(`/webhooks/*`)은 `@Public()` + **서명**으로, 공개 API(`/v1/*`)는 `@Public()` + **API 키**(`ApiKeyGuard`, 스코프·요청 수 제한)로 인증한다.
 
 ## 구조 규칙
 
-- 새 도메인은 모듈 단위: `workspace`, `credit`, `payment`, `reminder`, `ai`, `audit`, `common`. 모듈 안은 `controller → service`, Prisma 호출은 service에서.
+- 새 도메인은 모듈 단위: `workspace`, `credit`, `payment`, `reminder`, `apikey`, `ai`, `audit`, `common`. 모듈 안은 `controller → service`, Prisma 호출은 service에서.
 - 기존 컨트롤러(`calendar`, `events`, `shares`, `push`, `auth`)는 Prisma를 직접 부른다. 손대는 이슈에서만 service로 옮기고, 일부러 대규모 리팩터링하지 않는다.
 - 입력 검증은 `packages/shared`의 zod 스키마(기존 방식 유지). Swagger는 `ApiZodBody(schema)`(zod → `z.toJSONSchema`), 검증은 `ZodPipe(schema)`.
 - 외부 서비스(PG·중계사·LLM)는 인터페이스(`PaymentGateway`, `MessageProvider`, `LlmClient`) 뒤에 둔다. 구현체는 환경변수로 고른다. 실제 PG를 붙여도 service 코드는 바뀌지 않아야 한다.

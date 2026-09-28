@@ -159,6 +159,19 @@ erDiagram
 | processed | bool | |
 | received_at | | |
 
+### api_keys — 공개 API(`/v1/*`)용 개인 액세스 토큰 (PLANDIT-13)
+| 컬럼 | 타입 | 비고 |
+|---|---|---|
+| id | cuid PK | |
+| workspace_id | FK | 키가 접근할 수 있는 범위 |
+| user_id | FK users | 발급자. 발급자의 권한을 넘는 스코프는 줄 수 없음 |
+| name | text | 용도 메모 |
+| prefix | text | 표시용 앞 8자(`pk_ab12cd34`) |
+| key_hash | text unique | SHA-256. **원문은 저장하지 않고 발급 응답에서 한 번만 보여줌** |
+| scopes | text[] | `events:read`, `events:write`, `credits:read` |
+| expires_at, last_used_at, revoked_at | timestamptz null | |
+| created_at | | |
+
 ### audit_logs
 | 컬럼 | 타입 | 비고 |
 |---|---|---|
@@ -179,6 +192,10 @@ LLM 호출 전 예상 크레딧 DEBIT, 호출 후 실제 사용량으로 ADJUST.
 
 ### assistant_sessions / assistant_messages
 workspace_id, user_id, title / session_id, role, content, tool_calls(jsonb), tool_results(jsonb), ai_usage_id. Tool Calling 기록.
+
+### documents / document_chunks — 회의록 파일 RAG (PLANDIT-22)
+documents: workspace_id, calendar_id null, event_id null, uploaded_by, filename, mime_type, size_bytes, storage_path, status(UPLOADED/PROCESSING/READY/FAILED), error, created_at.
+document_chunks: document_id, seq, content, embedding vector, token_count. 검색은 요청자가 볼 수 있는 캘린더·일정에 연결된 문서만.
 
 ### event_embeddings
 event_id unique, content(제목·설명·장소 합친 텍스트), embedding vector(1536), content_hash(변경 시에만 재임베딩), updated_at. 검색 시 요청자 권한으로 볼 수 있는 일정만 조인.
