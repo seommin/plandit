@@ -1,29 +1,17 @@
-import "reflect-metadata";
-
 import type { INestApplication } from "@nestjs/common";
-import { Test } from "@nestjs/testing";
 import request from "supertest";
 
-import { prisma } from "@plandit/database/prisma";
-
-import { AppModule } from "../src/app.module";
-import { redis } from "../src/redis";
-import { configureApp } from "../src/setup";
+import { closeTestApp, createTestApp } from "./helpers";
 
 describe("PLANDIT-1 foundation (e2e)", () => {
   let app: INestApplication;
   const secret = process.env.API_INTERNAL_SECRET ?? "";
 
   beforeAll(async () => {
-    const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
-    app = configureApp(moduleRef.createNestApplication({ bufferLogs: true }));
-    await app.init();
+    app = await createTestApp();
   });
 
-  afterAll(async () => {
-    await app.close();
-    await Promise.all([prisma.$disconnect(), redis.quit()]);
-  });
+  afterAll(() => closeTestApp(app));
 
   it("GET /health checks postgres and redis without the internal secret", async () => {
     const response = await request(app.getHttpServer()).get("/health").expect(200);

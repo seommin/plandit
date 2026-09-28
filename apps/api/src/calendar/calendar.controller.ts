@@ -28,6 +28,7 @@ import {
   getManageableCalendar,
 } from "../events/event-permissions";
 import { getUserId, type RequestWithUser } from "../request-user";
+import { ensurePersonalWorkspace } from "../workspace/personal-workspace";
 
 const calendarInviteSchema = z.object({
   email: z.string().email().max(255),
@@ -40,6 +41,7 @@ const calendarMemberUpdateSchema = z.object({
 
 function toCalendarResponse(calendar: {
   id: string;
+  workspaceId: string;
   name: string;
   type: "PERSONAL" | "SHARED" | "SUBSCRIBED";
   color: string;
@@ -50,6 +52,7 @@ function toCalendarResponse(calendar: {
 }) {
   return {
     id: calendar.id,
+    workspaceId: calendar.workspaceId,
     name: calendar.name,
     type: calendar.type,
     color: calendar.color,
@@ -208,8 +211,18 @@ export class CalendarController {
 
     await assertExistingUser(userId);
 
+    const { workspaceId } = parsed.data;
+    const workspace = workspaceId
+      ? await prisma.workspace.findFirst({ where: { id: workspaceId, members: { some: { userId } } } })
+      : await ensurePersonalWorkspace(userId);
+
+    if (!workspace) {
+      throw new NotFoundException("Workspace not found.");
+    }
+
     const calendar = await prisma.calendar.create({
       data: {
+        workspaceId: workspace.id,
         name: parsed.data.name,
         type: parsed.data.type,
         color: parsed.data.color,
