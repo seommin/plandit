@@ -12,7 +12,7 @@ import { configureApp } from "../src/setup";
 
 export async function createTestApp() {
   const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
-  const app = configureApp(moduleRef.createNestApplication({ bufferLogs: true }));
+  const app = configureApp(moduleRef.createNestApplication({ bufferLogs: true, rawBody: true }));
   await app.init();
   return app;
 }
