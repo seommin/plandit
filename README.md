@@ -19,6 +19,7 @@
 ```txt
 apps/web              Next.js 웹앱 — 화면, Auth.js 세션 처리
 apps/api              NestJS API 서버 — 캘린더·일정·공유·워크스페이스·크레딧
+apps/mocks            모의 PG·문자 중계사 서버(실제 결제·발송 없음)
 packages/database     Prisma 스키마, 마이그레이션, DB 연결
 packages/shared       공용 zod 스키마와 상수
 ```
@@ -41,6 +42,7 @@ pnpm dev                      # web :3000, api :4000
 
 - API 문서(Swagger): http://localhost:4000/docs
 - 헬스 체크: http://localhost:4000/health
+- 모의 PG·문자 중계사: http://localhost:4100 (사용법: [apps/mocks/README.md](apps/mocks/README.md)), 가상 수신함: http://localhost:4100/inbox
 - 검증: `pnpm lint && pnpm typecheck && pnpm test && pnpm test:e2e` (e2e는 `docker compose up -d` 필요. 별도 DB `plandit_test`를 사용)
 
 ## 기능 범위

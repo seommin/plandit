@@ -1,0 +1,22 @@
+{
+  "name": "@plandit/mocks",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node ../../scripts/with-root-env.mjs node --watch src/main.ts",
+    "start": "node src/main.ts",
+    "typecheck": "tsc --noEmit",
+    "test:e2e": "node ../../scripts/with-root-env.mjs node --test \"src/**/*.test.ts\""
+  },
+  "dependencies": {
+    "express": "5.1.0",
+    "pg": "8.20.0"
+  },
+  "devDependencies": {
+    "@types/express": "5.0.6",
+    "@types/node": "24.11.1",
+    "@types/pg": "8.15.6",
+    "typescript": "6.0.3"
+  }
+}
