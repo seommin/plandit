@@ -8,21 +8,22 @@
     "pnpm": "11.5.2"
   },
   "scripts": {
-    "dev": "pnpm --parallel --filter @plandit/api --filter @plandit/web dev",
+    "dev": "pnpm --parallel --filter @plandit/api --filter @plandit/web --filter @plandit/mocks dev",
     "dev:web": "pnpm --filter @plandit/web dev",
     "dev:api": "pnpm --filter @plandit/api dev",
     "build": "pnpm --filter @plandit/database prisma:generate && pnpm -r --filter @plandit/shared --filter @plandit/database --filter @plandit/api --filter @plandit/web build",
     "start:web": "pnpm --filter @plandit/web start",
     "start:api": "pnpm --filter @plandit/api start",
-    "typecheck": "pnpm -r --filter @plandit/shared --filter @plandit/database --filter @plandit/api --filter @plandit/web typecheck",
+    "typecheck": "pnpm -r --filter @plandit/shared --filter @plandit/database --filter @plandit/api --filter @plandit/web --filter @plandit/mocks typecheck",
     "prisma:generate": "pnpm --filter @plandit/database prisma:generate",
     "prisma:migrate": "pnpm --filter @plandit/database prisma:migrate",
     "prisma:studio": "pnpm --filter @plandit/database prisma:studio",
     "lint": "pnpm --filter @plandit/api lint",
     "test": "pnpm --filter @plandit/api test",
-    "test:e2e": "pnpm --filter @plandit/api test:e2e",
+    "test:e2e": "pnpm --filter @plandit/api test:e2e && pnpm --filter @plandit/mocks test:e2e",
     "docker:up": "docker compose up -d",
-    "docker:down": "docker compose down"
+    "docker:down": "docker compose down",
+    "dev:mocks": "pnpm --filter @plandit/mocks dev"
   },
   "devDependencies": {
     "typescript": "6.0.3"

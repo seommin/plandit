@@ -185,5 +185,8 @@ event_id unique, content(제목·설명·장소 합친 텍스트), embedding vec
 
 ## 모의 서버 테이블 (스키마 `mock`)
 
-- `mock_pg_transactions`: tx_id, merchant_trade_id, amount, status, scenario, webhook_url, webhook_sent_count, created_at
-- `mock_relay_messages`: msg_id, to, body, kind, status, result_at, created_at — 가상 수신함 데이터
+`apps/mocks`가 기동 시 직접 만든다. 제품 Prisma 스키마에는 넣지 않는다(실제 PG·중계사의 DB도 우리 것이 아니므로).
+
+- `mock.pg_transactions`: tx_id, merchant_trade_id(unique), amount, scenario, status(READY/APPROVED/FAILED/CANCELED), method, failure_code, return_url, webhook_url, created_at, approved_at, canceled_at
+- `mock.pg_events`: event_id, tx_id, type, payload(jsonb), sent_count, last_http_status — 재전송용 원문 보관
+- `mock.relay_messages`: msg_id, client_ref, phone, kind, body, status(ACCEPTED/DELIVERED/FAILED), fail_code, callback_url, event_id, sent_count, last_http_status, created_at, result_at — 가상 수신함의 데이터
