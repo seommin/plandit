@@ -35,12 +35,15 @@
 - **완료 조건**: `docker compose up -d` → `pnpm dev`로 web·api가 뜨고 `/health` 200, `/docs` 표시. 잘못된 입력 → 400에 필드별 details와 traceId ✅
 
 ### PLANDIT-2 · 워크스페이스·역할 [M]
-- [ ] `workspaces`, `workspace_members` 테이블. 가입 시 개인 워크스페이스(OWNER) + `credit_accounts` 같은 트랜잭션에서 생성
-- [ ] 마이그레이션: 기존 사용자마다 개인 워크스페이스·크레딧 계정 생성, 기존 캘린더를 OWNER의 개인 워크스페이스에 연결(`calendars.workspace_id` NOT NULL까지)
-- [ ] 워크스페이스 CRUD, 멤버 초대(기존 사용자 이메일)·역할 변경·제거. ADMIN 이상만, 자기 역할 이하로만, 본인 역할 변경 불가
-- [ ] `WorkspaceRole.covers()`, `@Roles()` + `RolesGuard`(경로 `/workspaces/:workspaceId/...`)
-- [ ] 캘린더 생성 시 워크스페이스 지정(기본값: 개인 워크스페이스)
-- **완료 조건**: e2e — MEMBER가 역할 변경 시도 403, ADMIN이 OWNER 부여 시도 403, 비멤버가 워크스페이스 조회 404. 마이그레이션 후 기존 캘린더가 전부 워크스페이스에 연결됨
+- [x] `Workspace`, `WorkspaceMember`, `CreditAccount` 모델. 가입 시 개인 워크스페이스(OWNER) + 크레딧 계정 + 기본 캘린더를 한 트랜잭션에서 생성
+- [x] OAuth 가입자(Auth.js가 web에서 생성)는 `ensurePersonalWorkspace()`로 지연 생성. `Workspace.personalOwnerId @unique`로 동시 호출에도 1개 보장
+- [x] 마이그레이션: 기존 사용자마다 개인 워크스페이스·크레딧 계정 생성, 기존 캘린더를 OWNER의 개인 워크스페이스에 연결 후 `Calendar.workspaceId` NOT NULL
+- [x] 워크스페이스 목록(cursor)·생성·상세·이름 변경, 멤버 목록(cursor)·추가(기존 사용자 이메일)·역할 변경·제거. ADMIN 이상만, 자기 역할 이하로만, 본인 멤버십 변경 불가, 개인 워크스페이스는 멤버 추가 불가
+- [x] `roleCovers()`(`packages/shared/workspaces`), `@Roles()` + 전역 `RolesGuard`(경로 `/workspaces/:workspaceId/...`), `@CurrentMember()`
+- [x] 캘린더 생성 시 `workspaceId` 지정(멤버만, 기본값: 개인 워크스페이스)
+- [x] e2e는 별도 DB(`plandit_test`, Redis DB 1)에서 실행. globalSetup이 생성·마이그레이션
+- 워크스페이스 **삭제는 보류**: 크레딧 원장(append-only)이 딸려 있어 물리 삭제와 충돌. 필요 시 보관(archive)으로 추가
+- **완료 조건**: e2e — MEMBER가 역할 변경 시도 403, ADMIN이 OWNER 부여 시도 403, 비멤버가 워크스페이스 조회 404. 마이그레이션 후 기존 캘린더가 전부 워크스페이스에 연결됨 ✅ (개발 DB: 사용자 3명 → 개인 워크스페이스 3개, 캘린더 3개 연결)
 
 ### PLANDIT-3 · 크레딧 계정·원장 [M]
 - [ ] `LedgerService.append({ accountId, type, amount, refType, refId, idempotencyKey, memo })`

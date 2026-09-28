@@ -6,6 +6,17 @@ datasource db {
   provider = "postgresql"
 }
 
+enum WorkspaceType {
+  PERSONAL
+  TEAM
+}
+
+enum WorkspaceRole {
+  OWNER
+  ADMIN
+  MEMBER
+}
+
 enum CalendarRole {
   OWNER
   ADMIN
@@ -89,6 +100,8 @@ model User {
   widgets       WidgetPreference[]
   pushSubscriptions PushSubscription[]
   pushDeliveries PushNotificationDelivery[]
+  workspaceMemberships WorkspaceMember[]
+  personalWorkspace Workspace? @relation("PersonalWorkspace")
 }
 
 model Account {
@@ -129,6 +142,7 @@ model VerificationToken {
 
 model Calendar {
   id          String   @id @default(cuid())
+  workspaceId String
   name        String
   type        CalendarType @default(PERSONAL)
   color       String   @default("#2F6BFF")
@@ -138,11 +152,53 @@ model Calendar {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
+  workspace    Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
   members      CalendarMember[]
   events       Event[]
   invites      CalendarInvite[]
   integrations CalendarIntegration[]
   widgets      WidgetPreference[]
+
+  @@index([workspaceId])
+}
+
+model Workspace {
+  id              String        @id @default(cuid())
+  name            String
+  type            WorkspaceType @default(TEAM)
+  /// Set only for PERSONAL workspaces. The unique index makes "one personal workspace per user" a DB guarantee.
+  personalOwnerId String?       @unique
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  personalOwner User?             @relation("PersonalWorkspace", fields: [personalOwnerId], references: [id], onDelete: Cascade)
+  members       WorkspaceMember[]
+  calendars     Calendar[]
+  creditAccount CreditAccount?
+}
+
+model WorkspaceMember {
+  id          String        @id @default(cuid())
+  workspaceId String
+  userId      String
+  role        WorkspaceRole @default(MEMBER)
+  createdAt   DateTime      @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, userId])
+  @@index([userId])
+}
+
+/// One per workspace. `balance` is a cache derived from the credit ledger (PLANDIT-3); never update it directly.
+model CreditAccount {
+  id          String   @id @default(cuid())
+  workspaceId String   @unique
+  balance     BigInt   @default(0)
+  updatedAt   DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
 }
 
 model CalendarMember {

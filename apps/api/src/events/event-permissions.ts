@@ -6,6 +6,8 @@ import {
   LEGACY_DEFAULT_PERSONAL_CALENDAR_NAMES,
 } from "@plandit/shared/calendar-defaults";
 
+import { ensurePersonalWorkspace } from "../workspace/personal-workspace";
+
 const writableRoles = ["OWNER", "ADMIN", "EDITOR"] as const;
 const manageableRoles = ["OWNER", "ADMIN"] as const;
 
@@ -74,6 +76,7 @@ export async function getWritableCalendar(calendarId: string, userId: string) {
 
 export async function getDefaultPersonalCalendar(userId: string) {
   await assertExistingUser(userId);
+  const workspace = await ensurePersonalWorkspace(userId);
 
   const existingCalendar = await prisma.calendar.findFirst({
     where: {
@@ -105,6 +108,7 @@ export async function getDefaultPersonalCalendar(userId: string) {
 
   return prisma.calendar.create({
     data: {
+      workspaceId: workspace.id,
       name: DEFAULT_PERSONAL_CALENDAR_NAME,
       type: "PERSONAL",
       isDefault: true,
