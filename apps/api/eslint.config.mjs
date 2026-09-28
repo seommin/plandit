@@ -3,7 +3,7 @@ import prettier from "eslint-config-prettier";
 import tseslint from "typescript-eslint";
 
 export default tseslint.config(
-  { ignores: ["dist/**", "*.config.js", "test/*.config.js"] },
+  { ignores: ["dist/**", "*.config.js", "test/*.js"] },
   js.configs.recommended,
   ...tseslint.configs.recommended,
   prettier,

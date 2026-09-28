@@ -12,6 +12,9 @@ import { HealthController } from "./health/health.controller";
 import { InternalApiGuard } from "./internal-api.guard";
 import { PushController } from "./push/push.controller";
 import { SharesController } from "./shares/shares.controller";
+import { RolesGuard } from "./workspace/roles";
+import { WorkspaceController } from "./workspace/workspace.controller";
+import { WorkspaceService } from "./workspace/workspace.service";
 
 const TRACE_ID = /^[\w-]{1,128}$/;
 
@@ -40,9 +43,13 @@ const TRACE_ID = /^[\w-]{1,128}$/;
     HealthController,
     PushController,
     SharesController,
+    WorkspaceController,
   ],
   providers: [
+    WorkspaceService,
+    // Order matters: internal-secret check first, then workspace role check.
     { provide: APP_GUARD, useClass: InternalApiGuard },
+    { provide: APP_GUARD, useClass: RolesGuard },
     { provide: APP_FILTER, useClass: ApiExceptionFilter },
   ],
 })
