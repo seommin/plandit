@@ -25,13 +25,14 @@
 ## 1주차 — 기반·돈·큐
 
 ### PLANDIT-1 · 백엔드 기반 정비 [M]
-- [ ] `docker-compose.yml`: postgres를 `pgvector/pgvector:pg18`로, redis 7 추가(헬스체크). 기존 web·api 서비스는 유지
-- [ ] api: ESLint + Prettier, Jest 단위/e2e 설정 분리, 루트 스크립트 `lint / test / test:e2e`
-- [ ] Swagger(`/docs`): zod 스키마 → OpenAPI 변환 방식 확정(`z.toJSONSchema` 또는 `nestjs-zod`)
-- [ ] `ApiError` + `ErrorCode` + 전역 ExceptionFilter, 요청별 `traceId`(`X-Trace-Id` 수용/생성), 구조화 로그(pino)
-- [ ] `@Public()` 데코레이터(InternalApiGuard 우회), `/health`(DB·Redis 핑)
-- [ ] web의 오류 표시가 새 응답 형식(`message`)과 맞는지 확인
-- **완료 조건**: `docker compose up -d postgres redis` → `pnpm dev`로 web·api가 뜨고 `/health` 200, `/docs` 표시. 잘못된 입력 → 400에 필드별 details와 traceId
+- [x] `docker-compose.yml`: postgres를 `pgvector/pgvector:0.8.1-pg18`로, redis 7.4 추가(헬스체크). 개발은 로컬 실행이라 web·api 컨테이너·Dockerfile은 제거(배포용은 PLANDIT-11에서 새로 작성)
+- [x] api: ESLint(flat) + Prettier 설정, Jest 단위(`src/**/*.spec.ts`)/e2e(`test/*.e2e-spec.ts`) 분리(@swc/jest), 루트 스크립트 `lint / test / test:e2e`
+- [x] Swagger(`/docs`): **`z.toJSONSchema(target: openapi-3.0)`** 채택(추가 의존성 없음). `ApiZodBody(schema)` + `ZodPipe(schema)`
+- [x] `ApiError` + `ErrorCode` + 전역 `ApiExceptionFilter`, 요청별 `traceId`(`X-Trace-Id` 수용/생성, 응답 헤더로 반환), 구조화 로그(nestjs-pino, 시크릿·쿠키 헤더 마스킹)
+- [x] `@Public()` 데코레이터(InternalApiGuard 우회, 시크릿 비교는 timingSafeEqual), `/health`(DB·Redis 핑, 실패 시 503)
+- [x] web의 오류 표시가 새 응답 형식(`message`)을 먼저 읽도록 수정
+- [x] 정리: 중복 Prisma 클라이언트(`auth-prisma.ts`), `docs/DOCKER.md`, `docs/TECH_STACK.md` 제거
+- **완료 조건**: `docker compose up -d` → `pnpm dev`로 web·api가 뜨고 `/health` 200, `/docs` 표시. 잘못된 입력 → 400에 필드별 details와 traceId ✅
 
 ### PLANDIT-2 · 워크스페이스·역할 [M]
 - [ ] `workspaces`, `workspace_members` 테이블. 가입 시 개인 워크스페이스(OWNER) + `credit_accounts` 같은 트랜잭션에서 생성

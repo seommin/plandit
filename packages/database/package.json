@@ -3,8 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "exports": {
-    "./prisma": "./src/prisma.ts",
-    "./auth-prisma": "./src/auth-prisma.ts"
+    "./prisma": "./src/prisma.ts"
   },
   "scripts": {
     "build": "tsc --noEmit",

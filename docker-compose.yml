@@ -1,61 +1,6 @@
 services:
-  web:
-    build:
-      context: .
-      target: dev
-    command: sh -c "pnpm prisma:generate && pnpm --filter @plandit/web dev --hostname 0.0.0.0"
-    environment:
-      NEXTAUTH_URL: http://localhost:3000
-      NEXTAUTH_SECRET: local-development-secret-change-me
-      AUTH_SECRET: local-development-secret-change-me
-      API_INTERNAL_URL: http://api:4000
-      API_INTERNAL_SECRET: local-internal-api-secret
-      DATABASE_URL: postgresql://plandit:plandit@postgres:5432/plandit
-      DIRECT_URL: postgresql://plandit:plandit@postgres:5432/plandit
-      CI: "true"
-    ports:
-      - "3000:3000"
-    volumes:
-      - .:/app
-      - web_root_node_modules:/app/node_modules
-      - web_app_node_modules:/app/apps/web/node_modules
-      - web_api_node_modules:/app/apps/api/node_modules
-      - web_database_node_modules:/app/packages/database/node_modules
-      - web_shared_node_modules:/app/packages/shared/node_modules
-      - web_next:/app/apps/web/.next
-    depends_on:
-      api:
-        condition: service_started
-      postgres:
-        condition: service_healthy
-
-  api:
-    build:
-      context: .
-      target: dev
-    command: sh -c "pnpm prisma:generate && pnpm --filter @plandit/api dev"
-    environment:
-      API_PORT: 4000
-      API_INTERNAL_SECRET: local-internal-api-secret
-      WEB_ORIGIN: http://localhost:3000
-      DATABASE_URL: postgresql://plandit:plandit@postgres:5432/plandit
-      DIRECT_URL: postgresql://plandit:plandit@postgres:5432/plandit
-      CI: "true"
-    ports:
-      - "4000:4000"
-    volumes:
-      - .:/app
-      - api_root_node_modules:/app/node_modules
-      - api_web_node_modules:/app/apps/web/node_modules
-      - api_app_node_modules:/app/apps/api/node_modules
-      - api_database_node_modules:/app/packages/database/node_modules
-      - api_shared_node_modules:/app/packages/shared/node_modules
-    depends_on:
-      postgres:
-        condition: service_healthy
-
   postgres:
-    image: postgres:18.4-bookworm
+    image: pgvector/pgvector:0.8.1-pg18
     environment:
       POSTGRES_DB: plandit
       POSTGRES_USER: plandit
@@ -70,16 +15,18 @@ services:
       timeout: 5s
       retries: 12
 
+  redis:
+    image: redis:7.4-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+
 volumes:
   postgres_data:
-  web_root_node_modules:
-  web_app_node_modules:
-  web_api_node_modules:
-  web_database_node_modules:
-  web_shared_node_modules:
-  api_root_node_modules:
-  api_web_node_modules:
-  api_app_node_modules:
-  api_database_node_modules:
-  api_shared_node_modules:
-  web_next:
+  redis_data:

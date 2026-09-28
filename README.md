@@ -36,23 +36,14 @@ Next.js web -> NestJS API -> Prisma -> PostgreSQL
 ```bash
 pnpm install
 cp .env.example .env
-pnpm prisma:generate
-pnpm dev
+docker compose up -d          # postgres(pgvector) :5432, redis :6379
+pnpm prisma:migrate
+pnpm dev                      # web :3000, api :4000
 ```
 
-Open `http://localhost:3000`. The API server runs on `http://localhost:4000`.
-
-## Docker
-
-```bash
-docker compose up --build
-```
-
-This starts:
-
-- `web`: Next.js on `http://localhost:3000`
-- `api`: NestJS on `http://localhost:4000`
-- `postgres`: PostgreSQL on port `5432`
+- API docs (Swagger): http://localhost:4000/docs
+- Health: http://localhost:4000/health
+- Checks: `pnpm lint && pnpm typecheck && pnpm test && pnpm test:e2e` (e2e needs `docker compose up -d`)
 
 ## Product Scope
 
