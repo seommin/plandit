@@ -8,7 +8,8 @@
     "./calendars": "./src/calendars.ts",
     "./events": "./src/events.ts",
     "./push": "./src/push.ts",
-    "./workspaces": "./src/workspaces.ts"
+    "./workspaces": "./src/workspaces.ts",
+    "./credits": "./src/credits.ts"
   },
   "scripts": {
     "build": "tsc --noEmit",

@@ -79,12 +79,17 @@
 - **완료 조건**: curl만으로 reserve→confirm→웹훅, 문자 접수→결과 웹훅을 재현하는 절차가 `apps/mocks/README.md`에 있다 ✅ (절차대로 실행해 확인)
 
 ### PLANDIT-5 · 충전 흐름 [M]
-- [ ] `PaymentGateway` + `MockPgAdapter`(`PAYMENT_PROVIDER=mock`)
-- [ ] `POST /workspaces/:id/payments/charge` { amount }(ADMIN 이상) → **`payments` RESERVE 저장(trade_id 발급)** → PG reserve → `paymentPageUrl`. PG 호출 실패 시 FAILED
-- [ ] returnUrl은 화면용. **원장 반영은 웹훅에서만**
-- [ ] `POST /webhooks/payments/mock`(@Public): 서명 검증 → `payment_events` INSERT(event_id unique, 중복이면 200 종료) → 상태 전이 검증(RESERVE/UNKNOWN → APPROVED) → `LedgerService.append(CHARGE, "PAYMENT:{id}:CHARGE")` → payments APPROVED. **한 트랜잭션**
-- [ ] 감사 로그 `payment.approved`, `payment.failed`
-- **완료 조건**: e2e — 정상(원장 1행, APPROVED) / 시나리오 `03` 중복(이벤트 1행, 원장 1행) / 잘못된 서명 401·변화 없음 / 다른 eventId로 APPROVED 재수신 → 이벤트 저장, 원장 1행 유지
+- [x] `PaymentGateway` 인터페이스(reserve, parseWebhook) + `MockPgAdapter`(`PAYMENT_PROVIDER=mock`). 서비스는 인터페이스만 안다
+- [x] `POST /workspaces/:id/payments/charge` { amount: 1,000~1,000,000원 }(ADMIN 이상) → **`Payment` RESERVE 저장(tradeId `P{yyMMdd}-{seq}`, DB 시퀀스로 발급)** → PG reserve → `paymentPageUrl`
+  - PG가 명확히 거절(4xx) → FAILED, 타임아웃·5xx·연결 실패 → **UNKNOWN**(PG에 기록됐을 수도 있으므로 재조회 대상) + 502 `PAYMENT_GATEWAY_ERROR`
+  - 크레딧 환산: 1크레딧 = 10원(`packages/shared/credits`)
+- [x] returnUrl(`/credits/charge-result`)은 화면용. **원장 반영은 웹훅에서만**
+- [x] `POST /webhooks/payments/mock`(@Public, raw body 서명 검증): `PaymentEvent` INSERT(`eventId` unique, 중복이면 `DUPLICATE_EVENT`로 200 종료) → Payment 행 `FOR UPDATE` → 금액 대조 → 상태 전이(RESERVE/UNKNOWN → APPROVED·FAILED) → `LedgerService.append(CHARGE, "PAYMENT:{id}:CHARGE", tx)` → APPROVED + ledgerId. **한 트랜잭션**, 예외 시 전부 롤백되어 PG 재전송을 깨끗하게 받음
+  - 처리 결과를 이벤트 행에 기록: APPLIED / ALREADY_APPLIED / UNKNOWN_PAYMENT / AMOUNT_MISMATCH / CONFLICT_STATE(닫힌 결제에 승인 도착 → 운영자 확인) / UNHANDLED(CANCELED, PLANDIT-31)
+- [x] 승인 처리 `PaymentService.applyApproval(tx, …)`는 웹훅과 PLANDIT-6 재조회가 같은 멱등키로 공유
+- [x] 결제 목록(cursor)·단건 조회(ADMIN 이상)
+- 감사 로그 `payment.approved`, `payment.failed`는 PLANDIT-8에서 연결
+- **완료 조건**: ✅ e2e(실제 모의 PG 프로세스를 띄워서 실행) — 정상(원장 1행, APPROVED) / 시나리오 `03` 중복(이벤트 1행, 원장 1행) / 잘못된 서명 401·변화 없음 / 다른 eventId로 APPROVED 재수신 → 이벤트 저장, 원장 1행 유지 / 금액 불일치 미반영 / `01` 실패 / PG 다운 → 502 + UNKNOWN / 권한·입력 검증. 개발 서버에서도 10,000원 충전 → 결제 페이지 승인 → 1,000크레딧 확인
 
 ### PLANDIT-6 · 미확정 결제 재조회 (worker) [M]
 - [ ] `apps/api/src/worker.ts` 진입점 + BullMQ 반복 작업(1분): RESERVE 5분 경과·UNKNOWN 건을 PG 재조회로 확정, 승인이면 PLANDIT-5 승인 처리를 **같은 멱등키로** 호출
