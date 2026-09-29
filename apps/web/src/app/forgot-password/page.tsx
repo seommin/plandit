@@ -1,52 +1,60 @@
 "use client";
 
 import Link from "next/link";
-import { FormEvent, useState } from "react";
+import { type FormEvent, useState } from "react";
+
+import { AuthCard } from "@/components/auth-card";
+import { Button, Field, Notice, TextInput } from "@/components/ui";
+import { api, errorMessage } from "@/lib/client-api";
 
 export default function ForgotPasswordPage() {
-  const [email, setEmail] = useState("");
-  const [status, setStatus] = useState<string | null>(null);
-  const [developmentResetUrl, setDevelopmentResetUrl] = useState<string | null>(null);
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [sent, setSent] = useState(false);
+  const [devUrl, setDevUrl] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
 
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setIsSubmitting(true);
-    setStatus(null);
-    setDevelopmentResetUrl(null);
+    setSubmitting(true);
+    setError(null);
     try {
-      const response = await fetch("/api/auth/forgot-password", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ email }),
-      });
-      const result = (await response.json()) as { developmentResetUrl?: string; message?: string };
-      if (!response.ok) throw new Error(result.message ?? "요청을 처리하지 못했습니다.");
-      setStatus("가입된 이메일이라면 비밀번호 재설정 링크를 발송했습니다.");
-      setDevelopmentResetUrl(result.developmentResetUrl ?? null);
-    } catch (error) {
-      setStatus(error instanceof Error ? error.message : "다시 시도해주세요.");
+      const result = await api<{ developmentResetUrl?: string }>("/auth/forgot-password", { body: { email: String(new FormData(event.currentTarget).get("email")) } });
+      setSent(true);
+      setDevUrl(result.developmentResetUrl ?? null);
+    } catch (e) {
+      setError(errorMessage(e));
     } finally {
-      setIsSubmitting(false);
+      setSubmitting(false);
     }
   }
 
   return (
-    <main className="app-shell flex min-h-screen items-center justify-center px-4">
-      <section className="panel w-full max-w-[420px] p-6">
-        <p className="mobile-brand-script mb-7 text-center text-[42px] leading-none">Plandit</p>
-        <h1 className="text-lg font-semibold">비밀번호 찾기</h1>
-        <p className="mt-2 text-sm leading-6 text-[var(--muted)]">가입한 이메일을 입력하면 30분 동안 유효한 재설정 링크를 보내드립니다.</p>
-        <form className="mt-5 space-y-3" onSubmit={handleSubmit}>
-          <input className="h-11 w-full rounded-lg border border-[var(--line)] bg-white px-3" onChange={(event) => setEmail(event.target.value)} placeholder="you@example.com" required type="email" value={email} />
-          <button className="h-11 w-full rounded-lg bg-[var(--ink)] text-sm font-semibold text-white disabled:opacity-55" disabled={isSubmitting} type="submit">
-            {isSubmitting ? "처리 중" : "재설정 링크 받기"}
-          </button>
+    <AuthCard subtitle="가입한 이메일로 재설정 링크를 보내드려요">
+      {sent ? (
+        <div className="space-y-4">
+          <Notice tone="success">가입된 이메일이라면 비밀번호 재설정 링크를 보냈어요.</Notice>
+          {devUrl ? (
+            <a className="block break-all rounded-xl bg-surface-2 p-3 text-xs text-primary" href={devUrl}>
+              개발 환경 링크: {devUrl}
+            </a>
+          ) : null}
+        </div>
+      ) : (
+        <form className="space-y-4" onSubmit={submit}>
+          <Field label="이메일">
+            <TextInput autoComplete="email" name="email" placeholder="you@example.com" required type="email" />
+          </Field>
+          {error ? <Notice>{error}</Notice> : null}
+          <Button block loading={submitting} type="submit">
+            재설정 링크 받기
+          </Button>
         </form>
-        {status ? <p className="mt-4 rounded-lg bg-white p-3 text-sm">{status}</p> : null}
-        {developmentResetUrl ? <Link className="mt-3 block text-sm font-semibold underline" href={developmentResetUrl}>개발 환경 재설정 링크 열기</Link> : null}
-        <Link className="mt-5 block text-center text-sm font-semibold text-[var(--muted)]" href="/login">로그인으로 돌아가기</Link>
-      </section>
-    </main>
+      )}
+      <p className="mt-6 text-center text-sm">
+        <Link className="font-semibold text-primary" href="/login">
+          로그인으로 돌아가기
+        </Link>
+      </p>
+    </AuthCard>
   );
 }

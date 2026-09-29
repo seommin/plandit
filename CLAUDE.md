@@ -18,7 +18,14 @@
 
 ## 인증 흐름 (기존 유지)
 
-- 로그인은 `apps/web`의 Auth.js. web 서버가 `x-api-secret` + `x-user-id` 헤더로 api를 호출한다(`InternalApiGuard`).
+- 로그인은 `apps/web`의 Auth.js. web 서버가 `x-api-secret` + `x-user-id` 헤더로 api를 호출한다(`InternalApiGuard`). 브라우저 → `app/api/[...path]`(세션 확인 캐치올 프록시) → api 경로 그대로. 새 API를 쓰려고 web 라우트 파일을 추가하지 않는다.
+
+## 화면 규칙 (apps/web)
+
+- 모바일이 주 화면. 폭 375px에서 먼저 확인하고 lg(1024px↑)에서 넓힌다. 터치 영역 44px 이상.
+- 색은 `globals.css` 토큰 유틸리티만(`bg-surface`, `text-fg-2`, `bg-primary` …). 16진수 색 하드코딩 금지(캘린더 사용자 색 제외).
+- 공용 부품은 `components/ui.tsx`(Button, Sheet, Field …). 폼·상세는 `Sheet`(모바일 바텀시트 / PC 다이얼로그).
+- 문구는 한국어 해요체. API 오류 코드는 `lib/client-api.ts`에서 한국어로 바꾼다.
 - 외부에서 api로 직접 들어오는 경로는 두 가지뿐이다. 웹훅(`/webhooks/*`)은 `@Public()` + **서명**으로, 공개 API(`/v1/*`)는 `@Public()` + **API 키**(`ApiKeyGuard`, 스코프·요청 수 제한)로 인증한다.
 
 ## 구조 규칙

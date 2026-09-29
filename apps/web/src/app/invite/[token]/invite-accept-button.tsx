@@ -3,55 +3,33 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
-type InviteAcceptButtonProps = {
-  token: string;
-};
+import { Button, Notice } from "@/components/ui";
+import { api, errorMessage } from "@/lib/client-api";
 
-export default function InviteAcceptButton({ token }: InviteAcceptButtonProps) {
+export default function InviteAcceptButton({ token }: { token: string }) {
   const router = useRouter();
-  const [error, setError] = useState("");
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
 
-  async function acceptInvite() {
-    setError("");
-    setIsSubmitting(true);
-
+  async function accept() {
+    setSubmitting(true);
+    setError(null);
     try {
-      const response = await fetch(`/api/invites/${token}/accept`, {
-        method: "POST",
-      });
-      const result = (await response.json()) as {
-        error?: string; message?: string;
-      };
-
-      if (!response.ok) {
-        throw new Error(result.message ?? result.error ?? "초대를 수락하지 못했습니다.");
-      }
-
+      await api(`/invites/${token}/accept`, { method: "POST" });
       router.push("/");
       router.refresh();
-    } catch (caughtError) {
-      setError(caughtError instanceof Error ? caughtError.message : "다시 시도해주세요.");
-    } finally {
-      setIsSubmitting(false);
+    } catch (e) {
+      setError(errorMessage(e));
+      setSubmitting(false);
     }
   }
 
   return (
     <div className="space-y-3">
-      <button
-        className="h-11 w-full rounded-lg bg-[var(--ink)] text-sm font-semibold text-white disabled:opacity-50"
-        disabled={isSubmitting}
-        onClick={acceptInvite}
-        type="button"
-      >
-        {isSubmitting ? "수락 중" : "초대 수락"}
-      </button>
-      {error ? (
-        <p className="rounded-lg bg-[#fff3f1] px-3 py-2 text-sm font-semibold text-[#b33a2f]">
-          {error}
-        </p>
-      ) : null}
+      <Button block loading={submitting} onClick={accept}>
+        초대 수락
+      </Button>
+      {error ? <Notice>{error}</Notice> : null}
     </div>
   );
 }

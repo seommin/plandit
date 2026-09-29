@@ -19,13 +19,14 @@
     "prisma:migrate": "pnpm --filter @plandit/database prisma:migrate",
     "prisma:studio": "pnpm --filter @plandit/database prisma:studio",
     "lint": "pnpm --filter @plandit/api lint",
-    "test": "pnpm --filter @plandit/api test",
+    "test": "pnpm --filter @plandit/api test && pnpm --filter @plandit/web test",
     "test:e2e": "pnpm --filter @plandit/api test:e2e && pnpm --filter @plandit/mocks test:e2e",
     "docker:up": "docker compose up -d",
     "docker:down": "docker compose down",
     "dev:mocks": "pnpm --filter @plandit/mocks dev",
     "dev:worker": "pnpm --filter @plandit/api dev:worker",
-    "start:worker": "pnpm --filter @plandit/api start:worker"
+    "start:worker": "pnpm --filter @plandit/api start:worker",
+    "seed:demo": "pnpm --filter @plandit/api seed:demo"
   },
   "devDependencies": {
     "typescript": "6.0.3"
