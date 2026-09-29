@@ -104,6 +104,10 @@ model User {
   personalWorkspace Workspace? @relation("PersonalWorkspace")
   ledgerEntries  CreditLedger[] @relation("LedgerCreatedBy")
   paymentsRequested Payment[] @relation("PaymentRequestedBy")
+  /// SMS/AlimTalk reminder number, digits only (01000000001). Seeds use 010-0000-xxxx only.
+  phone          String?
+  remindersCreated EventReminder[]
+  reminderDeliveries ReminderDelivery[]
 }
 
 model Account {
@@ -178,6 +182,7 @@ model Workspace {
   calendars     Calendar[]
   creditAccount CreditAccount?
   payments      Payment[]
+  reminderDeliveries ReminderDelivery[]
 }
 
 model WorkspaceMember {
@@ -238,6 +243,8 @@ model CreditLedger {
   account   CreditAccount @relation(fields: [accountId], references: [id], onDelete: Restrict)
   createdBy User?         @relation("LedgerCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
   payment   Payment?
+  deliveryDebit  ReminderDelivery? @relation("DeliveryDebit")
+  deliveryRefund ReminderDelivery? @relation("DeliveryRefund")
 
   @@index([accountId, id(sort: Desc)])
   @@index([refType, refId])
@@ -365,6 +372,7 @@ model Event {
   attendees EventAttendee[]
   shares    EventShare[]
   favorites EventFavorite[]
+  reminders EventReminder[]
 
   @@index([calendarId, startsAt])
   @@index([createdById])
@@ -503,4 +511,96 @@ model PushNotificationDelivery {
   @@index([userId, createdAt])
   @@index([subscriptionId])
   @@index([provider, status])
+}
+
+enum ReminderChannel {
+  PUSH
+  SMS
+  ALIMTALK
+}
+
+enum ReminderAudience {
+  /// the event's creator only
+  CREATOR
+  /// creator + attendees who are Plandit users
+  ATTENDEES
+}
+
+model EventReminder {
+  id            String           @id @default(cuid())
+  eventId       String
+  /// fire time = event start (all-day: 09:00 of the start date in the calendar timezone) - minutesBefore
+  minutesBefore Int
+  channel       ReminderChannel
+  audience      ReminderAudience @default(CREATOR)
+  createdById   String
+  createdAt     DateTime         @default(now())
+
+  event      Event              @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  createdBy  User               @relation(fields: [createdById], references: [id], onDelete: Cascade)
+  deliveries ReminderDelivery[]
+
+  @@unique([eventId, minutesBefore, channel])
+}
+
+enum DeliveryStatus {
+  /// written before any external call
+  QUEUED
+  /// accepted by the carrier (or push provider), result pending
+  SENT
+  DELIVERED
+  FAILED
+  /// not sent (no phone, not enough credits) — nothing charged
+  SKIPPED
+}
+
+/// One reminder to one person at one fire time. Paid channels debit credits before sending and refund on failure.
+/// Kept when the event/reminder is deleted (reminderId → null) because it may reference ledger rows.
+model ReminderDelivery {
+  id             String          @id @default(cuid())
+  reminderId     String?
+  userId         String
+  /// workspace charged (owner of the event's calendar at fire time)
+  workspaceId    String
+  channel        ReminderChannel
+  fireAt         DateTime
+  status         DeliveryStatus  @default(QUEUED)
+  toPhone        String?
+  credits        Int             @default(0)
+  relayMsgId     String?         @unique
+  failCode       String?
+  /// what happened instead when a paid channel was skipped (e.g. PUSH_SENT)
+  fallback       String?
+  debitLedgerId  BigInt?         @unique
+  refundLedgerId BigInt?         @unique
+  queuedAt       DateTime        @default(now())
+  sentAt         DateTime?
+  resultAt       DateTime?
+
+  reminder     EventReminder? @relation(fields: [reminderId], references: [id], onDelete: SetNull)
+  user         User           @relation(fields: [userId], references: [id], onDelete: Restrict)
+  workspace    Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+  debitLedger  CreditLedger?  @relation("DeliveryDebit", fields: [debitLedgerId], references: [id], onDelete: Restrict)
+  refundLedger CreditLedger?  @relation("DeliveryRefund", fields: [refundLedgerId], references: [id], onDelete: Restrict)
+  relayEvents  RelayEvent[]
+
+  @@unique([reminderId, userId, fireAt])
+  @@index([status, sentAt])
+  @@index([workspaceId, queuedAt])
+}
+
+/// Carrier result webhooks we accepted (signature valid). eventId dedupes repeated deliveries.
+model RelayEvent {
+  id         BigInt   @id @default(autoincrement())
+  deliveryId String?
+  eventId    String   @unique
+  status     String
+  payload    Json
+  /// APPLIED, ALREADY_APPLIED, UNKNOWN_DELIVERY
+  result     String
+  receivedAt DateTime @default(now())
+
+  delivery ReminderDelivery? @relation(fields: [deliveryId], references: [id], onDelete: Restrict)
+
+  @@index([deliveryId])
 }

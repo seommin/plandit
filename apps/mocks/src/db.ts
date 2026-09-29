@@ -55,5 +55,8 @@ export async function migrate(db: Db) {
       result_at        timestamptz
     );
     CREATE INDEX IF NOT EXISTS relay_messages_phone_idx ON mock.relay_messages (phone, created_at DESC);
+    -- Like real carriers' client message keys: the same clientRef is the same message.
+    CREATE UNIQUE INDEX IF NOT EXISTS relay_messages_client_ref_key ON mock.relay_messages (client_ref)
+      WHERE client_ref IS NOT NULL;
   `);
 }
