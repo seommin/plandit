@@ -104,6 +104,7 @@ model User {
   personalWorkspace Workspace? @relation("PersonalWorkspace")
   ledgerEntries  CreditLedger[] @relation("LedgerCreatedBy")
   auditLogs      AuditLog[]     @relation("AuditActor")
+  apiKeys        ApiKey[]
   paymentsRequested Payment[] @relation("PaymentRequestedBy")
   /// SMS/AlimTalk reminder number, digits only (01000000001). Seeds use 010-0000-xxxx only.
   phone          String?
@@ -185,6 +186,7 @@ model Workspace {
   payments      Payment[]
   reminderDeliveries ReminderDelivery[]
   auditLogs     AuditLog[]
+  apiKeys       ApiKey[]
 }
 
 model WorkspaceMember {
@@ -629,4 +631,28 @@ model AuditLog {
 
   @@index([workspaceId, id(sort: Desc)])
   @@index([action])
+}
+
+/// Personal access token for the public API (/v1). Acts as its owner inside one workspace, limited by scopes.
+/// Only a SHA-256 hash is stored; the token itself is shown once at creation.
+model ApiKey {
+  id          String    @id @default(cuid())
+  workspaceId String
+  userId      String
+  name        String
+  /// First characters of the token (pk_xxxxxxxx) so people can tell keys apart
+  prefix      String
+  keyHash     String    @unique
+  /// events:read, events:write, credits:read
+  scopes      String[]
+  expiresAt   DateTime?
+  lastUsedAt  DateTime?
+  revokedAt   DateTime?
+  createdAt   DateTime  @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, createdAt])
+  @@index([userId])
 }

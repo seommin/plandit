@@ -158,12 +158,13 @@
 
 ### PLANDIT-13 · API 키 인증 + 요청 수 제한 [M]
 채용공고의 "인증/권한"을 API 쪽에서 직접 보여주는 이슈. 2주차 MCP 서버와 외부 연동의 전제.
-- [ ] `ApiKey`: workspace_id, user_id(발급자), name, prefix(표시용 앞 8자), key_hash(SHA-256, **원문은 발급 응답에서 한 번만** 노출), scopes(`events:read`, `events:write`, `credits:read`), expires_at, last_used_at, revoked_at
-- [ ] 발급·목록·폐기 API: 본인 키는 본인이, 워크스페이스의 모든 키는 ADMIN 이상이 조회·폐기. 발급 스코프는 발급자 권한을 넘을 수 없음
-- [ ] 공개 API `/v1/*`(일정 조회·생성, 크레딧 잔액): `Authorization: Bearer pk_…` → `ApiKeyGuard`(해시 조회, 만료·폐기 확인, 스코프 검사). 내부 시크릿 경로와 분리
-- [ ] 요청 수 제한: 키별 Redis 카운터(`INCR` + `EXPIRE`), 초과 시 429 + `Retry-After`, 응답 헤더 `X-RateLimit-Limit/Remaining`
-- [ ] 감사 로그 `api_key.created`, `api_key.revoked`
-- **완료 조건**: e2e — 폐기·만료·잘못된 키 401(같은 본문), 스코프 없는 요청 403, 다른 워크스페이스 리소스 404, 한도 초과 429 + Retry-After, DB에 키 원문이 없음
+- [x] `ApiKey`: workspaceId, userId(발급자), name, prefix(`pk_` + 8자, 표시용), keyHash(SHA-256 — 192비트 난수 토큰이라 bcrypt 같은 느린 해시 불필요, **원문은 발급 응답에서 한 번만**), scopes(`events:read`, `events:write`, `credits:read`), expiresAt, lastUsedAt(분당 1회만 갱신), revokedAt
+- [x] 발급·목록·폐기 API(`/workspaces/:id/api-keys`): 본인 키는 본인이, 워크스페이스의 모든 키는 ADMIN 이상이 조회·폐기(남의 키는 404)
+- [x] "발급자 권한을 넘을 수 없음" = **요청마다 발급자의 현재 멤버십을 확인**. 발급자가 워크스페이스를 떠나면 키도 즉시 무효, 일정은 발급자의 캘린더 권한·공개 범위 그대로
+- [x] 공개 API `/v1/events`(조회 cursor·기간, 생성), `/v1/credits`: `@Public()` + `ApiKeyGuard`(Bearer → 해시 조회 → 만료·폐기·멤버십 → 요청 수 → 스코프). Swagger에 bearer 인증 표시
+- [x] 요청 수 제한: 키별 Redis 고정 윈도(`MULTI INCR + EXPIRE`, `API_KEY_RATE_LIMIT_PER_MIN`), 초과 시 429 + `Retry-After`, 헤더 `X-RateLimit-Limit/Remaining`
+- [x] 감사 로그 `api_key.created`, `api_key.revoked`
+- **완료 조건**: ✅ e2e — 없음·형식 오류·모르는 키·폐기·만료 키 모두 401(같은 본문), 발급자 탈퇴 시 401, 스코프 없는 요청 403, 다른 워크스페이스 캘린더 404, 한도 초과 429 + Retry-After, DB·목록 응답에 키 원문 없음, 감사 행 수 일치
 
 ### PLANDIT-14 · 모니터링 + 장애 대응 런북 [M]
 채용공고의 "로깅, 모니터링, 장애 대응"에 대응.
