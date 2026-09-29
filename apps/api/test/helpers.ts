@@ -47,6 +47,7 @@ export function as(app: INestApplication, userId: string) {
     get: (url: string) => withHeaders(request(server).get(url)),
     post: (url: string) => withHeaders(request(server).post(url)),
     patch: (url: string) => withHeaders(request(server).patch(url)),
+    put: (url: string) => withHeaders(request(server).put(url)),
     delete: (url: string) => withHeaders(request(server).delete(url)),
   };
 }
@@ -62,6 +63,7 @@ export const waitFor = async <T>(check: () => Promise<T | undefined | null | fal
 };
 
 export const MOCK_PG_SECRET = "e2e-mock-pg-secret";
+export const MOCK_RELAY_SECRET = "e2e-mock-relay-secret";
 
 /**
  * Starts the real apps/mocks server as a child process (it never shares code with the api) and points the api
@@ -75,6 +77,9 @@ export async function startMocksFor(app: INestApplication, port: number, env: Re
   process.env.MOCK_PG_BASE_URL = `${base}/pg`;
   process.env.MOCK_PG_WEBHOOK_SECRET = MOCK_PG_SECRET;
   process.env.PAYMENT_WEBHOOK_URL = `http://127.0.0.1:${apiPort}/webhooks/payments/mock`;
+  process.env.MOCK_RELAY_BASE_URL = `${base}/relay`;
+  process.env.MOCK_RELAY_WEBHOOK_SECRET = MOCK_RELAY_SECRET;
+  process.env.RELAY_WEBHOOK_URL = `http://127.0.0.1:${apiPort}/webhooks/relay/mock`;
 
   const child = spawn(process.execPath, ["src/main.ts"], {
     cwd: path.resolve(__dirname, "../../mocks"),
@@ -83,6 +88,7 @@ export async function startMocksFor(app: INestApplication, port: number, env: Re
       MOCKS_PORT: String(port),
       MOCKS_PUBLIC_URL: base,
       MOCK_PG_WEBHOOK_SECRET: MOCK_PG_SECRET,
+      MOCK_RELAY_WEBHOOK_SECRET: MOCK_RELAY_SECRET,
       MOCK_PG_WEBHOOK_DELAY_MS: "100",
       MOCK_PG_SLOW_MS: "200",
       ...env,

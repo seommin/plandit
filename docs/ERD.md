@@ -128,23 +128,24 @@ erDiagram
 | created_by | FK users | |
 | unique(event_id, minutes_before, channel) | | |
 
-발송 시각 = `events.starts_at - minutes_before`. 일정 시각이 바뀌면 BullMQ 작업을 새 jobId로 교체한다(작업 payload의 `startsAt`과 현재 값이 다르면 무시).
+발송 시각 = `events.starts_at - minutes_before`(종일 일정은 캘린더 타임존 09:00 기준). 일정 시각이 바뀌면 새 jobId(`fire_{id}_{발송시각}`)로 예약하고, 옛 작업은 실행 시 현재 발송 시각과 달라 무시된다.
 
 ### reminder_deliveries — 수신자별 발송 건
 | 컬럼 | 타입 | 비고 |
 |---|---|---|
 | id | cuid PK | |
-| reminder_id | FK | |
+| reminder_id | FK null | 일정·리마인더가 삭제돼도 발송 건은 남긴다(SetNull). 원장 행을 참조하기 때문 |
 | user_id | FK users | |
-| channel | enum | 발송 시점 채널(대체 발송 시 PUSH) |
+| workspace_id | FK | 과금 워크스페이스(발송 시점 캘린더 소유) |
+| channel | enum | |
 | fire_at | timestamptz | 예정 발송 시각 |
 | status | enum QUEUED / SENT / DELIVERED / FAILED / SKIPPED | |
-| to_phone | text null | 발송 시점 번호 스냅샷 |
+| to_phone | text null | 발송 시점 번호 스냅샷(숫자만) |
 | credits | int | 차감 크레딧(PUSH 0) |
-| relay_msg_id | text unique null | 중계사 접수번호 |
-| fail_code, fail_reason | text null | |
-| attempt | int | |
-| debit_ledger_id, refund_ledger_id | FK credit_ledger null | |
+| relay_msg_id | text unique null | 중계사 접수번호. 중계사에는 `clientRef = id`로 보내 재요청 멱등 |
+| fail_code | text null | INVALID_NUMBER, RELAY_UNAVAILABLE, INSUFFICIENT_CREDITS … |
+| fallback | text null | 유료 채널을 건너뛸 때 대체 결과(PUSH_SENT / PUSH_UNAVAILABLE) |
+| debit_ledger_id, refund_ledger_id | FK credit_ledger unique null | |
 | queued_at, sent_at, result_at | | |
 | unique(reminder_id, user_id, fire_at) | | 같은 시각 중복 발송 차단 |
 
@@ -158,7 +159,7 @@ erDiagram
 | event_id | text unique | |
 | status | text | DELIVERED / FAILED |
 | payload | jsonb | |
-| processed | bool | |
+| result | text | APPLIED / ALREADY_APPLIED / UNKNOWN_DELIVERY |
 | received_at | | |
 
 ### api_keys — 공개 API(`/v1/*`)용 개인 액세스 토큰 (PLANDIT-13)

@@ -104,17 +104,22 @@
 - **완료 조건**: ✅ e2e — 시나리오 `05` 충전 → 재조회 → APPROVED, 원장 1행 → 늦은 웹훅(원 이벤트 재전송) → `ALREADY_APPLIED`, 원장 1행 유지 / PG 미도달 UNKNOWN → FAILED / 미결제 대기 → 25시간 후 만료 / 웹훅이 먼저 처리한 건 무시 / 최소 경과 시간 / **실제 BullMQ 워커가 스케줄로 스스로 실행**해 승인. `pnpm dev`에 워커 포함
 
 ### PLANDIT-7 · 리마인더 발송 큐 [M]
-- [ ] `event_reminders`(event_id, minutes_before, channel PUSH/SMS/ALIMTALK, recipient 범위) + 사용자 `phone`
-- [ ] 일정 생성·수정·삭제 시 BullMQ **지연 작업** 등록·교체·취소. jobId = `reminder:{reminderId}:{startsAt epoch}`(시각이 바뀌면 새 jobId → 옛 작업은 실행 시 버전 불일치로 무시)
-- [ ] 실행: 수신자별 `reminder_deliveries` **QUEUED 선기록**(unique(reminder_id, user_id, fire_at)) → 채널별 발송
+- [x] `EventReminder`(eventId, minutesBefore, channel PUSH/SMS/ALIMTALK, audience CREATOR/ATTENDEES) + `User.phone`(`PATCH /me`)
+- [x] `PUT /events/:id/reminders`(목록 교체, 바뀌지 않은 항목은 id·예약 작업 유지), `GET` 조회. 일정 수정 시 `syncEvent()`로 재예약
+- [x] BullMQ **지연 작업** `fire`, jobId = `fire_{reminderId}_{fireAt epoch}`(BullMQ 커스텀 id에 `:` 금지라 `_`). 시각이 바뀌면 새 jobId, 옛 작업은 실행 시 현재 발송 시각과 비교해 `stale`로 무시. 이미 지난 시각은 예약하지 않음
+- [x] 발송 시각: 시간 일정은 시작 − N분, **종일 일정은 캘린더 타임존 09:00 − N분**(서머타임 반영)
+- [x] `fire` → 수신자별 `ReminderDelivery` **QUEUED 선기록**(unique(reminderId, userId, fireAt), 재시도해도 1건) → 건별 `send` 작업으로 분리(건마다 재시도·백오프)
   - PUSH: 기존 `PushProviderClient`, 크레딧 0
-  - SMS/ALIMTALK: `LedgerService.append(DEBIT, "REMINDER_DELIVERY:{id}:DEBIT")` → `MessageProvider`(mock relay) 호출 → SENT. 잔액 부족이면 SKIPPED(원장 없음) + 푸시로 대체 발송
-- [ ] 중계사 결과 웹훅(@Public): `relay_events` 멱등 → DELIVERED/FAILED → 실패 건 **자동 환불**(REFUND, `"REMINDER_DELIVERY:{id}:REFUND"`)
-- [ ] 429/5xx 지수 백오프(BullMQ attempts/backoff), 워커 동시성 설정
-- [ ] 미확정(SENT 후 N분 결과 없음) 재조회 반복 작업
-- **완료 조건**:
-  - 단위: 발송 시각 계산(타임존·종일 일정)
-  - e2e: 일정 시간 변경 → 옛 시각 발송 0건 / 결과 웹훅 2회 → 환불 1행 / 실패율 30%로 100건 → `차감 = 성공 차감 + 실패 환불`, 이중 환불 0건
+  - SMS/ALIMTALK: `LedgerService.append(DEBIT, "REMINDER_DELIVERY:{id}:DEBIT")` → `MessageProvider.send(clientRef = deliveryId)` → SENT. 번호 없음·잔액 부족이면 SKIPPED(원장 없음) + 푸시 대체 발송(`fallback`)
+  - **중계사 멱등**: 모의 중계사가 같은 `clientRef`를 같은 메시지로 처리 → 응답 유실 후 재시도해도 문자 1통
+- [x] 중계사 결과 웹훅(@Public, HMAC): `RelayEvent` 멱등 → 발송 건 `FOR UPDATE` → DELIVERED/FAILED → 실패 건 **자동 환불**(REFUND, `"REMINDER_DELIVERY:{id}:REFUND"`), 한 트랜잭션
+- [x] 429/5xx 지수 백오프(`RELAY_SEND_ATTEMPTS`, `RELAY_BACKOFF_MS`), 마지막 시도까지 실패하면 FAILED + 환불. 워커 동시성 `REMINDER_SEND_CONCURRENCY`
+- [x] 미확정(SENT 후 `RELAY_RESULT_TIMEOUT_MS` 결과 없음) 재조회 반복 작업: 중계사 조회 → 결과 반영, 중계사에 기록 없으면 FAILED(`RELAY_LOST`) + 환불
+- [x] 워크스페이스 발송 내역 API(ADMIN+, 상태 필터, cursor)
+- **완료 조건**: ✅
+  - 단위: 발송 시각 계산(시간 일정, 종일 일정 UTC·KST 자정 저장 모두, 서머타임)
+  - e2e(API + 실제 BullMQ 워커 + 모의 중계사 프로세스): 일정 시간 변경 → 옛 시각 발송 0건·새 시각 작업 존재 / 결과 웹훅 재전송 → 환불 1행 / **수신자 100명 중 30명 실패(초당 25건 제한으로 429 백오프 발생)** → `차감 = 성공 차감 + 실패 환불`, 환불 30행·이중 환불 0건 / 배달 완료 건에 늦은 실패 → 환불 없음 / 위조 서명 401 / 잔액 부족 SKIPPED / 푸시 무료 / 결과 웹훅 유실 → 재조회로 확정
+  - 개발 서버에서 문자 리마인더 → 가상 수신함 도착 확인
 
 ### PLANDIT-8 · 감사 로그 [M]
 - [ ] `AuditService.record()`: 워크스페이스 멤버 초대·역할 변경·제거, 결제 승인/실패/취소, 수동 조정

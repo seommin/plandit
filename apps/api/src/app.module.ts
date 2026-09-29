@@ -10,22 +10,26 @@ import { EventsController } from "./events/events.controller";
 import { HealthController } from "./health/health.controller";
 import { InternalApiGuard } from "./internal-api.guard";
 import { PaymentModule } from "./payment/payment.module";
+import { ProfileController, ProfileService } from "./profile/profile.controller";
 import { PushController } from "./push/push.controller";
+import { ReminderModule } from "./reminder/reminder.module";
 import { SharesController } from "./shares/shares.controller";
 import { RolesGuard } from "./workspace/roles";
 import { WorkspaceModule } from "./workspace/workspace.module";
 
 @Module({
-  imports: [loggerModule, WorkspaceModule, CreditModule, PaymentModule],
+  imports: [loggerModule, WorkspaceModule, CreditModule, PaymentModule, ReminderModule],
   controllers: [
     AuthController,
     CalendarController,
     EventsController,
     HealthController,
+    ProfileController,
     PushController,
     SharesController,
   ],
   providers: [
+    ProfileService,
     // Order matters: internal-secret check first, then workspace role check.
     { provide: APP_GUARD, useClass: InternalApiGuard },
     { provide: APP_GUARD, useClass: RolesGuard },
