@@ -7,6 +7,6 @@ import { LedgerService } from "./ledger.service";
 @Module({
   controllers: [CreditController],
   providers: [LedgerService, CreditService],
-  exports: [LedgerService],
+  exports: [LedgerService, CreditService],
 })
 export class CreditModule {}

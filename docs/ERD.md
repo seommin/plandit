@@ -169,7 +169,7 @@ erDiagram
 | workspace_id | FK | 키가 접근할 수 있는 범위 |
 | user_id | FK users | 발급자. 발급자의 권한을 넘는 스코프는 줄 수 없음 |
 | name | text | 용도 메모 |
-| prefix | text | 표시용 앞 8자(`pk_ab12cd34`) |
+| prefix | text | 표시용 앞부분(`pk_` + 8자) |
 | key_hash | text unique | SHA-256. **원문은 저장하지 않고 발급 응답에서 한 번만 보여줌** |
 | scopes | text[] | `events:read`, `events:write`, `credits:read` |
 | expires_at, last_used_at, revoked_at | timestamptz null | |

@@ -10,7 +10,8 @@
     "./push": "./src/push.ts",
     "./workspaces": "./src/workspaces.ts",
     "./credits": "./src/credits.ts",
-    "./reminders": "./src/reminders.ts"
+    "./reminders": "./src/reminders.ts",
+    "./api-keys": "./src/api-keys.ts"
   },
   "scripts": {
     "build": "tsc --noEmit",
