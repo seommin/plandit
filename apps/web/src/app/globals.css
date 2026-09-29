@@ -140,10 +140,10 @@ html[data-theme="dark"] {
   display: none;
 }
 
-.wordmark {
-  font-weight: 900;
-  letter-spacing: -0.04em;
-  line-height: 1;
+.brand-script {
+  font-family: "Satisfy", "Segoe Script", cursive;
+  font-weight: 400;
+  letter-spacing: 0;
 }
 
 /* Event block: tinted with its calendar color, colored edge, readable text in both themes. */
