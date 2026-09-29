@@ -83,7 +83,7 @@ async function main() {
         workspaceId: team.id,
         name: "팀 일정",
         type: "SHARED",
-        color: "#34466B",
+        color: "#4A6FC4",
         members: { create: [{ userId: owner.id, role: "OWNER" }, { userId: teammate.id, role: "EDITOR" }] },
       },
     });

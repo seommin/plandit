@@ -44,7 +44,7 @@ const LONG_PRESS_MS = 300;
 
 /**
  * Hour grid for one day (phone) or a week (desktop).
- * Tap empty space → create there; drag across empty time → create with that range.
+ * Tap empty space → create there; drag across empty time → create with that range. Drags snap to :00 and :30.
  * Mouse: drag an event to move it, drag its bottom edge to resize.
  * Touch: long-press (≈0.3s) first, then drag; a quick swipe still scrolls the page.
  */
@@ -108,7 +108,7 @@ export function TimeGrid({ days, events, hourHeight = 56, canEdit, onSlot, onOpe
       if (e.pointerType !== "mouse" || !canEdit(drag.event)) return;
       drag.active = true;
     }
-    const deltaMin = snap(dy / pxPerMin, 15);
+    const deltaMin = snap(dy / pxPerMin, 30);
     if (drag.mode === "move") {
       const deltaDay = days.length > 1 ? Math.round(dx / columnWidth()) : 0;
       const duration = drag.endMin - drag.startMin;
@@ -165,7 +165,7 @@ export function TimeGrid({ days, events, hourHeight = 56, canEdit, onSlot, onOpe
 
   function beginCreate(e: ReactPointerEvent<HTMLDivElement>, dayIndex: number) {
     if (e.target !== e.currentTarget || e.button !== 0) return;
-    const anchor = Math.floor(minutesAt(e) / 15) * 15;
+    const anchor = Math.floor(minutesAt(e) / 30) * 30;
     const create: Create = { pointerId: e.pointerId, day: dayIndex, anchor, x: e.clientX, y: e.clientY, active: false, from: anchor, to: anchor + 30 };
     createRef.current = create;
     e.currentTarget.setPointerCapture(e.pointerId);
@@ -192,9 +192,9 @@ export function TimeGrid({ days, events, hourHeight = 56, canEdit, onSlot, onOpe
       create.active = true;
       setHover(null);
     }
-    const current = Math.floor(minutesAt(e) / 15) * 15;
+    const current = Math.floor(minutesAt(e) / 30) * 30;
     create.from = Math.min(create.anchor, current);
-    create.to = Math.max(create.anchor, current) + 15;
+    create.to = Math.max(create.anchor, current) + 30;
     setRange({ day: create.day, from: create.from, to: create.to });
     return true;
   }
@@ -204,7 +204,7 @@ export function TimeGrid({ days, events, hourHeight = 56, canEdit, onSlot, onOpe
     if (!create || create.pointerId !== e.pointerId) return;
     cancelCreate();
     if (create.active) onSlot(atMinutes(day, create.from), atMinutes(day, create.to));
-    else onSlot(atMinutes(day, Math.floor(create.anchor / 30) * 30)); // a tap: the half hour under the pointer
+    else onSlot(atMinutes(day, create.anchor)); // a tap: the half hour under the pointer
   }
 
   function cancelCreate() {
