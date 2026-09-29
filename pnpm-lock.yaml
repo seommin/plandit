@@ -157,12 +157,6 @@ importers:
       '@auth/prisma-adapter':
         specifier: 2.9.1
         version: 2.9.1(@prisma/client@7.4.0(prisma@7.4.0(@types/react@19.2.7)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(typescript@6.0.3))(typescript@6.0.3))
-      '@fontsource/pretendard':
-        specifier: 5.2.5
-        version: 5.2.5
-      '@fontsource/satisfy':
-        specifier: 5.2.7
-        version: 5.2.7
       '@plandit/database':
         specifier: workspace:*
         version: link:../../packages/database
@@ -573,12 +567,6 @@ packages:
   '@eslint/plugin-kit@0.7.3':
     resolution: {integrity: sha512-IkO+/KEUvwbVpiURZg+P7zF74z5Jxe0UgJxVni+RtoHQ6IZieXaO02kmadomap/q+l6bc/jdPGGqTjhuZnuz1Q==}
     engines: {node: ^20.19.0 || ^22.13.0 || >=24}
-
-  '@fontsource/pretendard@5.2.5':
-    resolution: {integrity: sha512-UAj3l+Exfx6Sq5hySbhTQhNzkZnhzBxQdHySmjo2lifXyXpMAHv7GD7hAQTLgZfBd1WixJJkmynfJbOp+TAckg==}
-
-  '@fontsource/satisfy@5.2.7':
-    resolution: {integrity: sha512-nCryyRwgppe04BV6WcaaL9x52AsF3VrJ06rBW6wOz+7xqwqJRaw6fy69bW86kmL/NanEfraFDciMm9IDUGoqEg==}
 
   '@hono/node-server@1.19.9':
     resolution: {integrity: sha512-vHL6w3ecZsky+8P5MD+eFfaGTyCeOHUIFYMGpQGbrBTSmNNoxv0if69rEZ5giu36weC5saFuznL411gRX7bJDw==}
@@ -4824,10 +4812,6 @@ snapshots:
     dependencies:
       '@eslint/core': 1.2.1
       levn: 0.4.1
-
-  '@fontsource/pretendard@5.2.5': {}
-
-  '@fontsource/satisfy@5.2.7': {}
 
   '@hono/node-server@1.19.9(hono@4.11.4)':
     dependencies:
