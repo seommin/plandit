@@ -10,6 +10,7 @@ import {
   Post,
   Req,
 } from "@nestjs/common";
+import { ApiCreatedResponse, ApiOkResponse, ApiOperation, ApiTags } from "@nestjs/swagger";
 
 import { prisma } from "@plandit/database/prisma";
 import {
@@ -18,6 +19,9 @@ import {
   pushSubscriptionUpdateSchema,
 } from "@plandit/shared/push";
 
+import { ErrorCode } from "../common/api-error";
+import { ApiErrors } from "../common/swagger";
+import { ApiZodBody } from "../common/zod";
 import { getUserId, type RequestWithUser } from "../request-user";
 import { getPushProvider } from "./push-provider";
 
@@ -49,9 +53,26 @@ function toSubscriptionResponse(subscription: {
   };
 }
 
+const SUBSCRIPTION_EXAMPLE = {
+  id: "cmum9m8r40009qwyjf2x6k1dp",
+  provider: "WEB_PUSH",
+  endpoint: "https://fcm.googleapis.com/fcm/send/demo-endpoint-7f3a9c",
+  externalId: null,
+  deviceName: "내 아이폰",
+  userAgent: "Mozilla/5.0 (iPhone; CPU iPhone OS 19_0 like Mac OS X)",
+  platform: "iOS",
+  enabled: true,
+  lastSeenAt: "2026-09-29T06:01:15.320Z",
+  createdAt: "2026-09-29T06:01:15.320Z",
+  updatedAt: "2026-09-29T06:01:15.320Z",
+};
+
+@ApiTags("푸시")
 @Controller("push")
 export class PushController {
   @Get("subscriptions")
+  @ApiOperation({ summary: "내 푸시 구독 목록", description: "켜진 구독 먼저, 최근에 바뀐 순." })
+  @ApiOkResponse({ example: { subscriptions: [SUBSCRIPTION_EXAMPLE] } })
   async list(@Req() request: RequestWithUser) {
     const userId = getUserId(request);
     const subscriptions = await prisma.pushSubscription.findMany({
@@ -67,6 +88,21 @@ export class PushController {
   }
 
   @Post("subscriptions")
+  @ApiOperation({
+    summary: "푸시 구독 등록",
+    description:
+      "`provider`·`endpoint`가 같은 구독이 있으면 새로 만들지 않고 지금 사용자에게 옮겨 다시 켠다. WEB_PUSH는 `metadata`에 구독 키 `p256dh`·`auth`가 있어야 발송된다.",
+  })
+  @ApiZodBody(pushSubscriptionCreateSchema, {
+    provider: "WEB_PUSH",
+    endpoint: "https://fcm.googleapis.com/fcm/send/demo-endpoint-7f3a9c",
+    deviceName: "내 아이폰",
+    userAgent: "Mozilla/5.0 (iPhone; CPU iPhone OS 19_0 like Mac OS X)",
+    platform: "iOS",
+    metadata: { p256dh: "BDemoP256dhKey", auth: "demoAuthKey" },
+  })
+  @ApiCreatedResponse({ example: { subscription: SUBSCRIPTION_EXAMPLE } })
+  @ApiErrors(ErrorCode.BAD_REQUEST)
   async upsert(@Req() request: RequestWithUser, @Body() payload: unknown) {
     const userId = getUserId(request);
     const parsed = pushSubscriptionCreateSchema.safeParse(payload);
@@ -111,6 +147,10 @@ export class PushController {
   }
 
   @Patch("subscriptions/:subscriptionId")
+  @ApiOperation({ summary: "푸시 구독 켜기·끄기", description: "내 구독만(아니면 404)." })
+  @ApiZodBody(pushSubscriptionUpdateSchema, { enabled: false })
+  @ApiOkResponse({ example: { subscription: { ...SUBSCRIPTION_EXAMPLE, enabled: false, updatedAt: "2026-09-29T06:05:02.771Z" } } })
+  @ApiErrors(ErrorCode.BAD_REQUEST, ErrorCode.NOT_FOUND)
   async update(
     @Req() request: RequestWithUser,
     @Param("subscriptionId") subscriptionId: string,
@@ -150,6 +190,9 @@ export class PushController {
   }
 
   @Delete("subscriptions/:subscriptionId")
+  @ApiOperation({ summary: "푸시 구독 삭제", description: "내 구독만(아니면 404)." })
+  @ApiOkResponse({ example: { ok: true } })
+  @ApiErrors(ErrorCode.NOT_FOUND)
   async remove(
     @Req() request: RequestWithUser,
     @Param("subscriptionId") subscriptionId: string,
@@ -176,6 +219,13 @@ export class PushController {
   }
 
   @Post("test")
+  @ApiOperation({
+    summary: "테스트 푸시 보내기",
+    description: "내 켜진 구독 전부에 바로 보내고 결과를 건수로 돌려준다. 구독마다 발송 기록이 남는다.",
+  })
+  @ApiZodBody(pushMessageSchema, { title: "테스트 알림", body: "푸시 알림이 잘 오는지 확인해요", url: "/calendar" })
+  @ApiCreatedResponse({ example: { sent: 1, failed: 0, total: 1 } })
+  @ApiErrors(ErrorCode.BAD_REQUEST)
   async sendTest(@Req() request: RequestWithUser, @Body() payload: unknown) {
     const userId = getUserId(request);
     const parsed = pushMessageSchema.safeParse(payload);

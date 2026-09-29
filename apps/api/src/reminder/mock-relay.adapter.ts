@@ -4,7 +4,7 @@ import { ApiError, ErrorCode } from "../common/api-error";
 import { isValidHmacSha256 } from "../common/safe-equal";
 import { type MessageProvider, MessageProviderError, type RelayResult, type RelayWebhookEvent } from "./message-provider";
 
-const webhookSchema = z.object({
+export const webhookSchema = z.object({
   eventId: z.string().min(1),
   msgId: z.string().min(1),
   clientRef: z.string().nullable(),
