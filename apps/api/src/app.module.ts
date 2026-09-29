@@ -1,6 +1,7 @@
 import { Module } from "@nestjs/common";
 import { APP_FILTER, APP_GUARD } from "@nestjs/core";
 
+import { AuditModule } from "./audit/audit.module";
 import { AuthController } from "./auth/auth.controller";
 import { CalendarController } from "./calendar/calendar.controller";
 import { ApiExceptionFilter } from "./common/api-exception.filter";
@@ -18,7 +19,7 @@ import { RolesGuard } from "./workspace/roles";
 import { WorkspaceModule } from "./workspace/workspace.module";
 
 @Module({
-  imports: [loggerModule, WorkspaceModule, CreditModule, PaymentModule, ReminderModule],
+  imports: [loggerModule, AuditModule, WorkspaceModule, CreditModule, PaymentModule, ReminderModule],
   controllers: [
     AuthController,
     CalendarController,

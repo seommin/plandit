@@ -89,20 +89,19 @@ export class PaymentWebhookService {
           providerTxId: event.providerTxId,
           method: event.method,
           approvedAt: event.occurredAt,
+          source: "webhook",
         });
         return done("APPLIED");
 
       case "FAILED":
         if (payment.status === "FAILED") return done("ALREADY_APPLIED");
         if (!open) return done("CONFLICT_STATE");
-        await tx.payment.update({
-          where: { id: payment.id },
-          data: {
-            status: "FAILED",
-            providerTxId: event.providerTxId,
-            failureCode: event.failureCode ?? "UNKNOWN",
-            failedAt: event.occurredAt,
-          },
+        await this.payments.applyFailure(tx, payment, {
+          status: "FAILED",
+          failureCode: event.failureCode ?? "UNKNOWN",
+          providerTxId: event.providerTxId,
+          at: event.occurredAt,
+          source: "webhook",
         });
         return done("APPLIED");
 

@@ -75,37 +75,30 @@ export class PaymentReconcileService {
               providerTxId: found.providerTxId,
               method: found.method,
               approvedAt: found.approvedAt ?? now,
+              source: "reconcile",
             });
             return "approved";
           case "FAILED":
           case "CANCELED":
-            await tx.payment.update({
-              where: { id: paymentId },
-              data: {
-                status: found.status,
-                providerTxId: found.providerTxId,
-                failureCode: found.failureCode ?? found.status,
-                ...(found.status === "FAILED" ? { failedAt: now } : { canceledAt: now }),
-              },
+            await this.payments.applyFailure(tx, payment, {
+              status: found.status,
+              failureCode: found.failureCode ?? found.status,
+              providerTxId: found.providerTxId,
+              at: now,
+              source: "reconcile",
             });
             return "failed";
         }
 
         // The PG never saw it (our reserve never arrived): nobody can pay it, so it's safe to close.
         if (!found) {
-          await tx.payment.update({
-            where: { id: paymentId },
-            data: { status: "FAILED", failureCode: "PG_NOT_FOUND", failedAt: now },
-          });
+          await this.payments.applyFailure(tx, payment, { status: "FAILED", failureCode: "PG_NOT_FOUND", at: now, source: "reconcile" });
           return "failed";
         }
 
         // READY at the PG: the user hasn't paid (yet). Give up after the expiry window.
         if (now.getTime() - payment.createdAt.getTime() >= this.expireAfterMs) {
-          await tx.payment.update({
-            where: { id: paymentId },
-            data: { status: "FAILED", failureCode: "EXPIRED", failedAt: now },
-          });
+          await this.payments.applyFailure(tx, payment, { status: "FAILED", failureCode: "EXPIRED", at: now, source: "reconcile" });
           return "expired";
         }
         return "pending";

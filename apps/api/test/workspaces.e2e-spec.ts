@@ -168,4 +168,19 @@ describe("PLANDIT-2 workspaces & roles (e2e)", () => {
     await as(app, admin.id).delete(`/workspaces/${teamId}/members/${await memberIdOf(member.id)}`).expect(204);
     await as(app, member.id).get(`/workspaces/${teamId}`).expect(404);
   });
+
+  it("audit trail: exactly one row per successful change, none for rejected attempts", async () => {
+    const rows = await prisma.auditLog.groupBy({ by: ["action"], where: { workspaceId: teamId }, _count: true });
+    const counts = Object.fromEntries(rows.map((r) => [r.action, r._count]));
+    expect(counts).toEqual({
+      "workspace.created": 1,
+      "workspace.member_added": 2, // admin, member (403/404/409 attempts left nothing)
+      "workspace.member_role_changed": 2, // promote + demote
+      "workspace.member_removed": 1,
+    });
+    const demote = await prisma.auditLog.findFirstOrThrow({
+      where: { workspaceId: teamId, action: "workspace.member_role_changed", actorId: owner.id },
+    });
+    expect(demote.payload).toMatchObject({ userId: member.id, from: "ADMIN", to: "MEMBER" });
+  });
 });

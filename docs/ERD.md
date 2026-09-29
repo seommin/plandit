@@ -183,9 +183,12 @@ erDiagram
 | actor_id | FK users null | 시스템 작업이면 null |
 | action | text | `workspace.member_role_changed`, `payment.approved` … |
 | target_type, target_id | text | |
-| payload | jsonb | 변경 전후 |
-| trace_id | text | |
+| payload | jsonb | 변경 전후, 처리 경로(`source`) |
+| trace_id | text null | 요청의 X-Trace-Id. 로그와 연결 |
+| ip, user_agent | text null | 최종 사용자 기준(web 프록시가 전달) |
 | created_at | | |
+
+UPDATE·DELETE는 트리거로 차단(원장과 같은 방식). 변경과 같은 트랜잭션에서 기록한다.
 
 ## 2주차 추가 테이블 (AI)
 

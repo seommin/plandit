@@ -45,7 +45,7 @@
 - 워크스페이스 역할 `OWNER > ADMIN > MEMBER`(`roleCovers()`, `packages/shared/workspaces`). 역할 게이트는 `@Roles()` + `RolesGuard`, 경로는 `/workspaces/:workspaceId/...`로 통일.
 - 캘린더 역할(`OWNER/ADMIN/EDITOR/VIEWER`)은 기존대로 캘린더 단위 데이터 권한이다. 워크스페이스 역할은 결제·크레딧·멤버 관리 권한이다. 둘을 섞지 않는다.
 - 권한 없는 리소스 조회는 404(존재 여부 노출 안 함), 권한 부족 행위는 403.
-- 워크스페이스 멤버·역할·결제·크레딧 변경은 `AuditService.record()`로 감사 로그를 남긴다.
+- 워크스페이스 멤버·역할·결제·크레딧 변경은 `AuditService.record(entry, tx)`로 감사 로그를 남긴다. **변경과 같은 트랜잭션**을 넘기고, 재시도·멱등 재호출은 기록하지 않는다.
 
 ## 모의 서버 규칙
 

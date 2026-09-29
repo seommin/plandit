@@ -150,6 +150,11 @@ describe("PLANDIT-3 credit ledger (e2e)", () => {
       const retry = await as(app, operator.id).post(url).set("idempotency-key", "adjust-0001").send({ amount: 10, memo: "보상" }).expect(201);
       expect(first.body.entry).toMatchObject({ type: "ADJUST", amount: 10, balanceAfter: 85, createdById: operator.id });
       expect(retry.body).toMatchObject({ replayed: true, entry: { id: first.body.entry.id } });
+
+      const audits = await prisma.auditLog.findMany({ where: { workspaceId, action: "credit.adjusted" } });
+      expect(audits).toHaveLength(1); // the retry wrote no second audit row
+      expect(audits[0]).toMatchObject({ actorId: operator.id, targetId: first.body.entry.id });
+      expect(audits[0].payload).toMatchObject({ amount: 10, memo: "보상" });
     });
   });
 });
