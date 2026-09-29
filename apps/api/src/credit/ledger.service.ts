@@ -9,6 +9,7 @@ import {
 } from "@plandit/database/prisma";
 
 import { ApiError, ErrorCode } from "../common/api-error";
+import { ledgerAppends } from "../metrics/metrics";
 
 export type AppendInput = {
   accountId: string;
@@ -45,9 +46,21 @@ export class LedgerService {
     const amount = BigInt(input.amount);
     assertAmountSign(input.type, amount);
 
-    return tx
+    const run = tx
       ? this.appendIn(tx, { ...input, amount })
       : prisma.$transaction((t) => this.appendIn(t, { ...input, amount }), { maxWait: 10_000, timeout: 10_000 });
+    return run.then(
+      (result) => {
+        ledgerAppends.inc({ type: input.type, outcome: result.replayed ? "replayed" : "applied" });
+        return result;
+      },
+      (error: unknown) => {
+        if (error instanceof ApiError && error.code === ErrorCode.INSUFFICIENT_CREDITS) {
+          ledgerAppends.inc({ type: input.type, outcome: "insufficient" });
+        }
+        throw error;
+      },
+    );
   }
 
   private async appendIn(tx: Tx, input: AppendInput & { amount: bigint }): Promise<AppendResult> {

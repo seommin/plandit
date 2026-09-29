@@ -1,6 +1,8 @@
 import { Injectable, Logger, type OnApplicationBootstrap, type OnApplicationShutdown } from "@nestjs/common";
 import { Queue, Worker } from "bullmq";
 
+import { requestContext } from "../common/request-context";
+import { jobRuns } from "../metrics/metrics";
 import { PaymentReconcileService } from "../payment/payment-reconcile.service";
 import { QUEUES, redisConnection } from "../queue/redis-connection";
 
@@ -25,8 +27,16 @@ export class PaymentReconcileProcessor implements OnApplicationBootstrap, OnAppl
       { name: "reconcile", opts: { removeOnComplete: 100, removeOnFail: 500 } },
     );
 
-    this.worker = new Worker(QUEUES.paymentReconcile, () => this.reconcile.run(), { connection, concurrency: 1 });
-    this.worker.on("failed", (job, error) => this.logger.error({ jobId: job?.id, err: error }, "Reconcile job failed"));
+    this.worker = new Worker(
+      QUEUES.paymentReconcile,
+      (job) => requestContext.run({ traceId: `job-${job.id}` }, () => this.reconcile.run()),
+      { connection, concurrency: 1 },
+    );
+    this.worker.on("completed", (job) => jobRuns.inc({ queue: QUEUES.paymentReconcile, name: job.name, outcome: "completed" }));
+    this.worker.on("failed", (job, error) => {
+      jobRuns.inc({ queue: QUEUES.paymentReconcile, name: job?.name ?? "unknown", outcome: "failed" });
+      this.logger.error({ jobId: job?.id, err: error }, "Reconcile job failed");
+    });
     this.logger.log(`Worker listening on queue "${QUEUES.paymentReconcile}"`);
   }
 

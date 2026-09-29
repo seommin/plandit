@@ -5,6 +5,7 @@ import { CHANNEL_CREDITS } from "@plandit/shared/reminders";
 
 import { ApiError, ErrorCode } from "../common/api-error";
 import { LedgerService } from "../credit/ledger.service";
+import { reminderDeliveries } from "../metrics/metrics";
 import { MESSAGE_PROVIDER, type MessageProvider, MessageProviderError } from "./message-provider";
 import { sendPushToUser } from "./push-sender";
 import { fireAtFor } from "./reminder-time";
@@ -35,7 +36,7 @@ export class ReminderDispatchService {
     private readonly queue: ReminderQueue,
   ) {}
 
-  async fire(reminderId: string, fireAtIso: string) {
+  async fire(reminderId: string, fireAtIso: string, traceId?: string) {
     const reminder = await prisma.eventReminder.findUnique({
       where: { id: reminderId },
       include: {
@@ -71,7 +72,7 @@ export class ReminderDispatchService {
       where: { reminderId, fireAt, status: "QUEUED" },
       select: { id: true },
     });
-    await this.queue.enqueueSends(queued.map((d) => d.id));
+    await this.queue.enqueueSends(queued.map((d) => d.id), traceId);
     return { status: "fired" as const, deliveries: queued.length };
   }
 
@@ -159,10 +160,11 @@ export class ReminderDispatchService {
 
   private async skipWithPushFallback(delivery: ReminderDelivery, reason: string, title: string, body: string) {
     const pushed = await sendPushToUser(delivery.userId, { title, body });
-    await prisma.reminderDelivery.updateMany({
+    const { count } = await prisma.reminderDelivery.updateMany({
       where: { id: delivery.id, status: "QUEUED" },
       data: { status: "SKIPPED", failCode: reason, fallback: pushed ? "PUSH_SENT" : "PUSH_UNAVAILABLE", resultAt: new Date() },
     });
+    if (count) reminderDeliveries.inc({ channel: delivery.channel, status: "SKIPPED" });
     return "skipped";
   }
 
@@ -200,18 +202,16 @@ export class ReminderDispatchService {
         where: { id: deliveryId },
         data: { status: outcome.status, failCode: outcome.failCode, resultAt: new Date(), refundLedgerId },
       });
+      reminderDeliveries.inc({ channel: delivery.channel, status: outcome.status });
       return "APPLIED";
     };
     return outerTx ? run(outerTx) : prisma.$transaction(run, { maxWait: 10_000, timeout: 10_000 });
   }
 
   /** Deliveries accepted by the carrier but with no result after RELAY_RESULT_TIMEOUT_MS: ask the carrier. */
-  async reconcileSent(now = new Date()) {
+  async reconcileSent(now = new Date(), minAgeMs = Number(process.env.RELAY_RESULT_TIMEOUT_MS ?? 10 * 60_000)) {
     const stale = await prisma.reminderDelivery.findMany({
-      where: {
-        status: "SENT",
-        sentAt: { lte: new Date(now.getTime() - Number(process.env.RELAY_RESULT_TIMEOUT_MS ?? 10 * 60_000)) },
-      },
+      where: { status: "SENT", sentAt: { lte: new Date(now.getTime() - minAgeMs) } },
       take: 100,
       select: { id: true, relayMsgId: true },
     });

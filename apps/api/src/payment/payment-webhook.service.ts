@@ -3,6 +3,7 @@ import { Inject, Injectable, Logger } from "@nestjs/common";
 import { Prisma, prisma } from "@plandit/database/prisma";
 
 import { ApiError, ErrorCode } from "../common/api-error";
+import { webhookEvents } from "../metrics/metrics";
 import { PAYMENT_GATEWAY, type PaymentGateway, type PaymentWebhookEvent } from "./payment-gateway";
 import { PaymentService } from "./payment.service";
 
@@ -32,9 +33,12 @@ export class PaymentWebhookService {
    */
   async handle(rawBody: Buffer, headers: Record<string, string | string[] | undefined>) {
     const event = this.gateway.parseWebhook(rawBody, headers);
-    if (!event) throw new ApiError(ErrorCode.UNAUTHORIZED, "Invalid webhook signature.");
+    if (!event) {
+      webhookEvents.inc({ source: "pg", result: "invalid_signature" });
+      throw new ApiError(ErrorCode.UNAUTHORIZED, "Invalid webhook signature.");
+    }
 
-    return prisma.$transaction(
+    const outcome = await prisma.$transaction(
       async (tx) => {
         const { count } = await tx.paymentEvent.createMany({
           data: [
@@ -55,6 +59,8 @@ export class PaymentWebhookService {
       },
       { maxWait: 10_000, timeout: 10_000 },
     );
+    webhookEvents.inc({ source: "pg", result: outcome.result });
+    return outcome;
   }
 
   private async apply(
