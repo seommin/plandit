@@ -5,7 +5,7 @@ import { useMemo, useState } from "react";
 
 import { EventRow } from "@/components/event-row";
 import { type EditorState, EventEditor } from "@/components/event-editor";
-import { EmptyState, Notice, Segmented } from "@/components/ui";
+import { EmptyState, Notice, Tabs } from "@/components/ui";
 import { useCalendarState } from "@/components/use-calendar-state";
 import { addDays, byStart, formatMonthDay, isSameDay, startOfDay } from "@/lib/dates";
 import type { CalendarEvent } from "@/lib/types";
@@ -65,7 +65,7 @@ export default function AgendaPage() {
             value={query}
           />
         </label>
-        <Segmented
+        <Tabs
           label="일정 보기"
           onChange={setTab}
           options={[

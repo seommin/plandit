@@ -1,16 +1,17 @@
 "use client";
 
-import { ChevronDown, X } from "lucide-react";
+import { Check, ChevronDown, X } from "lucide-react";
 import {
   type ButtonHTMLAttributes,
   type InputHTMLAttributes,
   type ReactNode,
-  type SelectHTMLAttributes,
   type TextareaHTMLAttributes,
   useEffect,
   useId,
   useRef,
+  useState,
 } from "react";
+import { createPortal } from "react-dom";
 
 export const cn = (...classes: Array<string | false | null | undefined>) => classes.filter(Boolean).join(" ");
 
@@ -81,7 +82,7 @@ export function SectionTitle({ children, action }: { children: ReactNode; action
 }
 
 export function Notice({ tone = "danger", children }: { tone?: "danger" | "success" | "info"; children: ReactNode }) {
-  const tones = { danger: "bg-danger-weak text-danger", success: "bg-success-weak text-success", info: "bg-primary-weak text-primary" };
+  const tones = { danger: "bg-danger-weak text-danger", success: "bg-surface-2 text-fg", info: "bg-surface-2 text-fg-2" };
   return (
     <p className={cn("rounded-xl px-3 py-2.5 text-sm font-medium", tones[tone])} role={tone === "danger" ? "alert" : "status"}>
       {children}
@@ -121,13 +122,147 @@ export function TextArea({ className, ...props }: TextareaHTMLAttributes<HTMLTex
   return <textarea className={cn(fieldClass, "min-h-24 py-3", className)} {...props} />;
 }
 
-export function Select({ className, children, ...props }: SelectHTMLAttributes<HTMLSelectElement>) {
+/**
+ * Our own dropdown (the browser's select popup can't be styled): the trigger shows the current choice and the list opens next to it.
+ * The list is drawn on top of the page (portal), so rounded cards and sheets never clip it; it opens upward near the bottom edge
+ * and closes on scroll. `variant="field"` looks like a text field inside forms, `variant="text"` is a quiet "value ▾" for inline use.
+ * With `name` it submits with its form.
+ */
+export function Picker<T extends string | number>({
+  value,
+  defaultValue,
+  options,
+  onChange,
+  label,
+  name,
+  variant = "field",
+  align = "left",
+  className,
+}: {
+  value?: T;
+  defaultValue?: T;
+  options: Array<{ value: T; label: string }>;
+  onChange?: (value: T) => void;
+  label: string;
+  name?: string;
+  variant?: "field" | "text";
+  align?: "left" | "right";
+  className?: string;
+}) {
+  const [inner, setInner] = useState(defaultValue ?? options[0]?.value);
+  const [anchor, setAnchor] = useState<DOMRect | null>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const listRef = useRef<HTMLUListElement>(null);
+  const open = anchor !== null;
+  const current = value ?? inner;
+  const selected = options.find((option) => option.value === current);
+
+  useEffect(() => {
+    if (!open) return;
+    const close = () => setAnchor(null);
+    const outside = (event: PointerEvent) => {
+      const target = event.target as Node;
+      if (!triggerRef.current?.contains(target) && !listRef.current?.contains(target)) close();
+    };
+    const scrolled = (event: Event) => !listRef.current?.contains(event.target as Node) && close();
+    document.addEventListener("pointerdown", outside);
+    window.addEventListener("scroll", scrolled, true);
+    window.addEventListener("resize", close);
+    return () => {
+      document.removeEventListener("pointerdown", outside);
+      window.removeEventListener("scroll", scrolled, true);
+      window.removeEventListener("resize", close);
+    };
+  }, [open]);
+
+  const LIST_MAX = 256;
+  const upward = anchor ? anchor.bottom + LIST_MAX + 8 > window.innerHeight && anchor.top > window.innerHeight - anchor.bottom : false;
+
   return (
-    <div className="relative">
-      <select className={cn(fieldClass, "h-12 appearance-none pr-10", className)} {...props}>
-        {children}
-      </select>
-      <ChevronDown aria-hidden="true" className="pointer-events-none absolute right-3.5 top-1/2 size-4 -translate-y-1/2 text-fg-3" />
+    <div
+      className={cn("relative", className)}
+      onKeyDown={(event) => {
+        if (event.key !== "Escape" || !open) return;
+        event.stopPropagation(); // close the list, not the sheet around it
+        setAnchor(null);
+        triggerRef.current?.focus();
+      }}
+    >
+      {name ? <input name={name} type="hidden" value={String(current ?? "")} /> : null}
+      <button
+        aria-expanded={open}
+        aria-haspopup="listbox"
+        aria-label={`${label}: ${selected?.label ?? ""}`}
+        className={cn(
+          "flex items-center gap-1 text-left",
+          variant === "field" ? cn(fieldClass, "h-12 justify-between", open && "border-primary") : "h-9 max-w-full rounded-lg px-2 text-[14px] font-semibold transition-colors hover:bg-surface-2",
+        )}
+        onClick={() => setAnchor(open ? null : (triggerRef.current?.getBoundingClientRect() ?? null))}
+        ref={triggerRef}
+        type="button"
+      >
+        <span className="min-w-0 truncate">{selected?.label}</span>
+        <ChevronDown className={cn("size-4 shrink-0 text-fg-3 transition-transform", open && "rotate-180")} />
+      </button>
+      {anchor
+        ? createPortal(
+            <ul
+              className="animate-scrim fixed z-[70] overflow-y-auto rounded-xl bg-surface p-1 shadow-float ring-1 ring-line"
+              ref={listRef}
+              role="listbox"
+              style={{
+                maxHeight: LIST_MAX,
+                minWidth: anchor.width,
+                ...(upward ? { bottom: window.innerHeight - anchor.top + 4 } : { top: anchor.bottom + 4 }),
+                ...(align === "right" ? { right: window.innerWidth - anchor.right } : { left: anchor.left }),
+              }}
+            >
+              {options.map((option) => (
+                <li key={String(option.value)}>
+                  <button
+                    aria-selected={option.value === current}
+                    className={cn(
+                      "flex h-10 w-full items-center gap-3 whitespace-nowrap rounded-lg px-3 text-left text-[14px]",
+                      option.value === current ? "font-semibold text-fg" : "text-fg-2 hover:bg-surface-2",
+                    )}
+                    onClick={() => {
+                      setInner(option.value);
+                      onChange?.(option.value);
+                      setAnchor(null);
+                    }}
+                    role="option"
+                    type="button"
+                  >
+                    <span className="flex-1">{option.label}</span>
+                    {option.value === current ? <Check className="size-4 shrink-0" /> : <span className="size-4 shrink-0" />}
+                  </button>
+                </li>
+              ))}
+            </ul>,
+            document.body,
+          )
+        : null}
+    </div>
+  );
+}
+
+/** Underlined text tabs for sections of content (다가오는 / 중요 …). View modes like 일/주/월 use Segmented. */
+export function Tabs<T extends string>({ value, options, onChange, label, className }: { value: T; options: Array<{ value: T; label: string }>; onChange: (value: T) => void; label: string; className?: string }) {
+  return (
+    <div aria-label={label} className={cn("flex gap-5 overflow-x-auto scrollbar-hide", className)} role="tablist">
+      {options.map((option) => (
+        <button
+          aria-selected={option.value === value}
+          className={cn("relative h-10 shrink-0 text-[15px] font-semibold transition-colors", option.value === value ? "text-fg" : "text-fg-3 hover:text-fg-2")}
+          key={option.value}
+          onClick={() => onChange(option.value)}
+          role="tab"
+          type="button"
+        >
+          {option.label}
+          {option.value === value ? <span aria-hidden="true" className="absolute inset-x-0 bottom-1.5 h-0.5 rounded-full bg-fg" /> : null}
+        </button>
+      ))}
     </div>
   );
 }

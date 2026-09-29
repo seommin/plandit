@@ -6,7 +6,7 @@ import { type FormEvent, useEffect, useState } from "react";
 import { api, errorMessage } from "@/lib/client-api";
 import { type Calendar, type CalendarRole, canManage, type Workspace } from "@/lib/types";
 
-import { Button, cn, Field, IconButton, Notice, Select, Sheet, TextArea, TextInput } from "./ui";
+import { Button, cn, Field, IconButton, Notice, Picker, Sheet, TextArea, TextInput } from "./ui";
 
 /** Graphite first (the default), then hues bright enough to tell apart from it at checkbox size. */
 export const CALENDAR_COLORS = ["#3F3F46", "#4A6FC4", "#2E8B84", "#5F8A3A", "#C8922A", "#C9623A", "#C24A68", "#7A5BC2"];
@@ -67,13 +67,7 @@ export function NewCalendarSheet({ open, onClose, workspaces, defaultWorkspaceId
           <TextInput autoFocus maxLength={80} name="name" placeholder="예: 운동, 스터디" required />
         </Field>
         <Field label="워크스페이스">
-          <Select defaultValue={defaultWorkspaceId} name="workspaceId">
-            {workspaces.map((w) => (
-              <option key={w.id} value={w.id}>
-                {w.name}
-              </option>
-            ))}
-          </Select>
+          <Picker defaultValue={defaultWorkspaceId} label="워크스페이스" name="workspaceId" options={workspaces.map((w) => ({ value: w.id, label: w.type === "PERSONAL" ? "개인" : w.name }))} />
         </Field>
         <div>
           <span className="mb-2 block text-[13px] font-semibold text-fg-2">색상</span>
@@ -221,18 +215,14 @@ function CalendarSettings({ calendar, currentUserId, onSaved, onDeleted }: { cal
                 <span className="text-xs font-semibold text-fg-3">{ROLE_LABEL[member.role]}</span>
               ) : (
                 <>
-                  <select
-                    aria-label="권한"
-                    className="h-9 rounded-lg border border-line bg-surface px-2 text-sm"
-                    onChange={(e) => changeRole(member, e.target.value as CalendarRole)}
+                  <Picker
+                    align="right"
+                    label="권한"
+                    onChange={(role) => changeRole(member, role)}
+                    options={(["ADMIN", "EDITOR", "VIEWER"] as const).map((role) => ({ value: role, label: ROLE_LABEL[role] }))}
                     value={member.role}
-                  >
-                    {(["ADMIN", "EDITOR", "VIEWER"] as const).map((role) => (
-                      <option key={role} value={role}>
-                        {ROLE_LABEL[role]}
-                      </option>
-                    ))}
-                  </select>
+                    variant="text"
+                  />
                   <IconButton className="text-danger hover:text-danger" label="내보내기" onClick={() => removeMember(member)}>
                     <UserMinus size={18} />
                   </IconButton>
@@ -246,11 +236,16 @@ function CalendarSettings({ calendar, currentUserId, onSaved, onDeleted }: { cal
             <TextInput aria-label="초대할 이메일" name="email" placeholder="초대할 이메일" required type="email" />
           </div>
           <div className="w-24 shrink-0">
-            <Select aria-label="권한" defaultValue="VIEWER" name="role">
-              <option value="VIEWER">보기</option>
-              <option value="EDITOR">편집</option>
-              <option value="ADMIN">관리</option>
-            </Select>
+            <Picker
+              defaultValue="VIEWER"
+              label="권한"
+              name="role"
+              options={[
+                { value: "VIEWER", label: "보기" },
+                { value: "EDITOR", label: "편집" },
+                { value: "ADMIN", label: "관리" },
+              ]}
+            />
           </div>
           <Button disabled={busy} type="submit" variant="secondary">
             초대

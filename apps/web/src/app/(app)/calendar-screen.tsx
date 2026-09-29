@@ -10,7 +10,7 @@ import { DateNavigator, MiniMonth, useDayDots } from "@/components/mini-month";
 import { MonthGrid } from "@/components/month-grid";
 import { TimeGrid } from "@/components/time-grid";
 import { useToast } from "@/components/toast";
-import { Button, cn, IconButton, Notice, Segmented, Sheet } from "@/components/ui";
+import { Button, cn, IconButton, Notice, Picker, Segmented, Sheet, Tabs } from "@/components/ui";
 import { useCalendarScope, useCalendarState, useHiddenCalendars } from "@/components/use-calendar-state";
 import { api, errorMessage } from "@/lib/client-api";
 import { addDays, addMonths, formatMonthDay, formatMonthTitle, formatTime, isSameDay, monthGridRange, startOfDay, startOfMonth, startOfWeek } from "@/lib/dates";
@@ -246,39 +246,13 @@ export function CalendarScreen({ initial, openCreate }: { initial: CalendarState
   );
 }
 
-/** Text tabs for a few workspaces; with many, one "name ▾" line that opens the device's own list. */
+/** Text tabs for a few workspaces; with many, one quiet "name ▾" that opens a list. */
 function ScopePicker({ options, value, onChange }: { options: Array<{ id: string; label: string }>; value: string; onChange: (id: string) => void }) {
-  if (options.length > 4) {
-    return (
-      <label className="relative flex h-9 items-center gap-1 px-2 text-[14px] font-semibold">
-        <span className="truncate">{options.find((option) => option.id === value)?.label ?? "전체"}</span>
-        <ChevronDown className="shrink-0 text-fg-3" size={16} />
-        <select aria-label="워크스페이스" className="absolute inset-0 cursor-pointer opacity-0" onChange={(e) => onChange(e.target.value)} value={value}>
-          {options.map((option) => (
-            <option key={option.id} value={option.id}>
-              {option.label}
-            </option>
-          ))}
-        </select>
-      </label>
-    );
-  }
-  return (
-    <div aria-label="워크스페이스" className="flex gap-4 overflow-x-auto px-2 scrollbar-hide" role="radiogroup">
-      {options.map((option) => (
-        <button
-          aria-checked={option.id === value}
-          className={cn("relative h-9 shrink-0 text-[14px] font-semibold transition-colors", option.id === value ? "text-fg" : "text-fg-3 hover:text-fg-2")}
-          key={option.id}
-          onClick={() => onChange(option.id)}
-          role="radio"
-          type="button"
-        >
-          {option.label}
-          {option.id === value ? <span aria-hidden="true" className="absolute inset-x-0 bottom-1 h-0.5 rounded-full bg-fg" /> : null}
-        </button>
-      ))}
-    </div>
+  const items = options.map((option) => ({ value: option.id, label: option.label }));
+  return options.length > 4 ? (
+    <Picker label="워크스페이스" onChange={onChange} options={items} value={value} variant="text" />
+  ) : (
+    <Tabs className="px-2" label="워크스페이스" onChange={onChange} options={items} value={value} />
   );
 }
 
