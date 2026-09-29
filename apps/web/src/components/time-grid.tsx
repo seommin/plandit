@@ -2,7 +2,7 @@
 
 import { type CSSProperties, type PointerEvent as ReactPointerEvent, useEffect, useMemo, useRef, useState } from "react";
 
-import { addDays, atMinutes, dayTone, formatTime, holidayName, isAllDayLike, isSameDay, layoutDay, minutesOfDay, overlaps, snap, startOfDay, WEEKDAYS } from "@/lib/dates";
+import { addDays, atMinutes, dayTone, formatMonthDay, formatTime, holidayName, isAllDayLike, isSameDay, layoutDay, minutesOfDay, overlaps, snap, startOfDay, WEEKDAYS } from "@/lib/dates";
 import type { CalendarEvent } from "@/lib/types";
 
 import { cn } from "./ui";
@@ -37,14 +37,18 @@ type Drag = {
   previewEnd: number;
 };
 
-/** Pressing on empty time: a tap creates at that half hour, a drag selects the range to create. */
-type Create = { pointerId: number; day: number; anchor: number; x: number; y: number; active: boolean; from: number; to: number; timer?: ReturnType<typeof setTimeout> };
+/**
+ * Pressing on empty time: a tap creates at that half hour, a drag selects the range to create.
+ * Positions are minutes from the first shown day, so a drag can run across days in the week view.
+ */
+type Create = { pointerId: number; anchor: number; x: number; y: number; active: boolean; from: number; to: number; timer?: ReturnType<typeof setTimeout> };
+const DAY_MIN = 24 * 60;
 
 const LONG_PRESS_MS = 300;
 
 /**
  * Hour grid for one day (phone) or a week (desktop).
- * Tap empty space → create there; drag across empty time → create with that range. Drags snap to :00 and :30.
+ * Tap empty space → create there; drag across empty time (also across days) → create with that range. Drags snap to :00 and :30.
  * Mouse: drag an event to move it, drag its bottom edge to resize.
  * Touch: long-press (≈0.3s) first, then drag; a quick swipe still scrolls the page.
  */
@@ -54,7 +58,7 @@ export function TimeGrid({ days, events, hourHeight = 56, canEdit, onSlot, onOpe
   const dragRef = useRef<Drag | null>(null);
   const [preview, setPreview] = useState<Drag | null>(null);
   const createRef = useRef<Create | null>(null);
-  const [range, setRange] = useState<Pick<Create, "day" | "from" | "to"> | null>(null);
+  const [range, setRange] = useState<Pick<Create, "from" | "to"> | null>(null);
   const [now, setNow] = useState(() => new Date());
 
   useEffect(() => {
@@ -163,17 +167,24 @@ export function TimeGrid({ days, events, hourHeight = 56, canEdit, onSlot, onOpe
   const minutesAt = (e: ReactPointerEvent<HTMLDivElement>) =>
     Math.min(Math.max((e.clientY - e.currentTarget.getBoundingClientRect().top) / pxPerMin, 0), 24 * 60 - 1);
 
-  function beginCreate(e: ReactPointerEvent<HTMLDivElement>, dayIndex: number) {
+  /** The half hour under the pointer, counted from the first shown day. */
+  const slotAt = (e: ReactPointerEvent<HTMLDivElement>) => {
+    const body = bodyRef.current?.getBoundingClientRect();
+    const day = body ? Math.min(Math.max(Math.floor(((e.clientX - body.left) / body.width) * days.length), 0), days.length - 1) : 0;
+    return day * DAY_MIN + Math.floor(minutesAt(e) / 30) * 30;
+  };
+
+  function beginCreate(e: ReactPointerEvent<HTMLDivElement>) {
     if (e.target !== e.currentTarget || e.button !== 0) return;
-    const anchor = Math.floor(minutesAt(e) / 30) * 30;
-    const create: Create = { pointerId: e.pointerId, day: dayIndex, anchor, x: e.clientX, y: e.clientY, active: false, from: anchor, to: anchor + 30 };
+    const anchor = slotAt(e);
+    const create: Create = { pointerId: e.pointerId, anchor, x: e.clientX, y: e.clientY, active: false, from: anchor, to: anchor + 30 };
     createRef.current = create;
     e.currentTarget.setPointerCapture(e.pointerId);
     if (e.pointerType !== "mouse") {
       create.timer = setTimeout(() => {
         create.active = true;
         navigator.vibrate?.(8);
-        setRange({ day: dayIndex, from: create.from, to: create.to });
+        setRange({ from: create.from, to: create.to });
       }, LONG_PRESS_MS);
     }
   }
@@ -192,19 +203,19 @@ export function TimeGrid({ days, events, hourHeight = 56, canEdit, onSlot, onOpe
       create.active = true;
       setHover(null);
     }
-    const current = Math.floor(minutesAt(e) / 30) * 30;
+    const current = slotAt(e);
     create.from = Math.min(create.anchor, current);
     create.to = Math.max(create.anchor, current) + 30;
-    setRange({ day: create.day, from: create.from, to: create.to });
+    setRange({ from: create.from, to: create.to });
     return true;
   }
 
-  function endCreate(e: ReactPointerEvent<HTMLDivElement>, day: Date) {
+  function endCreate(e: ReactPointerEvent<HTMLDivElement>) {
     const create = createRef.current;
     if (!create || create.pointerId !== e.pointerId) return;
     cancelCreate();
-    if (create.active) onSlot(atMinutes(day, create.from), atMinutes(day, create.to));
-    else onSlot(atMinutes(day, create.anchor)); // a tap: the half hour under the pointer
+    if (create.active) onSlot(atMinutes(days[0], create.from), atMinutes(days[0], create.to));
+    else onSlot(atMinutes(days[0], create.anchor)); // a tap: the half hour under the pointer
   }
 
   function cancelCreate() {
@@ -282,17 +293,22 @@ export function TimeGrid({ days, events, hourHeight = 56, canEdit, onSlot, onOpe
               className={cn("relative cursor-cell", dayIndex > 0 && "border-l border-line")}
               key={day.toISOString()}
               onPointerCancel={cancelCreate}
-              onPointerDown={(e) => beginCreate(e, dayIndex)}
+              onPointerDown={beginCreate}
               onPointerLeave={() => setHover(null)}
               onPointerMove={(e) => moveCreate(e) || hoverSlot(e, dayIndex)}
-              onPointerUp={(e) => endCreate(e, day)}
+              onPointerUp={endCreate}
             >
-              {range?.day === dayIndex ? (
+              {range && range.from < (dayIndex + 1) * DAY_MIN && range.to > dayIndex * DAY_MIN ? (
                 <div
                   className="pointer-events-none absolute inset-x-0.5 flex items-start rounded-md bg-surface-2 px-2 pt-0.5 text-[11px] font-medium tabular-nums text-fg-3"
-                  style={{ top: range.from * pxPerMin + 1, height: (range.to - range.from) * pxPerMin - 2 }}
+                  style={{
+                    top: Math.max(range.from - dayIndex * DAY_MIN, 0) * pxPerMin + 1,
+                    height: (Math.min(range.to, (dayIndex + 1) * DAY_MIN) - Math.max(range.from, dayIndex * DAY_MIN)) * pxPerMin - 2,
+                  }}
                 >
-                  {formatTime(atMinutes(day, range.from))} – {formatTime(atMinutes(day, range.to))}
+                  {range.from >= dayIndex * DAY_MIN
+                    ? `${formatTime(atMinutes(days[0], range.from))} – ${range.to > (dayIndex + 1) * DAY_MIN ? `${formatMonthDay(atMinutes(days[0], range.to))} ` : ""}${formatTime(atMinutes(days[0], range.to))}`
+                    : null}
                 </div>
               ) : null}
               {hover?.day === dayIndex && !preview && !range ? (

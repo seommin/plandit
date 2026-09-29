@@ -84,7 +84,8 @@ function EditorForm({ state, calendars, onClose, onSaved, onRemoved }: Props & {
   const calendarOptions = readOnly && ownCalendar ? [ownCalendar] : writableCalendars;
 
   const [title, setTitle] = useState(event?.title ?? "");
-  const [calendarId, setCalendarId] = useState(event?.calendarId ?? writableCalendars.find((c) => c.isDefault)?.id ?? writableCalendars[0]?.id ?? "");
+  // A new event can go to several calendars at once (one copy each); an existing event lives in exactly one.
+  const [calendarIds, setCalendarIds] = useState(() => [event?.calendarId ?? writableCalendars.find((c) => c.isDefault)?.id ?? writableCalendars[0]?.id ?? ""]);
   const [allDay, setAllDay] = useState(event?.allDay ?? (state.mode === "create" && Boolean(state.allDay)));
   const [start, setStart] = useState(() => (event ? new Date(event.startsAt) : state.mode === "create" && state.allDay ? startOfDay(state.start) : state.mode === "create" ? state.start : new Date()));
   const [end, setEnd] = useState(() => (event ? new Date(event.endsAt) : state.mode === "create" && state.allDay ? addDays(startOfDay(state.start), 1) : state.mode === "create" && state.end ? state.end : new Date((state.mode === "create" ? state.start : new Date()).getTime() + 60 * MINUTE)));
@@ -136,7 +137,6 @@ function EditorForm({ state, calendars, onClose, onSaved, onRemoved }: Props & {
     setBusy(true);
     setError(null);
     const body = {
-      calendarId,
       title: title.trim(),
       location: location.trim(),
       description: description.trim(),
@@ -144,20 +144,36 @@ function EditorForm({ state, calendars, onClose, onSaved, onRemoved }: Props & {
       endsAt: end.toISOString(),
       allDay,
     };
+    const remaining = [...calendarIds];
     try {
-      const { event: saved } = event
-        ? await api<{ event: CalendarEvent }>(`/events/${event.id}`, { method: "PATCH", body })
-        : await api<{ event: CalendarEvent }>("/events", { body });
-      if (JSON.stringify(reminders) !== JSON.stringify(savedReminders.current)) {
-        await api(`/events/${saved.id}/reminders`, { method: "PUT", body: { reminders } });
+      if (event) {
+        const { event: saved } = await api<{ event: CalendarEvent }>(`/events/${event.id}`, { method: "PATCH", body: { ...body, calendarId: calendarIds[0] } });
+        if (JSON.stringify(reminders) !== JSON.stringify(savedReminders.current)) {
+          await api(`/events/${saved.id}/reminders`, { method: "PUT", body: { reminders } });
+        }
+        onSaved(withCalendar(saved, calendars, important));
+      } else {
+        for (const calendarId of calendarIds) {
+          const { event: saved } = await api<{ event: CalendarEvent }>("/events", { body: { ...body, calendarId } });
+          if (reminders.length) await api(`/events/${saved.id}/reminders`, { method: "PUT", body: { reminders } });
+          onSaved(withCalendar(saved, calendars));
+          remaining.shift();
+        }
       }
-      onSaved(withCalendar(saved, calendars, important));
       onClose();
-      toast.show(event ? "저장했어요" : "일정을 추가했어요");
+      toast.show(event ? "저장했어요" : calendarIds.length > 1 ? `캘린더 ${calendarIds.length}곳에 추가했어요` : "일정을 추가했어요");
     } catch (e) {
-      setError(errorMessage(e));
+      // Some copies may already exist: keep only the calendars still to do, so saving again doesn't duplicate.
+      const partly = !event && remaining.length < calendarIds.length;
+      if (partly) setCalendarIds(remaining);
+      setError(partly ? `${errorMessage(e)} 이미 추가된 캘린더는 목록에서 뺐어요.` : errorMessage(e));
       setBusy(false);
     }
+  }
+
+  function pickCalendar(id: string) {
+    if (event) return setCalendarIds([id]);
+    setCalendarIds((current) => (!current.includes(id) ? [...current, id] : current.length > 1 ? current.filter((x) => x !== id) : current));
   }
 
   async function remove() {
@@ -342,7 +358,7 @@ function EditorForm({ state, calendars, onClose, onSaved, onRemoved }: Props & {
                   <button
                     className={cn(
                       "h-8 shrink-0 rounded-lg px-3 text-[13px] font-semibold transition-colors",
-                      duration === minutes ? "bg-surface text-fg ring-1 ring-fg" : "bg-surface-2 text-fg-2 hover:bg-surface-3",
+                      duration === minutes ? "bg-surface text-fg ring-1 ring-inset ring-fg" : "bg-surface-2 text-fg-2 hover:bg-surface-3",
                     )}
                     key={minutes}
                     onClick={() => setEnd(new Date(start.getTime() + minutes * MINUTE))}
@@ -355,18 +371,18 @@ function EditorForm({ state, calendars, onClose, onSaved, onRemoved }: Props & {
             ) : null}
           </Row>
 
-          <Row icon={<span className="block size-3 rounded-full" style={{ backgroundColor: calendarOptions.find((c) => c.id === calendarId)?.color }} />}>
-            <div aria-label="캘린더" className="flex gap-1.5 overflow-x-auto py-2 scrollbar-hide" role="radiogroup">
+          <Row icon={<span className="block size-3 rounded-full" style={{ backgroundColor: calendarOptions.find((c) => c.id === calendarIds[0])?.color }} />}>
+            <div aria-label={event ? "캘린더" : "캘린더(여러 개 고를 수 있어요)"} className="flex gap-1.5 overflow-x-auto py-2 scrollbar-hide" role={event ? "radiogroup" : "group"}>
               {calendarOptions.map((calendar) => (
                 <button
-                  aria-checked={calendar.id === calendarId}
+                  aria-checked={calendarIds.includes(calendar.id)}
                   className={cn(
                     "flex h-9 shrink-0 items-center gap-2 rounded-lg px-3.5 text-[14px] font-semibold transition-colors",
-                    calendar.id === calendarId ? "bg-surface text-fg ring-1 ring-fg" : "bg-surface-2 text-fg-2 hover:bg-surface-3",
+                    calendarIds.includes(calendar.id) ? "bg-surface text-fg ring-1 ring-inset ring-fg" : "bg-surface-2 text-fg-2 hover:bg-surface-3",
                   )}
                   key={calendar.id}
-                  onClick={() => setCalendarId(calendar.id)}
-                  role="radio"
+                  onClick={() => pickCalendar(calendar.id)}
+                  role={event ? "radio" : "checkbox"}
                   type="button"
                 >
                   <span className="size-2 rounded-full" style={{ backgroundColor: calendar.color }} />
@@ -374,6 +390,7 @@ function EditorForm({ state, calendars, onClose, onSaved, onRemoved }: Props & {
                 </button>
               ))}
             </div>
+            {!event && calendarIds.length > 1 ? <p className="pb-2 text-[12px] text-fg-3">캘린더 {calendarIds.length}곳에 각각 따로 추가돼요.</p> : null}
           </Row>
 
           {!readOnly ? (
@@ -459,7 +476,7 @@ function Chip({ active, danger, onClick, children }: { active: boolean; danger?:
       aria-expanded={active}
       className={cn(
         "h-10 rounded-xl px-3 text-[15px] font-semibold tabular-nums transition-colors",
-        active ? "bg-surface ring-1 ring-fg" : "bg-surface-2 hover:bg-surface-3",
+        active ? "bg-surface ring-1 ring-inset ring-fg" : "bg-surface-2 hover:bg-surface-3",
         danger && !active && "text-danger",
       )}
       onClick={onClick}
