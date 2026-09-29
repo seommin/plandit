@@ -32,9 +32,10 @@ export class PaymentReconcileService {
     return Number(process.env.PAYMENT_EXPIRE_AFTER_MS ?? minutes(24 * 60));
   }
 
-  async run(now = new Date()): Promise<ReconcileSummary> {
+  /** `minAgeMs` override: an operator forcing a run (runbook) may pass 0. */
+  async run(now = new Date(), minAgeMs = this.minAgeMs): Promise<ReconcileSummary> {
     const due = await prisma.payment.findMany({
-      where: { status: { in: ["RESERVE", "UNKNOWN"] }, createdAt: { lte: new Date(now.getTime() - this.minAgeMs) } },
+      where: { status: { in: ["RESERVE", "UNKNOWN"] }, createdAt: { lte: new Date(now.getTime() - minAgeMs) } },
       orderBy: { createdAt: "asc" },
       take: 100, // ponytail: one batch per tick; raise or loop if the backlog ever exceeds 100/minute
       select: { id: true },
