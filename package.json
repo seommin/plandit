@@ -8,6 +8,7 @@
     "pnpm": "11.5.2"
   },
   "scripts": {
+    "postinstall": "pnpm --filter @plandit/database prisma:generate",
     "dev": "pnpm run \"/^dev:(web|api|worker|mocks)$/\"",
     "dev:web": "pnpm --filter @plandit/web dev",
     "dev:api": "pnpm --filter @plandit/api dev",
