@@ -1,8 +1,8 @@
 "use client";
 
-import { type CSSProperties, type MouseEvent, type PointerEvent as ReactPointerEvent, useEffect, useMemo, useRef, useState } from "react";
+import { type CSSProperties, type PointerEvent as ReactPointerEvent, useEffect, useMemo, useRef, useState } from "react";
 
-import { addDays, atMinutes, formatTime, isAllDayLike, isSameDay, layoutDay, minutesOfDay, overlaps, snap, startOfDay, WEEKDAYS } from "@/lib/dates";
+import { addDays, atMinutes, dayTone, formatTime, holidayName, isAllDayLike, isSameDay, layoutDay, minutesOfDay, overlaps, snap, startOfDay, WEEKDAYS } from "@/lib/dates";
 import type { CalendarEvent } from "@/lib/types";
 
 import { cn } from "./ui";
@@ -12,8 +12,8 @@ type Props = {
   events: CalendarEvent[];
   hourHeight?: number;
   canEdit: (event: CalendarEvent) => boolean;
-  /** tap on an empty slot: create at that time */
-  onSlot: (start: Date) => void;
+  /** tap on an empty slot (start only) or drag across empty time (start and end): create there */
+  onSlot: (start: Date, end?: Date) => void;
   onOpen: (event: CalendarEvent) => void;
   /** drag (move) or bottom-edge drag (resize) finished */
   onReschedule: (event: CalendarEvent, startsAt: Date, endsAt: Date) => void;
@@ -37,18 +37,24 @@ type Drag = {
   previewEnd: number;
 };
 
+/** Pressing on empty time: a tap creates at that half hour, a drag selects the range to create. */
+type Create = { pointerId: number; day: number; anchor: number; x: number; y: number; active: boolean; from: number; to: number; timer?: ReturnType<typeof setTimeout> };
+
 const LONG_PRESS_MS = 300;
 
 /**
  * Hour grid for one day (phone) or a week (desktop).
- * Tap empty space → create there. Mouse: drag an event to move it, drag its bottom edge to resize.
- * Touch: long-press an event (≈0.3s) then drag; a quick swipe still scrolls the page.
+ * Tap empty space → create there; drag across empty time → create with that range.
+ * Mouse: drag an event to move it, drag its bottom edge to resize.
+ * Touch: long-press (≈0.3s) first, then drag; a quick swipe still scrolls the page.
  */
 export function TimeGrid({ days, events, hourHeight = 56, canEdit, onSlot, onOpen, onReschedule, showDayHeaders }: Props) {
   const pxPerMin = hourHeight / 60;
   const bodyRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<Drag | null>(null);
   const [preview, setPreview] = useState<Drag | null>(null);
+  const createRef = useRef<Create | null>(null);
+  const [range, setRange] = useState<Pick<Create, "day" | "from" | "to"> | null>(null);
   const [now, setNow] = useState(() => new Date());
 
   useEffect(() => {
@@ -58,7 +64,7 @@ export function TimeGrid({ days, events, hourHeight = 56, canEdit, onSlot, onOpe
 
   // While a touch drag is active, stop the page from scrolling under the finger.
   useEffect(() => {
-    const block = (e: TouchEvent) => dragRef.current?.active && e.cancelable && e.preventDefault();
+    const block = (e: TouchEvent) => (dragRef.current?.active || createRef.current?.active) && e.cancelable && e.preventDefault();
     document.addEventListener("touchmove", block, { passive: false });
     return () => document.removeEventListener("touchmove", block);
   }, []);
@@ -68,7 +74,8 @@ export function TimeGrid({ days, events, hourHeight = 56, canEdit, onSlot, onOpe
     () => days.map((day) => events.filter((e) => isAllDayLike(e) && overlaps(e, startOfDay(day), addDays(startOfDay(day), 1)))),
     [days, events],
   );
-  const hasAllDay = allDay.some((list) => list.length);
+  const hasAllDay = allDay.some((list) => list.length) || days.some((day) => holidayName(day));
+  const [hover, setHover] = useState<{ day: number; minutes: number } | null>(null);
 
   const columnWidth = () => (bodyRef.current ? bodyRef.current.getBoundingClientRect().width / days.length : 1);
 
@@ -146,11 +153,64 @@ export function TimeGrid({ days, events, hourHeight = 56, canEdit, onSlot, onOpe
     setPreview(null);
   }
 
-  function slot(e: MouseEvent<HTMLDivElement>, day: Date) {
-    if (e.target !== e.currentTarget) return;
-    const rect = e.currentTarget.getBoundingClientRect();
-    const minutes = Math.floor((e.clientY - rect.top) / pxPerMin / 30) * 30;
-    onSlot(atMinutes(day, Math.min(Math.max(minutes, 0), 23 * 60 + 30)));
+  /** Mouse only: shade the empty half hour under the pointer, which is where a click would create an event. */
+  function hoverSlot(e: ReactPointerEvent<HTMLDivElement>, dayIndex: number) {
+    if (e.pointerType !== "mouse" || e.target !== e.currentTarget) return hover && setHover(null);
+    const minutes = Math.min(Math.max(Math.floor((e.clientY - e.currentTarget.getBoundingClientRect().top) / pxPerMin / 30) * 30, 0), 23 * 60 + 30);
+    if (hover?.day !== dayIndex || hover.minutes !== minutes) setHover({ day: dayIndex, minutes });
+  }
+
+  const minutesAt = (e: ReactPointerEvent<HTMLDivElement>) =>
+    Math.min(Math.max((e.clientY - e.currentTarget.getBoundingClientRect().top) / pxPerMin, 0), 24 * 60 - 1);
+
+  function beginCreate(e: ReactPointerEvent<HTMLDivElement>, dayIndex: number) {
+    if (e.target !== e.currentTarget || e.button !== 0) return;
+    const anchor = Math.floor(minutesAt(e) / 15) * 15;
+    const create: Create = { pointerId: e.pointerId, day: dayIndex, anchor, x: e.clientX, y: e.clientY, active: false, from: anchor, to: anchor + 30 };
+    createRef.current = create;
+    e.currentTarget.setPointerCapture(e.pointerId);
+    if (e.pointerType !== "mouse") {
+      create.timer = setTimeout(() => {
+        create.active = true;
+        navigator.vibrate?.(8);
+        setRange({ day: dayIndex, from: create.from, to: create.to });
+      }, LONG_PRESS_MS);
+    }
+  }
+
+  /** Returns true while a create gesture owns the pointer. */
+  function moveCreate(e: ReactPointerEvent<HTMLDivElement>) {
+    const create = createRef.current;
+    if (!create || create.pointerId !== e.pointerId) return false;
+    if (!create.active) {
+      const distance = Math.hypot(e.clientX - create.x, e.clientY - create.y);
+      if (e.pointerType !== "mouse") {
+        if (distance > 8) cancelCreate(); // it's a scroll
+        return true;
+      }
+      if (distance < 4) return true;
+      create.active = true;
+      setHover(null);
+    }
+    const current = Math.floor(minutesAt(e) / 15) * 15;
+    create.from = Math.min(create.anchor, current);
+    create.to = Math.max(create.anchor, current) + 15;
+    setRange({ day: create.day, from: create.from, to: create.to });
+    return true;
+  }
+
+  function endCreate(e: ReactPointerEvent<HTMLDivElement>, day: Date) {
+    const create = createRef.current;
+    if (!create || create.pointerId !== e.pointerId) return;
+    cancelCreate();
+    if (create.active) onSlot(atMinutes(day, create.from), atMinutes(day, create.to));
+    else onSlot(atMinutes(day, Math.floor(create.anchor / 30) * 30)); // a tap: the half hour under the pointer
+  }
+
+  function cancelCreate() {
+    clearTimeout(createRef.current?.timer);
+    createRef.current = null;
+    setRange(null);
   }
 
   const today = new Date();
@@ -164,8 +224,8 @@ export function TimeGrid({ days, events, hourHeight = 56, canEdit, onSlot, onOpe
           <div className="grid flex-1" style={{ gridTemplateColumns: `repeat(${days.length}, minmax(0, 1fr))` }}>
             {days.map((day) => (
               <div className="py-2 text-center" key={day.toISOString()}>
-                <p className="text-[11px] font-semibold text-fg-3">{WEEKDAYS[day.getDay()]}</p>
-                <p className={cn("mx-auto mt-0.5 flex size-8 items-center justify-center rounded-full text-[17px] font-semibold tabular-nums", isSameDay(day, today) && "bg-primary text-on-primary")}>
+                <p className={cn("text-[11px] font-semibold", dayTone(day) || "text-fg-3")}>{WEEKDAYS[day.getDay()]}</p>
+                <p className={cn("mx-auto mt-0.5 flex size-8 items-center justify-center rounded-full text-[17px] font-semibold tabular-nums", isSameDay(day, today) ? "bg-primary text-on-primary" : dayTone(day))}>
                   {day.getDate()}
                 </p>
               </div>
@@ -180,6 +240,7 @@ export function TimeGrid({ days, events, hourHeight = 56, canEdit, onSlot, onOpe
           <div className="grid flex-1 gap-x-1" style={{ gridTemplateColumns: `repeat(${days.length}, minmax(0, 1fr))` }}>
             {allDay.map((list, i) => (
               <div className="min-w-0 space-y-1" key={i}>
+                {holidayName(days[i]) ? <p className="truncate px-2 text-[12px] font-semibold text-sunday">{holidayName(days[i])}</p> : null}
                 {list.map((event) => (
                   <button
                     className="event-tint block w-full truncate rounded-md px-2 py-1 text-left text-[12px] font-semibold"
@@ -217,7 +278,31 @@ export function TimeGrid({ days, events, hourHeight = 56, canEdit, onSlot, onOpe
           }}
         >
           {days.map((day, dayIndex) => (
-            <div className={cn("relative cursor-cell", dayIndex > 0 && "border-l border-line")} key={day.toISOString()} onClick={(e) => slot(e, day)}>
+            <div
+              className={cn("relative cursor-cell", dayIndex > 0 && "border-l border-line")}
+              key={day.toISOString()}
+              onPointerCancel={cancelCreate}
+              onPointerDown={(e) => beginCreate(e, dayIndex)}
+              onPointerLeave={() => setHover(null)}
+              onPointerMove={(e) => moveCreate(e) || hoverSlot(e, dayIndex)}
+              onPointerUp={(e) => endCreate(e, day)}
+            >
+              {range?.day === dayIndex ? (
+                <div
+                  className="pointer-events-none absolute inset-x-0.5 flex items-start rounded-md bg-surface-2 px-2 pt-0.5 text-[11px] font-medium tabular-nums text-fg-3"
+                  style={{ top: range.from * pxPerMin + 1, height: (range.to - range.from) * pxPerMin - 2 }}
+                >
+                  {formatTime(atMinutes(day, range.from))} – {formatTime(atMinutes(day, range.to))}
+                </div>
+              ) : null}
+              {hover?.day === dayIndex && !preview && !range ? (
+                <div
+                  className="pointer-events-none absolute inset-x-0.5 flex items-start rounded-md bg-surface-2 px-2 pt-0.5 text-[11px] font-medium tabular-nums text-fg-3"
+                  style={{ top: hover.minutes * pxPerMin + 1, height: 30 * pxPerMin - 2 }}
+                >
+                  {formatTime(atMinutes(day, hover.minutes))}
+                </div>
+              ) : null}
               {columns[dayIndex].map(({ event, startMin, endMin, column, columns: count }) => {
                 const dragging = preview?.event.id === event.id && preview.active;
                 const short = endMin - startMin <= 45;
