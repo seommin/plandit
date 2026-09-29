@@ -123,4 +123,13 @@ describe("PLANDIT-6 unsettled payment re-query (e2e)", () => {
       await worker.close();
     }
   }, 20_000);
+
+  it("audit rows say which path settled each payment", async () => {
+    const bySource = async (action: string, source: string) =>
+      prisma.auditLog.count({ where: { workspaceId, action, payload: { path: ["source"], equals: source } } });
+    expect(await bySource("payment.approved", "reconcile")).toBe(2); // 05 twice (direct call + worker)
+    expect(await bySource("payment.approved", "webhook")).toBe(1); // the one the webhook won
+    expect(await bySource("payment.failed", "reconcile")).toBe(1); // PG_NOT_FOUND
+    expect(await bySource("payment.expired", "reconcile")).toBe(1);
+  });
 });

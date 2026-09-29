@@ -188,4 +188,13 @@ describe("PLANDIT-5 charge flow (e2e, with the real mock PG process)", () => {
     expect(one.body.payment.id).toBe(list.body.items[0].id);
     await as(app, member.id).get(`/workspaces/${workspaceId}/payments`).expect(403);
   });
+
+  it("audit: one payment.approved per approved payment (duplicates add none), one payment.failed for 01", async () => {
+    const approved = await prisma.auditLog.findMany({ where: { workspaceId, action: "payment.approved" } });
+    const failed = await prisma.auditLog.findMany({ where: { workspaceId, action: "payment.failed" } });
+    expect(approved).toHaveLength(2); // scenario 00 and 03
+    expect(approved.every((a) => a.actorId === null && (a.payload as { source: string }).source === "webhook")).toBe(true);
+    expect(failed).toHaveLength(1);
+    expect(failed[0].payload).toMatchObject({ failureCode: "CARD_DECLINED", source: "webhook" });
+  });
 });

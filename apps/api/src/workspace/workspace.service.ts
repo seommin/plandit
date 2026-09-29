@@ -3,6 +3,7 @@ import { Injectable } from "@nestjs/common";
 import { prisma, type WorkspaceMember, type WorkspaceRole } from "@plandit/database/prisma";
 import { roleCovers } from "@plandit/shared/workspaces";
 
+import { AuditService } from "../audit/audit.service";
 import { ApiError, ErrorCode } from "../common/api-error";
 import { type PageQuery, pageArgs, toPage } from "../common/pagination";
 
@@ -10,6 +11,8 @@ const memberUser = { select: { id: true, name: true, email: true, image: true } 
 
 @Injectable()
 export class WorkspaceService {
+  constructor(private readonly audit: AuditService) {}
+
   async listMine(userId: string, page: PageQuery) {
     const rows = await prisma.workspaceMember.findMany({
       where: { userId },
@@ -31,13 +34,20 @@ export class WorkspaceService {
   }
 
   create(userId: string, name: string) {
-    return prisma.workspace.create({
-      data: {
-        name,
-        type: "TEAM",
-        members: { create: { userId, role: "OWNER" } },
-        creditAccount: { create: {} },
-      },
+    return prisma.$transaction(async (tx) => {
+      const workspace = await tx.workspace.create({
+        data: {
+          name,
+          type: "TEAM",
+          members: { create: { userId, role: "OWNER" } },
+          creditAccount: { create: {} },
+        },
+      });
+      await this.audit.record(
+        { action: "workspace.created", workspaceId: workspace.id, actorId: userId, targetType: "workspace", targetId: workspace.id, payload: { name } },
+        tx,
+      );
+      return workspace;
     });
   }
 
@@ -58,8 +68,16 @@ export class WorkspaceService {
     };
   }
 
-  rename(workspaceId: string, name: string) {
-    return prisma.workspace.update({ where: { id: workspaceId }, data: { name } });
+  rename(actor: WorkspaceMember, name: string) {
+    return prisma.$transaction(async (tx) => {
+      const before = await tx.workspace.findUniqueOrThrow({ where: { id: actor.workspaceId } });
+      const workspace = await tx.workspace.update({ where: { id: actor.workspaceId }, data: { name } });
+      await this.audit.record(
+        { ...this.auditBase(actor, "workspace", workspace.id), action: "workspace.renamed", payload: { from: before.name, to: name } },
+        tx,
+      );
+      return workspace;
+    });
   }
 
   async listMembers(workspaceId: string, page: PageQuery) {
@@ -86,9 +104,16 @@ export class WorkspaceService {
     });
     if (existing) throw new ApiError(ErrorCode.ALREADY_MEMBER, "This user is already a member.");
 
-    return prisma.workspaceMember.create({
-      data: { workspaceId: actor.workspaceId, userId: user.id, role },
-      include: { user: memberUser },
+    return prisma.$transaction(async (tx) => {
+      const member = await tx.workspaceMember.create({
+        data: { workspaceId: actor.workspaceId, userId: user.id, role },
+        include: { user: memberUser },
+      });
+      await this.audit.record(
+        { ...this.auditBase(actor, "workspace_member", member.id), action: "workspace.member_added", payload: { userId: user.id, email: member.user.email, role } },
+        tx,
+      );
+      return member;
     });
   }
 
@@ -96,16 +121,29 @@ export class WorkspaceService {
     const target = await this.findManageableTarget(actor, memberId);
     this.assertCanGrant(actor, role);
 
-    return prisma.workspaceMember.update({
-      where: { id: target.id },
-      data: { role },
-      include: { user: memberUser },
+    return prisma.$transaction(async (tx) => {
+      const member = await tx.workspaceMember.update({ where: { id: target.id }, data: { role }, include: { user: memberUser } });
+      await this.audit.record(
+        { ...this.auditBase(actor, "workspace_member", target.id), action: "workspace.member_role_changed", payload: { userId: target.userId, from: target.role, to: role } },
+        tx,
+      );
+      return member;
     });
   }
 
   async removeMember(actor: WorkspaceMember, memberId: string) {
     const target = await this.findManageableTarget(actor, memberId);
-    await prisma.workspaceMember.delete({ where: { id: target.id } });
+    await prisma.$transaction(async (tx) => {
+      await tx.workspaceMember.delete({ where: { id: target.id } });
+      await this.audit.record(
+        { ...this.auditBase(actor, "workspace_member", target.id), action: "workspace.member_removed", payload: { userId: target.userId, role: target.role } },
+        tx,
+      );
+    });
+  }
+
+  private auditBase(actor: WorkspaceMember, targetType: string, targetId: string) {
+    return { workspaceId: actor.workspaceId, actorId: actor.userId, targetType, targetId };
   }
 
   /** Target must be in the same workspace, not the actor, and not above the actor's role. */
