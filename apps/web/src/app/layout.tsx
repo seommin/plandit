@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import Script from "next/script";
 import "@fontsource/satisfy";
 import "./globals.css";
 
@@ -28,13 +29,14 @@ export default function RootLayout({
       <head>
         {/* Pretendard with Korean glyphs, split by unicode range so a page only downloads the characters it shows. */}
         <link crossOrigin="anonymous" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css" rel="stylesheet" />
-        <script
-          dangerouslySetInnerHTML={{
-            __html: `(function(){try{var t=localStorage.getItem('plandit-theme');if(t!=='light'&&t!=='dark'){t=matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'}document.documentElement.dataset.theme=t}catch(e){}})()`,
-          }}
-        />
       </head>
-      <body>{children}</body>
+      <body>
+        {/* Sets the theme before first paint (no light flash in dark mode). */}
+        <Script id="theme" strategy="beforeInteractive">
+          {`(function(){try{var t=localStorage.getItem('plandit-theme');if(t!=='light'&&t!=='dark'){t=matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'}document.documentElement.dataset.theme=t}catch(e){}})()`}
+        </Script>
+        {children}
+      </body>
     </html>
   );
 }
