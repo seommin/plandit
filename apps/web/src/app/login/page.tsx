@@ -1,113 +1,73 @@
 "use client";
 
 import Link from "next/link";
-import { FormEvent, useEffect, useState } from "react";
 import { signIn } from "next-auth/react";
+import { type FormEvent, useEffect, useState } from "react";
 
+import { AuthCard, safeCallbackUrl } from "@/components/auth-card";
 import SocialLoginButtons from "@/components/social-login-buttons";
+import { Button, Field, Notice, TextInput } from "@/components/ui";
 
-function getSafeCallbackUrl(value: string | null) {
-  return value?.startsWith("/") && !value.startsWith("//") ? value : "/";
-}
+// Public demo only (see .env.example). Unset → no demo button.
+const DEMO_EMAIL = process.env.NEXT_PUBLIC_DEMO_EMAIL;
+const DEMO_PASSWORD = process.env.NEXT_PUBLIC_DEMO_PASSWORD;
 
 export default function LoginPage() {
   const [callbackUrl, setCallbackUrl] = useState("/");
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [status, setStatus] = useState<string | null>(null);
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
 
-  useEffect(() => {
-    setCallbackUrl(getSafeCallbackUrl(new URLSearchParams(window.location.search).get("callbackUrl")));
-  }, []);
+  useEffect(() => setCallbackUrl(safeCallbackUrl(new URLSearchParams(window.location.search).get("callbackUrl"))), []);
 
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setIsSubmitting(true);
-    setStatus(null);
-
-    try {
-      const result = await signIn("credentials", {
-        email,
-        password,
-        redirect: false,
-      });
-
-      if (result?.error) {
-        throw new Error("이메일 또는 비밀번호를 확인해주세요.");
-      }
-
-      window.location.href = callbackUrl;
-    } catch (error) {
-      setStatus(error instanceof Error ? error.message : "다시 시도해주세요.");
-    } finally {
-      setIsSubmitting(false);
+  async function login(email: string, password: string) {
+    setSubmitting(true);
+    setError(null);
+    const result = await signIn("credentials", { email, password, redirect: false });
+    if (result?.error) {
+      setError("이메일 또는 비밀번호를 확인해주세요.");
+      setSubmitting(false);
+      return;
     }
+    window.location.href = callbackUrl;
+  }
+
+  function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const data = new FormData(event.currentTarget);
+    void login(String(data.get("email")), String(data.get("password")));
   }
 
   return (
-    <main className="app-shell flex min-h-screen items-center justify-center px-4">
-      <section className="panel w-full max-w-[420px] p-6">
-        <div className="mb-7 text-center">
-          <p className="mobile-brand-script text-[42px] leading-none">Plandit</p>
-        </div>
-
-        <form className="space-y-3" onSubmit={handleSubmit}>
-          <input
-            className="h-11 w-full rounded-lg border border-[var(--line)] bg-white px-3 outline-none focus:border-[#aeb3a6]"
-            name="email"
-            onChange={(event) => setEmail(event.target.value)}
-            placeholder="you@example.com"
-            required
-            type="email"
-            value={email}
-          />
-          <input
-            className="h-11 w-full rounded-lg border border-[var(--line)] bg-white px-3 outline-none focus:border-[#aeb3a6]"
-            minLength={8}
-            name="password"
-            onChange={(event) => setPassword(event.target.value)}
-            placeholder="password"
-            required
-            type="password"
-            value={password}
-          />
-          <button
-            className="h-11 w-full rounded-lg bg-[var(--ink)] text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-55"
-            disabled={isSubmitting}
-            type="submit"
-          >
-            {isSubmitting ? "처리 중" : "로그인"}
-          </button>
-        </form>
-
-        {status ? (
-          <p className="mt-3 rounded-lg bg-[#fff3f1] px-3 py-2 text-sm font-semibold text-[#b33a2f]">
-            {status}
-          </p>
+    <AuthCard subtitle="개인 일정부터 팀 일정까지 한 곳에서">
+      <form className="space-y-4" onSubmit={submit}>
+        <Field label="이메일">
+          <TextInput autoComplete="email" name="email" placeholder="you@example.com" required type="email" />
+        </Field>
+        <Field label="비밀번호">
+          <TextInput autoComplete="current-password" minLength={8} name="password" placeholder="8자 이상" required type="password" />
+        </Field>
+        {error ? <Notice>{error}</Notice> : null}
+        <Button block loading={submitting} type="submit">
+          로그인
+        </Button>
+        {DEMO_EMAIL && DEMO_PASSWORD ? (
+          <Button block disabled={submitting} onClick={() => login(DEMO_EMAIL, DEMO_PASSWORD)} variant="secondary">
+            데모 계정으로 둘러보기
+          </Button>
         ) : null}
+      </form>
 
-        <div className="my-5 flex items-center gap-3">
-          <div className="h-px flex-1 bg-[var(--line)]" />
-          <span className="text-xs font-semibold text-[var(--muted)]">또는</span>
-          <div className="h-px flex-1 bg-[var(--line)]" />
-        </div>
+      <SocialLoginButtons callbackUrl={callbackUrl} />
 
-        <SocialLoginButtons callbackUrl={callbackUrl} />
-
-        <div className="mt-5 flex items-center justify-center gap-3 text-sm font-semibold text-[var(--muted)]">
-          <Link className="hover:text-[var(--ink)]" href="/forgot-password">
-            비밀번호 찾기
-          </Link>
-          <span className="h-3 w-px bg-[var(--line)]" />
-          <Link
-            className="hover:text-[var(--ink)]"
-            href={`/signup?callbackUrl=${encodeURIComponent(callbackUrl)}`}
-          >
-            회원가입
-          </Link>
-        </div>
-      </section>
-    </main>
+      <div className="mt-6 flex items-center justify-center gap-3 text-sm font-semibold text-fg-3">
+        <Link className="hover:text-fg" href="/forgot-password">
+          비밀번호 찾기
+        </Link>
+        <span className="h-3 w-px bg-line" />
+        <Link className="hover:text-fg" href={`/signup?callbackUrl=${encodeURIComponent(callbackUrl)}`}>
+          회원가입
+        </Link>
+      </div>
+    </AuthCard>
   );
 }
