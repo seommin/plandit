@@ -1,10 +1,12 @@
 import { Injectable, type OnModuleDestroy } from "@nestjs/common";
 import { Queue } from "bullmq";
 
+import { requestContext } from "../common/request-context";
 import { QUEUES, redisConnection } from "../queue/redis-connection";
 
-export type FireJob = { reminderId: string; fireAt: string };
-export type SendJob = { deliveryId: string };
+/** traceId: the request that (re)scheduled the reminder, carried into the worker's logs and audit rows. */
+export type FireJob = { reminderId: string; fireAt: string; traceId?: string };
+export type SendJob = { deliveryId: string; traceId?: string };
 
 /**
  * Producer side of the reminder queue (the api process schedules, the worker process consumes).
@@ -18,7 +20,8 @@ export class ReminderQueue implements OnModuleDestroy {
   async scheduleFire(reminderId: string, fireAt: Date) {
     const delay = fireAt.getTime() - Date.now();
     if (delay < 0) return false; // too late to remind; never send reminders after the fact
-    await this.queue.add("fire", { reminderId, fireAt: fireAt.toISOString() } satisfies FireJob, {
+    const traceId = requestContext.getStore()?.traceId;
+    await this.queue.add("fire", { reminderId, fireAt: fireAt.toISOString(), traceId } satisfies FireJob, {
       jobId: `fire_${reminderId}_${fireAt.getTime()}`,
       delay,
       removeOnComplete: 1_000,
@@ -27,16 +30,17 @@ export class ReminderQueue implements OnModuleDestroy {
     return true;
   }
 
-  async enqueueSends(deliveryIds: string[]) {
+  async enqueueSends(deliveryIds: string[], traceId?: string) {
     await this.queue.addBulk(
       deliveryIds.map((deliveryId) => ({
         name: "send",
-        data: { deliveryId } satisfies SendJob,
+        data: { deliveryId, traceId } satisfies SendJob,
         opts: {
           jobId: `send_${deliveryId}`,
           attempts: Number(process.env.RELAY_SEND_ATTEMPTS ?? 6),
           // 429 / 5xx from the carrier: 1s, 2s, 4s, 8s, 16s …
-          backoff: { type: "exponential", delay: Number(process.env.RELAY_BACKOFF_MS ?? 1_000) },
+          // jitter spreads retries so a burst of 429s does not come back as one synchronized burst
+          backoff: { type: "exponential", delay: Number(process.env.RELAY_BACKOFF_MS ?? 1_000), jitter: 0.5 },
           removeOnComplete: 1_000,
           removeOnFail: 1_000,
         },

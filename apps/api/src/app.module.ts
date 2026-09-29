@@ -11,6 +11,8 @@ import { CreditModule } from "./credit/credit.module";
 import { EventsController } from "./events/events.controller";
 import { HealthController } from "./health/health.controller";
 import { InternalApiGuard } from "./internal-api.guard";
+import { MetricsModule } from "./metrics/metrics.module";
+import { OpsController } from "./ops/ops.controller";
 import { PaymentModule } from "./payment/payment.module";
 import { ProfileController, ProfileService } from "./profile/profile.controller";
 import { PushController } from "./push/push.controller";
@@ -20,12 +22,13 @@ import { RolesGuard } from "./workspace/roles";
 import { WorkspaceModule } from "./workspace/workspace.module";
 
 @Module({
-  imports: [loggerModule, AuditModule, WorkspaceModule, CreditModule, PaymentModule, ReminderModule, ApiKeyModule],
+  imports: [loggerModule, AuditModule, WorkspaceModule, CreditModule, PaymentModule, ReminderModule, ApiKeyModule, MetricsModule],
   controllers: [
     AuthController,
     CalendarController,
     EventsController,
     HealthController,
+    OpsController,
     ProfileController,
     PushController,
     SharesController,

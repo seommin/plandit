@@ -3,6 +3,7 @@ import { Inject, Injectable, Logger } from "@nestjs/common";
 import { Prisma, prisma } from "@plandit/database/prisma";
 
 import { ApiError, ErrorCode } from "../common/api-error";
+import { webhookEvents } from "../metrics/metrics";
 import { MESSAGE_PROVIDER, type MessageProvider } from "./message-provider";
 import { ReminderDispatchService } from "./reminder-dispatch.service";
 
@@ -18,9 +19,12 @@ export class RelayWebhookService {
 
   async handle(rawBody: Buffer, headers: Record<string, string | string[] | undefined>) {
     const event = this.carrier.parseWebhook(rawBody, headers);
-    if (!event) throw new ApiError(ErrorCode.UNAUTHORIZED, "Invalid webhook signature.");
+    if (!event) {
+      webhookEvents.inc({ source: "relay", result: "invalid_signature" });
+      throw new ApiError(ErrorCode.UNAUTHORIZED, "Invalid webhook signature.");
+    }
 
-    return prisma.$transaction(
+    const outcome = await prisma.$transaction(
       async (tx) => {
         const { count } = await tx.relayEvent.createMany({
           data: [{ eventId: event.eventId, status: event.status, payload: event.raw as Prisma.InputJsonValue, result: "PENDING" }],
@@ -46,5 +50,7 @@ export class RelayWebhookService {
       },
       { maxWait: 10_000, timeout: 10_000 },
     );
+    webhookEvents.inc({ source: "relay", result: outcome.result });
+    return outcome;
   }
 }

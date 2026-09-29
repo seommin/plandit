@@ -168,11 +168,14 @@
 
 ### PLANDIT-14 · 모니터링 + 장애 대응 런북 [M]
 채용공고의 "로깅, 모니터링, 장애 대응"에 대응.
-- [ ] `/metrics`(Prometheus 형식, `prom-client`): 라우트·상태별 요청 수와 지연, BullMQ 큐 적체·실패 수, 웹훅 수신 결과(처리/중복/서명 실패), 원장 append 결과(성공/잔액 부족/멱등 재호출), 미확정 결제 수. 외부 비공개
-- [ ] traceId를 큐 작업까지 전파(작업 payload에 포함) → 요청 하나를 api·worker 로그에서 끝까지 추적
-- [ ] `docs/runbook.md`: 증상별 대응 — 웹훅 서명 실패 급증, 큐 적체, 원장·캐시 불일치, PG 응답 지연. 볼 지표, 로그 검색어, 복구 명령(재조회 강제 실행, `recalculate`, 웹훅 재전송)
-- [ ] `docs/troubleshooting.md`: 개발 중 실제로 겪은 문제의 증상·원인·해결·재발 방지
-- **완료 조건**: 시나리오 `05`(웹훅 유실) 재현 → 지표에서 미확정 결제 증가 확인 → 런북 절차대로 복구 → 지표 정상화
+- [x] `/metrics`(Prometheus, `prom-client`): 라우트 **패턴**별 요청 수·지연(원시 URL·id는 라벨에 넣지 않음), BullMQ 큐 상태별 작업 수, 웹훅 결과(`invalid_signature` 포함), 원장 append 결과(applied/replayed/insufficient), 미확정 결제 수·가장 오래된 나이, 발송 대기 수. `METRICS_TOKEN`(bearer), 프록시에서도 차단
+- [x] 워커는 HTTP 앱이 없어 `WORKER_METRICS_PORT`에 별도 `/metrics`(작업 성공·실패, 발송 결과, 원장 append)
+- [x] traceId 전파: 리마인더 예약 요청의 traceId를 `fire` → `send` 작업 payload로 전달, 워커는 작업을 그 traceId의 요청 컨텍스트 안에서 실행. pino `mixin`으로 **api·워커의 모든 로그 줄**에 traceId, 워커가 남기는 감사 로그에도 같은 traceId
+- [x] 운영자 복구 API(`OperatorGuard`): `POST /admin/jobs/payment-reconcile?minAgeMs=0`, `POST /admin/jobs/reminder-reconcile`, `POST /admin/credit-accounts/:id/recalculate` — 스케줄 작업과 같은 코드를 즉시 실행
+- [x] 429 재시도 백오프에 지터(0.5) 추가 — 재시도가 한 시각에 몰리던 문제(트러블슈팅 1번)
+- [x] `docs/runbook.md`: 지표 요약·알림 기준, 증상별(A 미확정 결제, B 서명 실패, C 충돌·금액 불일치, D 리마인더 적체, E 원장·캐시 불일치, F 잔액 부족) 확인·복구·정상화 확인
+- [x] `docs/troubleshooting.md`: 실제로 겪은 8건
+- **완료 조건**: ✅ e2e — 시나리오 `05` 재현 → `plandit_payments_unsettled{status="RESERVE"} 1` → 운영자가 런북 명령 실행(`X-Trace-Id: runbook-incident-42`) → 지표 0, CHARGE 1회, 감사 로그에 같은 traceId. 캐시 불일치 복구, 지표 토큰, 라우트 패턴 라벨, 리마인더 작업의 traceId 전파
 
 ### 진행 순서
 번호는 한 번 정하면 바꾸지 않는다. 1주차 진행 순서: 5 → 6 → 7 → 8 → 13 → 14 → 9 → 10 → 11 → 12
