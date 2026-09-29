@@ -1,251 +1,233 @@
 "use client";
 
-import { ChevronLeft, ChevronRight, ChevronDown, CalendarPlus, SlidersHorizontal } from "lucide-react";
+import { ChevronDown, ChevronLeft, ChevronRight, SlidersHorizontal } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
-import { EventRow } from "@/components/event-row";
-import { EventSheet, type EventSheetState } from "@/components/event-sheet";
+import { defaultStart, EventEditor, type EditorState } from "@/components/event-editor";
+import { DateNavigator, MiniMonth, useDayDots } from "@/components/mini-month";
 import { MonthGrid } from "@/components/month-grid";
-import { Button, cn, EmptyState, IconButton, Notice, Segmented, Sheet } from "@/components/ui";
+import { TimeGrid } from "@/components/time-grid";
+import { useToast } from "@/components/toast";
+import { Button, cn, IconButton, Notice, Segmented, Sheet } from "@/components/ui";
 import { useCalendarState, useHiddenCalendars } from "@/components/use-calendar-state";
 import { api, errorMessage } from "@/lib/client-api";
-import {
-  addDays,
-  addMonths,
-  byStart,
-  formatMonthDay,
-  formatMonthTitle,
-  isSameDay,
-  monthGridRange,
-  overlaps,
-  startOfDay,
-  startOfMonth,
-  startOfWeek,
-  WEEKDAYS,
-} from "@/lib/dates";
-import type { Calendar, CalendarEvent, CalendarState } from "@/lib/types";
+import { addDays, addMonths, formatMonthDay, formatMonthTitle, formatTime, isSameDay, monthGridRange, startOfDay, startOfMonth, startOfWeek } from "@/lib/dates";
+import { type Calendar, type CalendarEvent, type CalendarState, canWrite } from "@/lib/types";
 
-type View = "month" | "week";
+type View = "day" | "week" | "month";
+const VIEWS: Array<{ value: View; label: string }> = [
+  { value: "day", label: "일" },
+  { value: "week", label: "주" },
+  { value: "month", label: "월" },
+];
 
+/**
+ * Phone: week strip (swipe for other weeks, pull down for the month) over one day's timeline.
+ * Desktop: 일/주/월, week by default, with a mini month and the calendar list on wide screens.
+ * Tap an empty time to add, tap an event to edit, drag to move, drag the bottom edge to change its length.
+ */
 export function CalendarScreen({ initial, openCreate }: { initial: CalendarState; openCreate: boolean }) {
   const router = useRouter();
-  const [month, setMonth] = useState(() => startOfMonth(new Date()));
-  const [selectedDate, setSelectedDate] = useState(() => startOfDay(new Date()));
-  const [view, setView] = useState<View>("month");
-  const [sheet, setSheet] = useState<EventSheetState>({ mode: "closed" });
-  const [pickerOpen, setPickerOpen] = useState(false);
+  const toast = useToast();
+  const [selected, setSelected] = useState(() => startOfDay(new Date()));
+  const [view, setView] = useState<View>("week");
+  const [expanded, setExpanded] = useState(false);
   const [filterOpen, setFilterOpen] = useState(false);
-  const [moveError, setMoveError] = useState<string | null>(null);
+  const [editor, setEditor] = useState<EditorState>({ mode: "closed" });
+  const gridRef = useRef<HTMLDivElement>(null);
+  const scrollerRef = useRef<HTMLDivElement>(null);
+  const headerRef = useRef<HTMLElement>(null);
 
-  const range = useMemo(() => monthGridRange(month), [month]);
-  const initialForCurrentMonth = useMemo(() => initial, [initial]);
-  const { calendars, events, upsertEvent, removeEvent, loading, error } = useCalendarState(range.from, range.to, initialForCurrentMonth);
+  const range = useMemo(() => monthGridRange(startOfMonth(selected)), [selected.getFullYear(), selected.getMonth()]); // eslint-disable-line react-hooks/exhaustive-deps
+  const { calendars, events, upsertEvent, removeEvent, loading, error } = useCalendarState(range.from, range.to, initial);
   const { hidden, toggle } = useHiddenCalendars();
   const visible = useMemo(() => events.filter((e) => !hidden.includes(e.calendarId)), [events, hidden]);
+  const dots = useDayDots(visible, range.from, range.to);
+
+  const writable = useMemo(() => new Set(calendars.filter(canWrite).map((c) => c.id)), [calendars]);
+  const canEdit = (event: CalendarEvent) => writable.has(event.calendarId);
+  const create = (start: Date) => setEditor({ mode: "create", start });
+  const open = (event: CalendarEvent) => setEditor({ mode: "edit", event });
 
   // "+" in the tab bar / sidebar links to /?new=1.
   useEffect(() => {
     if (!openCreate) return;
-    setSheet({ mode: "create", date: selectedDate });
+    create(defaultStart(selected));
     router.replace("/", { scroll: false });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [openCreate]);
 
-  // Desktop shortcuts: c = new event, t = today.
+  // Open at the current hour (08:00 on other days): page scroll on phones, the grid's own scroll on desktop.
+  useEffect(() => {
+    const hour = Math.max(new Date().getHours() - 1, 0);
+    const scroller = scrollerRef.current;
+    if (scroller && scroller.scrollHeight > scroller.clientHeight) scroller.scrollTop = hour * 48;
+    else if (gridRef.current && headerRef.current) {
+      window.scrollTo({ top: gridRef.current.getBoundingClientRect().top + window.scrollY + hour * 56 - headerRef.current.offsetHeight - 8 });
+    }
+  }, []);
+
+  // Desktop shortcuts: c = new event, t = today, d/w/m = 일/주/월, ←/→ = previous/next.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if ((e.target as HTMLElement)?.closest("input, textarea, select, [role=dialog]") || e.metaKey || e.ctrlKey) return;
-      if (e.key === "c") setSheet({ mode: "create", date: selectedDate });
-      if (e.key === "t") goToday();
+      if ((e.target as HTMLElement)?.closest("input, textarea, select, [role=dialog]") || e.metaKey || e.ctrlKey || e.altKey) return;
+      const views: Record<string, View> = { d: "day", w: "week", m: "month" };
+      if (e.key === "c") create(defaultStart(selected));
+      else if (e.key === "t") setSelected(startOfDay(new Date()));
+      else if (views[e.key]) setView(views[e.key]);
+      else if (e.key === "ArrowLeft" || e.key === "ArrowRight") step(e.key === "ArrowLeft" ? -1 : 1);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   });
 
-  function goToday() {
-    const today = startOfDay(new Date());
-    setMonth(startOfMonth(today));
-    setSelectedDate(today);
-  }
-
-  function selectDate(date: Date) {
-    setSelectedDate(date);
-    if (date.getMonth() !== month.getMonth()) setMonth(startOfMonth(date));
-  }
-
   function step(direction: 1 | -1) {
-    if (view === "month") {
-      const next = addMonths(month, direction);
-      setMonth(next);
-      setSelectedDate(isSameDay(startOfMonth(new Date()), next) ? startOfDay(new Date()) : next);
-    } else {
-      selectDate(addDays(selectedDate, direction * 7));
-    }
+    if (view === "month") setSelected(addMonths(selected, direction));
+    else setSelected(addDays(selected, view === "week" ? direction * 7 : direction));
   }
 
-  async function moveEvent(eventId: string, target: Date) {
-    const event = events.find((e) => e.id === eventId);
-    if (!event) return;
-    const shift = startOfDay(target).getTime() - startOfDay(new Date(event.startsAt)).getTime();
-    if (!shift) return;
-    const moved = { ...event, startsAt: new Date(new Date(event.startsAt).getTime() + shift).toISOString(), endsAt: new Date(new Date(event.endsAt).getTime() + shift).toISOString() };
-    upsertEvent(moved); // optimistic
+  /** Optimistic: move it now, save in the background, offer 되돌리기. */
+  async function reschedule(event: CalendarEvent, startsAt: Date, endsAt: Date) {
+    const moved = { ...event, startsAt: startsAt.toISOString(), endsAt: endsAt.toISOString() };
+    upsertEvent(moved);
     try {
-      await api(`/events/${eventId}`, { method: "PATCH", body: { startsAt: moved.startsAt, endsAt: moved.endsAt } });
-      setMoveError(null);
+      await api(`/events/${event.id}`, { method: "PATCH", body: { startsAt: moved.startsAt, endsAt: moved.endsAt } });
+      const label = event.allDay || isSameDay(startsAt, new Date(event.startsAt)) ? `${formatTime(startsAt)} – ${formatTime(endsAt)}` : `${formatMonthDay(startsAt)} ${formatTime(startsAt)}`;
+      toast.show(event.allDay ? `${formatMonthDay(startsAt)}로 옮겼어요` : `${label}로 바꿨어요`, {
+        label: "되돌리기",
+        onClick: () => {
+          upsertEvent(event);
+          api(`/events/${event.id}`, { method: "PATCH", body: { startsAt: event.startsAt, endsAt: event.endsAt } }).catch((e) => {
+            upsertEvent(moved);
+            toast.show(errorMessage(e));
+          });
+        },
+      });
     } catch (e) {
       upsertEvent(event);
-      setMoveError(errorMessage(e));
+      toast.show(errorMessage(e));
     }
   }
 
-  const dayEvents = visible.filter((e) => overlaps(e, selectedDate, addDays(selectedDate, 1))).sort(byStart);
-  const title = view === "month" ? formatMonthTitle(month) : `${formatMonthTitle(startOfWeek(selectedDate))} ${Math.ceil((startOfWeek(selectedDate).getDate() + 6) / 7)}주`;
+  function moveToDay(event: CalendarEvent, day: Date) {
+    const shift = startOfDay(day).getTime() - startOfDay(new Date(event.startsAt)).getTime();
+    if (shift) void reschedule(event, new Date(new Date(event.startsAt).getTime() + shift), new Date(new Date(event.endsAt).getTime() + shift));
+  }
+
+  const weekDays = Array.from({ length: 7 }, (_, i) => addDays(startOfWeek(selected), i));
+  const grid = { events: visible, canEdit, onOpen: open, onSlot: create, onReschedule: reschedule };
 
   return (
-    <div className="mx-auto max-w-6xl">
-      <header className="sticky top-0 z-30 flex items-center gap-1 bg-bg/90 px-3 py-2 backdrop-blur lg:static lg:px-8 lg:pb-4 lg:pt-7">
-        <button
-          aria-haspopup="dialog"
-          aria-label={`${title}, 날짜 이동`}
-          className="flex h-11 min-w-0 items-center gap-1 rounded-xl px-2 text-[21px] font-bold tracking-tight hover:bg-surface-2 lg:text-2xl"
-          onClick={() => setPickerOpen(true)}
-          type="button"
-        >
-          <span className="truncate">{title}</span>
-          <ChevronDown className="shrink-0 text-fg-3" size={18} />
-        </button>
-        {loading ? <span aria-live="polite" className="sr-only">불러오는 중</span> : null}
-        <div className="ml-auto flex items-center gap-0.5">
-          <Button className="mr-1" onClick={goToday} size="sm" variant="secondary">
-            오늘
-          </Button>
-          <IconButton label={view === "month" ? "이전 달" : "이전 주"} onClick={() => step(-1)}>
-            <ChevronLeft size={20} />
-          </IconButton>
-          <IconButton label={view === "month" ? "다음 달" : "다음 주"} onClick={() => step(1)}>
-            <ChevronRight size={20} />
-          </IconButton>
-          <IconButton className="lg:hidden" label="캘린더 선택" onClick={() => setFilterOpen(true)}>
-            <SlidersHorizontal size={19} />
-          </IconButton>
-        </div>
-      </header>
+    <div className="lg:flex lg:h-dvh">
+      <aside className="hidden w-72 shrink-0 space-y-6 overflow-y-auto border-r border-line px-4 py-5 xl:block">
+        <MiniMonth dots={dots} key={`${selected.getFullYear()}-${selected.getMonth()}`} month={selected} onSelect={setSelected} selected={selected} withHeader />
+        <section>
+          <h2 className="mb-1 px-2 text-[12px] font-semibold text-fg-3">캘린더</h2>
+          <CalendarFilter calendars={calendars} hidden={hidden} onToggle={toggle} />
+        </section>
+      </aside>
 
-      <div className="px-3 pb-3 lg:hidden">
-        <Segmented label="보기" onChange={setView} options={[{ value: "month", label: "월" }, { value: "week", label: "주" }]} value={view} />
-      </div>
+      <div className="min-w-0 flex-1 lg:flex lg:flex-col">
+        <header className="sticky top-0 z-30 bg-bg/95 px-2 pt-[env(safe-area-inset-top)] border-b border-line backdrop-blur lg:static lg:px-6 lg:py-3" ref={headerRef}>
+          <div className="flex h-14 items-center gap-1">
+            <button
+              aria-expanded={expanded}
+              className="flex h-11 min-w-0 items-center gap-1 rounded-xl px-2 text-[22px] font-bold tracking-tight lg:pointer-events-none lg:text-[22px]"
+              onClick={() => setExpanded(!expanded)}
+              type="button"
+            >
+              <span className="truncate">{selected.getFullYear() === new Date().getFullYear() ? `${selected.getMonth() + 1}월` : formatMonthTitle(selected)}</span>
+              <ChevronDown className={cn("shrink-0 text-fg-3 transition-transform lg:hidden", expanded && "rotate-180")} size={18} />
+            </button>
+            <span aria-live="polite" className={cn("size-1.5 rounded-full bg-fg-3 transition-opacity", loading ? "animate-pulse opacity-100" : "opacity-0")}>
+              <span className="sr-only">{loading ? "불러오는 중" : ""}</span>
+            </span>
 
-      {error ? (
-        <div className="px-3 pb-3 lg:px-8">
-          <Notice>{error}</Notice>
-        </div>
-      ) : null}
-      {moveError ? (
-        <div className="px-3 pb-3 lg:px-8">
-          <Notice>{moveError}</Notice>
-        </div>
-      ) : null}
-
-      <div className="grid gap-5 px-3 lg:grid-cols-[minmax(0,1fr)_340px] lg:px-8">
-        <div className={cn("min-w-0 transition-opacity", loading && "opacity-60")}>
-          <div className="mb-3 hidden lg:block">
-            <Segmented label="보기" onChange={setView} options={[{ value: "month", label: "월" }, { value: "week", label: "주" }]} value={view} />
-          </div>
-          {view === "month" ? (
-            <MonthGrid
-              events={visible}
-              month={month}
-              onMoveEvent={moveEvent}
-              onOpenEvent={(event) => setSheet({ mode: "view", event })}
-              onSelectDate={selectDate}
-              selectedDate={selectedDate}
-            />
-          ) : (
-            <WeekList events={visible} onOpen={(event) => setSheet({ mode: "view", event })} onSelect={selectDate} selectedDate={selectedDate} />
-          )}
-        </div>
-
-        <aside className="space-y-5 lg:sticky lg:top-6 lg:self-start">
-          <section>
-            <div className="mb-2 flex items-center justify-between px-1">
-              <h2 className="text-[17px] font-bold">
-                {formatMonthDay(selectedDate)}
-                <span className="ml-1.5 text-sm font-semibold text-fg-3">{dayEvents.length ? `${dayEvents.length}개` : ""}</span>
-              </h2>
-              <Button onClick={() => setSheet({ mode: "create", date: selectedDate })} size="sm" variant="ghost">
-                <CalendarPlus size={16} />
-                추가
+            <div className="ml-auto flex items-center gap-1">
+              <Button className="rounded-full" onClick={() => setSelected(startOfDay(new Date()))} size="sm" variant="secondary">
+                오늘
               </Button>
+              <div className="hidden items-center lg:flex">
+                <IconButton label="이전" onClick={() => step(-1)}>
+                  <ChevronLeft size={20} />
+                </IconButton>
+                <IconButton label="다음" onClick={() => step(1)}>
+                  <ChevronRight size={20} />
+                </IconButton>
+              </div>
+              <div className="ml-2 hidden lg:block">
+                <Segmented label="보기" onChange={setView} options={VIEWS} value={view} />
+              </div>
+              <IconButton className="xl:hidden" label="표시할 캘린더" onClick={() => setFilterOpen(true)}>
+                <SlidersHorizontal size={19} />
+              </IconButton>
             </div>
-            {dayEvents.length ? (
-              <div className="space-y-2">
-                {dayEvents.map((event) => (
-                  <EventRow event={event} key={event.id} onOpen={(e) => setSheet({ mode: "view", event: e })} />
-                ))}
-              </div>
-            ) : (
-              <div className="rounded-2xl bg-surface shadow-card">
-                <EmptyState description="이 날은 비어 있어요." title="일정 없음" />
-              </div>
-            )}
-          </section>
+          </div>
 
-          <section className="hidden lg:block">
-            <h2 className="mb-2 px-1 text-[13px] font-semibold text-fg-3">캘린더</h2>
-            <CalendarFilter calendars={calendars} hidden={hidden} onToggle={toggle} />
-          </section>
-        </aside>
+          <div className="lg:hidden">
+            <DateNavigator dots={dots} expanded={expanded} onSelect={setSelected} onToggle={() => setExpanded(!expanded)} selected={selected} />
+          </div>
+        </header>
+
+        {error ? (
+          <div className="px-4 py-2 lg:px-6">
+            <Notice>{error}</Notice>
+          </div>
+        ) : null}
+
+        <div className="min-h-0 flex-1 lg:overflow-y-auto" ref={scrollerRef}>
+          <div className="pt-2 lg:hidden" ref={gridRef}>
+            <TimeGrid days={[selected]} {...grid} />
+          </div>
+          <div className="hidden h-full lg:block">
+            {view === "month" ? (
+              <MonthGrid
+                canEdit={canEdit}
+                events={visible}
+                month={selected}
+                onCreate={(day) => create(defaultStart(day))}
+                onMoveEvent={moveToDay}
+                onOpenDay={(day) => {
+                  setSelected(day);
+                  setView("day");
+                }}
+                onOpenEvent={open}
+              />
+            ) : (
+              <TimeGrid days={view === "week" ? weekDays : [selected]} hourHeight={48} showDayHeaders {...grid} />
+            )}
+          </div>
+        </div>
       </div>
 
-      <EventSheet
-        calendars={calendars}
-        onChange={setSheet}
-        onDeleted={(id) => {
-          removeEvent(id);
-          setSheet({ mode: "closed" });
-        }}
-        onSaved={(event) => {
-          upsertEvent(event);
-          setSheet({ mode: "view", event });
-        }}
-        state={sheet}
-      />
+      <EventEditor calendars={calendars} onClose={() => setEditor({ mode: "closed" })} onRemoved={removeEvent} onSaved={upsertEvent} state={editor} />
 
       <Sheet onClose={() => setFilterOpen(false)} open={filterOpen} title="표시할 캘린더">
         <CalendarFilter calendars={calendars} hidden={hidden} onToggle={toggle} />
       </Sheet>
-
-      <MonthPicker
-        month={month}
-        onClose={() => setPickerOpen(false)}
-        onPick={(picked) => {
-          setMonth(picked);
-          setSelectedDate(isSameDay(startOfMonth(new Date()), picked) ? startOfDay(new Date()) : picked);
-          setView("month");
-          setPickerOpen(false);
-        }}
-        open={pickerOpen}
-      />
     </div>
   );
 }
 
 function CalendarFilter({ calendars, hidden, onToggle }: { calendars: Calendar[]; hidden: string[]; onToggle: (id: string) => void }) {
   return (
-    <ul className="space-y-1 rounded-2xl bg-surface p-2 shadow-card">
+    <ul>
       {calendars.map((calendar) => {
         const shown = !hidden.includes(calendar.id);
         return (
           <li key={calendar.id}>
-            <button aria-pressed={shown} className="flex h-11 w-full items-center gap-3 rounded-xl px-2.5 text-left hover:bg-surface-2" onClick={() => onToggle(calendar.id)} type="button">
+            <button aria-pressed={shown} className="flex h-11 w-full items-center gap-3 rounded-xl px-2 text-left hover:bg-surface-2" onClick={() => onToggle(calendar.id)} type="button">
               <span
                 aria-hidden="true"
-                className="flex size-5 items-center justify-center rounded-md border-2 transition-colors"
+                className="flex size-[18px] items-center justify-center rounded-[5px] border-2 transition-colors"
                 style={{ borderColor: calendar.color, backgroundColor: shown ? calendar.color : "transparent" }}
               >
-                {shown ? <span className="text-[11px] font-bold text-white">✓</span> : null}
+                {shown ? (
+                  <svg className="size-3 text-white" fill="none" stroke="currentColor" strokeWidth={3.5} viewBox="0 0 24 24">
+                    <path d="M5 12l5 5L20 7" />
+                  </svg>
+                ) : null}
               </span>
               <span className={cn("min-w-0 flex-1 truncate text-[15px] font-medium", !shown && "text-fg-3")}>{calendar.name}</span>
               {calendar.type === "SHARED" ? <span className="text-xs text-fg-3">공유</span> : null}
@@ -254,75 +236,5 @@ function CalendarFilter({ calendars, hidden, onToggle }: { calendars: Calendar[]
         );
       })}
     </ul>
-  );
-}
-
-function WeekList({ events, selectedDate, onSelect, onOpen }: { events: CalendarEvent[]; selectedDate: Date; onSelect: (date: Date) => void; onOpen: (event: CalendarEvent) => void }) {
-  const start = startOfWeek(selectedDate);
-  const today = new Date();
-  return (
-    <div className="divide-y divide-line overflow-hidden rounded-2xl bg-surface shadow-card">
-      {Array.from({ length: 7 }, (_, i) => addDays(start, i)).map((date) => {
-        const items = events.filter((e) => overlaps(e, date, addDays(date, 1))).sort(byStart);
-        return (
-          <div className="flex gap-3 p-3" key={date.toISOString()}>
-            <button
-              className={cn("flex w-12 shrink-0 flex-col items-center rounded-xl py-1.5", isSameDay(date, selectedDate) ? "bg-primary-weak" : "hover:bg-surface-2")}
-              onClick={() => onSelect(date)}
-              type="button"
-            >
-              <span className={cn("text-xs font-semibold", date.getDay() === 0 ? "text-sunday" : date.getDay() === 6 ? "text-saturday" : "text-fg-3")}>{WEEKDAYS[date.getDay()]}</span>
-              <span className={cn("mt-0.5 flex size-8 items-center justify-center rounded-full text-[15px] font-bold", isSameDay(date, today) && "bg-primary text-on-primary")}>{date.getDate()}</span>
-            </button>
-            <div className="min-w-0 flex-1 space-y-1.5 py-1">
-              {items.length ? (
-                items.map((event) => (
-                  <button className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left hover:bg-surface-2" key={event.id} onClick={() => onOpen(event)} type="button">
-                    <span className="h-4 w-1 shrink-0 rounded-full" style={{ backgroundColor: event.color }} />
-                    <span className="min-w-0 flex-1 truncate text-[14px] font-semibold">{event.title}</span>
-                    <span className="shrink-0 text-xs text-fg-3">{event.allDay ? "종일" : new Date(event.startsAt).toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit", hourCycle: "h23" })}</span>
-                  </button>
-                ))
-              ) : (
-                <p className="px-2 py-1.5 text-sm text-fg-3">일정 없음</p>
-              )}
-            </div>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
-function MonthPicker({ open, month, onPick, onClose }: { open: boolean; month: Date; onPick: (month: Date) => void; onClose: () => void }) {
-  const [year, setYear] = useState(month.getFullYear());
-  useEffect(() => setYear(month.getFullYear()), [month, open]);
-  return (
-    <Sheet onClose={onClose} open={open} title="날짜 이동">
-      <div className="mb-4 flex items-center justify-between">
-        <IconButton label="이전 해" onClick={() => setYear(year - 1)}>
-          <ChevronLeft size={20} />
-        </IconButton>
-        <span className="text-lg font-bold">{year}년</span>
-        <IconButton label="다음 해" onClick={() => setYear(year + 1)}>
-          <ChevronRight size={20} />
-        </IconButton>
-      </div>
-      <div className="grid grid-cols-4 gap-2">
-        {Array.from({ length: 12 }, (_, i) => {
-          const current = year === month.getFullYear() && i === month.getMonth();
-          return (
-            <button
-              className={cn("h-12 rounded-xl text-[15px] font-semibold transition-colors", current ? "bg-primary text-on-primary" : "bg-surface-2 hover:bg-surface-3")}
-              key={i}
-              onClick={() => onPick(new Date(year, i, 1))}
-              type="button"
-            >
-              {i + 1}월
-            </button>
-          );
-        })}
-      </div>
-    </Sheet>
   );
 }
