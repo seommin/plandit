@@ -1,8 +1,9 @@
 @import "tailwindcss";
 
 /*
- * Design tokens — modern, minimal. Neutral zinc greys, black primary actions, hairline borders instead of shadows.
- * One accent (--accent) is reserved for "today" and the current-time line.
+ * Design tokens — monochrome. Black and white with zinc greys, hairline borders instead of shadows, tight corners.
+ * No brand color: black is the only emphasis (main button, today, current time). Calendar colors are the user's data.
+ * Red/green/yellow appear only where they carry meaning (delete, errors, payment results).
  * Every color in the app comes from here; html[data-theme] switches light/dark.
  * Tailwind utilities map to them through @theme inline: bg-surface, text-fg-2, border-line, bg-primary …
  */
@@ -20,16 +21,13 @@
   --primary-strong: #000000;
   --primary-weak: #f4f4f5;
   --on-primary: #ffffff;
-  --accent: #ff3b30;
-  --accent-weak: #fff1f0;
+  --accent: var(--fg);
   --danger: #e5484d;
   --danger-weak: #fff0f0;
   --success: #12a150;
   --success-weak: #ebf8f0;
   --warning: #e8a317;
   --warning-weak: #fdf6e3;
-  --sunday: #e5484d;
-  --saturday: #3e63dd;
   --scrim: rgb(9 9 11 / 0.32);
   --shadow-card: 0 0 0 1px var(--line);
   --shadow-float: 0 1px 2px rgb(0 0 0 / 0.06), 0 12px 40px rgb(0 0 0 / 0.12);
@@ -51,16 +49,13 @@ html[data-theme="dark"] {
   --primary-strong: #ffffff;
   --primary-weak: #1c1c1f;
   --on-primary: #0b0b0c;
-  --accent: #ff453a;
-  --accent-weak: rgb(255 69 58 / 0.14);
+  --accent: var(--fg);
   --danger: #ff6369;
   --danger-weak: rgb(255 99 105 / 0.12);
   --success: #3dd68c;
   --success-weak: rgb(61 214 140 / 0.12);
   --warning: #f5c542;
   --warning-weak: rgb(245 197 66 / 0.12);
-  --sunday: #ff6369;
-  --saturday: #849dff;
   --scrim: rgb(0 0 0 / 0.6);
   --shadow-card: 0 0 0 1px var(--line);
   --shadow-float: 0 0 0 1px var(--line-strong), 0 16px 48px rgb(0 0 0 / 0.6);
@@ -82,18 +77,20 @@ html[data-theme="dark"] {
   --color-primary-weak: var(--primary-weak);
   --color-on-primary: var(--on-primary);
   --color-accent: var(--accent);
-  --color-accent-weak: var(--accent-weak);
   --color-danger: var(--danger);
   --color-danger-weak: var(--danger-weak);
   --color-success: var(--success);
   --color-success-weak: var(--success-weak);
   --color-warning: var(--warning);
   --color-warning-weak: var(--warning-weak);
-  --color-sunday: var(--sunday);
-  --color-saturday: var(--saturday);
-  --font-sans: "Pretendard", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-sans: "Pretendard Variable", "Pretendard", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   --shadow-card: var(--shadow-card);
   --shadow-float: var(--shadow-float);
+  /* Tighter corners than Tailwind's defaults: 6 / 8 / 12 / 16px. */
+  --radius-lg: 0.375rem;
+  --radius-xl: 0.5rem;
+  --radius-2xl: 0.75rem;
+  --radius-3xl: 1rem;
 }
 
 /* Element defaults live in the base layer so Tailwind utilities (text-on-primary, outline-none …) can override them. */
@@ -143,15 +140,15 @@ html[data-theme="dark"] {
   display: none;
 }
 
-.brand-script {
-  font-family: "Satisfy", "Segoe Script", cursive;
-  font-weight: 400;
-  letter-spacing: 0;
+.wordmark {
+  font-weight: 900;
+  letter-spacing: -0.04em;
+  line-height: 1;
 }
 
 /* Event block: tinted with its calendar color, colored edge, readable text in both themes. */
 .event-tint {
-  background: color-mix(in srgb, var(--event-color) 14%, var(--surface));
+  background: color-mix(in srgb, var(--event-color) 12%, var(--surface));
   box-shadow: inset 3px 0 0 var(--event-color);
   color: var(--fg);
 }

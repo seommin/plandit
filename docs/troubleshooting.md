@@ -55,3 +55,21 @@
 - **증상**: 이미 적용한 `migration.sql`이 작업 폴더에서 CRLF로 바뀜(`core.autocrlf=true`)
 - **원인**: Git이 체크아웃할 때 LF를 CRLF로 변환
 - **확인**: Prisma가 체크섬을 비교할 때 줄바꿈 차이는 문제 삼지 않음(`migrate status` 정상)을 확인하고 그대로 둠
+
+## 9. 버튼의 글자색·굵기 클래스가 적용되지 않는다
+
+- **증상**: 검정 버튼(`bg-primary text-on-primary`)의 글자가 배경과 같은 검정으로 나와 보이지 않음. 선택된 칩이 글자 없는 검은 덩어리로 보임
+- **원인**: `globals.css`의 `button { color: inherit; font: inherit }`가 레이어 밖에 있었음. CSS 캐스케이드 레이어 규칙상 레이어 밖 스타일이 Tailwind 유틸리티(`@layer utilities`)보다 항상 이김
+- **해결**: 요소 기본값(html·body·button·`:focus-visible`)을 `@layer base { … }` 안으로 옮김. 전역 CSS에 요소 선택자를 추가할 때는 반드시 `@layer base` 안에 둔다
+
+## 10. 한글이 Pretendard가 아니라 시스템 글꼴(맑은 고딕)로 나온다
+
+- **증상**: 영문·숫자만 Pretendard이고 한글은 맑은 고딕. 굵은 글씨가 뭉개져 보임
+- **원인**: `@fontsource/pretendard`는 **라틴 글자만**, 기본 import는 **400 굵기만** 들어 있음. 한글과 600·700 굵기는 대체 글꼴·가짜 굵게로 그려짐
+- **해결**: 패키지를 지우고 Pretendard 공식 가변 글꼴의 dynamic subset CSS를 `<head>`에서 불러옴(유니코드 범위별로 쪼개져 있어 화면에 나온 글자만 받음). `pretendard` npm 패키지는 OTF·TTF까지 들어 있어 97MB라 쓰지 않음
+
+## 11. 개발 서버가 `globals.css` 변경을 반영하지 않는다
+
+- **증상**: `globals.css`를 고쳤는데 브라우저에 옛 색이 계속 나옴. 서버가 내려주는 CSS 파일 자체가 옛 내용
+- **원인**: Turbopack 개발 서버가 파일 전체를 새로 쓴 변경을 놓치는 경우가 있음(편집기로 한 줄 고치는 변경은 잘 잡음)
+- **해결**: 파일 끝에 줄바꿈을 하나 넣었다 빼면 다시 빌드함. 서버 CSS가 새것인데 화면이 옛것이면 브라우저 캐시이므로 `Ctrl+Shift+R`

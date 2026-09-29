@@ -164,8 +164,8 @@ export function TimeGrid({ days, events, hourHeight = 56, canEdit, onSlot, onOpe
           <div className="grid flex-1" style={{ gridTemplateColumns: `repeat(${days.length}, minmax(0, 1fr))` }}>
             {days.map((day) => (
               <div className="py-2 text-center" key={day.toISOString()}>
-                <p className={cn("text-[11px] font-semibold", day.getDay() === 0 ? "text-sunday" : day.getDay() === 6 ? "text-saturday" : "text-fg-3")}>{WEEKDAYS[day.getDay()]}</p>
-                <p className={cn("mx-auto mt-0.5 flex size-8 items-center justify-center rounded-full text-[17px] font-semibold tabular-nums", isSameDay(day, today) && "bg-accent text-white")}>
+                <p className="text-[11px] font-semibold text-fg-3">{WEEKDAYS[day.getDay()]}</p>
+                <p className={cn("mx-auto mt-0.5 flex size-8 items-center justify-center rounded-full text-[17px] font-semibold tabular-nums", isSameDay(day, today) && "bg-primary text-on-primary")}>
                   {day.getDate()}
                 </p>
               </div>
