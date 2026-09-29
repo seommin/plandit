@@ -39,7 +39,7 @@ api 코드를 import하지 않고 HTTP로만 통신하며, 진짜 외부 서비�
 
 | 메서드·경로 | 설명 |
 |---|---|
-| `POST /relay/v1/messages` | 발송 접수. body `{ to, body, kind(SMS\|LMS\|ALIMTALK), clientRef?, callbackUrl? }` → `202 { msgId }` |
+| `POST /relay/v1/messages` | 발송 접수. body `{ to, body, kind(SMS\|LMS\|ALIMTALK), clientRef?, callbackUrl? }` → `202 { msgId }`. 같은 `clientRef`로 다시 보내면 새로 발송하지 않고 기존 메시지를 `200`으로 돌려줌(재시도 멱등) |
 | `GET /relay/v1/messages/{msgId}` | 결과 재조회 |
 | `POST /relay/v1/admin/webhooks/{eventId}/resend` | 결과 웹훅 수동 재전송 |
 | `GET /inbox?phone=010-0000-0001` | **가상 수신함**: 그 번호로 "도착"한 문자 목록 |
