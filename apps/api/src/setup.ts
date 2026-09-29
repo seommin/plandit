@@ -2,8 +2,11 @@ import type { INestApplication } from "@nestjs/common";
 import { DocumentBuilder, SwaggerModule } from "@nestjs/swagger";
 import { Logger } from "nestjs-pino";
 
+import { traceMiddleware } from "./common/request-context";
+
 /** Shared by main.ts and e2e tests so both run the exact same app wiring. */
 export function configureApp(app: INestApplication) {
+  app.use(traceMiddleware);
   app.useLogger(app.get(Logger));
   app.enableShutdownHooks();
   app.enableCors({

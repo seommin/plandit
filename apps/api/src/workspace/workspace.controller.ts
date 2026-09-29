@@ -52,7 +52,7 @@ export class WorkspaceController {
     @CurrentMember() member: WorkspaceMember,
     @Body(new ZodPipe(workspaceUpdateSchema)) body: z.infer<typeof workspaceUpdateSchema>,
   ) {
-    return { workspace: await this.workspaces.rename(member.workspaceId, body.name) };
+    return { workspace: await this.workspaces.rename(member, body.name) };
   }
 
   @Get(":workspaceId/members")

@@ -54,12 +54,15 @@ export async function proxyInternalApi(
 ) {
   const method = request.method;
   const body = ["GET", "HEAD"].includes(method) ? undefined : await request.text();
-  const response = await fetchInternalApi(path, {
-    body,
-    method,
-    userId,
-    headers: body ? { "content-type": request.headers.get("content-type") ?? "application/json" } : undefined,
-  });
+  const headers = new Headers();
+  if (body) headers.set("content-type", request.headers.get("content-type") ?? "application/json");
+  // The api records these in audit logs; without them every change would look like it came from this server.
+  const forwardedFor = request.headers.get("x-forwarded-for");
+  const userAgent = request.headers.get("user-agent");
+  if (forwardedFor) headers.set("x-forwarded-for", forwardedFor);
+  if (userAgent) headers.set("x-client-user-agent", userAgent);
+
+  const response = await fetchInternalApi(path, { body, method, userId, headers });
   const responseBody = await response.text();
   const contentType = response.headers.get("content-type") ?? "application/json";
 

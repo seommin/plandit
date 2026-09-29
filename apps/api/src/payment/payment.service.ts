@@ -3,6 +3,7 @@ import { Inject, Injectable } from "@nestjs/common";
 import { type Payment, Prisma, prisma } from "@plandit/database/prisma";
 import { creditsForAmount } from "@plandit/shared/credits";
 
+import { AuditService } from "../audit/audit.service";
 import { ApiError, ErrorCode } from "../common/api-error";
 import { type PageQuery, pageArgs, toPage } from "../common/pagination";
 import { LedgerService } from "../credit/ledger.service";
@@ -36,6 +37,7 @@ export class PaymentService {
   constructor(
     @Inject(PAYMENT_GATEWAY) private readonly gateway: PaymentGateway,
     private readonly ledger: LedgerService,
+    private readonly audit: AuditService,
   ) {}
 
   /**
@@ -73,27 +75,28 @@ export class PaymentService {
       );
     } catch (error) {
       if (!(error instanceof PaymentGatewayError)) throw error;
-      const failed = await prisma.payment.update({
-        where: { id: payment.id },
-        data: error.retryable
-          ? { status: "UNKNOWN", failureMessage: error.message }
-          : { status: "FAILED", failureCode: "PG_REJECTED", failureMessage: error.message, failedAt: new Date() },
-      });
+      if (error.retryable) {
+        await prisma.payment.update({ where: { id: payment.id }, data: { status: "UNKNOWN", failureMessage: error.message } });
+      } else {
+        await prisma.$transaction((tx) =>
+          this.applyFailure(tx, payment, { status: "FAILED", failureCode: "PG_REJECTED", at: new Date(), source: "charge", actorId: userId }),
+        );
+      }
       throw new ApiError(ErrorCode.PAYMENT_GATEWAY_ERROR, "The payment gateway is not available. Please try again.", {
-        paymentId: failed.id,
-        status: failed.status,
+        paymentId: payment.id,
+        status: error.retryable ? "UNKNOWN" : "FAILED",
       });
     }
   }
 
   /**
-   * RESERVE/UNKNOWN → APPROVED with the CHARGE ledger row, inside the caller's transaction.
-   * Shared by the webhook and (PLANDIT-6) the re-query job; the ledger key makes a second call harmless.
+   * RESERVE/UNKNOWN → APPROVED with the CHARGE ledger row and an audit row, inside the caller's transaction.
+   * Shared by the webhook and the re-query job; the ledger key makes a second call harmless.
    */
   async applyApproval(
     tx: Prisma.TransactionClient,
     payment: Payment,
-    info: { providerTxId: string; method: string | null; approvedAt: Date },
+    info: { providerTxId: string; method: string | null; approvedAt: Date; source: "webhook" | "reconcile" },
   ) {
     const { entry } = await this.ledger.append(
       {
@@ -106,7 +109,7 @@ export class PaymentService {
       },
       tx,
     );
-    return tx.payment.update({
+    const approved = await tx.payment.update({
       where: { id: payment.id },
       data: {
         status: "APPROVED",
@@ -118,6 +121,53 @@ export class PaymentService {
         failureMessage: null,
       },
     });
+    await this.audit.record(
+      {
+        action: "payment.approved",
+        workspaceId: payment.workspaceId,
+        targetType: "payment",
+        targetId: payment.id,
+        payload: { tradeId: payment.tradeId, amount: payment.amount, credits: Number(payment.credits), ledgerId: entry.id.toString(), source: info.source },
+      },
+      tx,
+    );
+    return approved;
+  }
+
+  /** RESERVE/UNKNOWN → FAILED/CANCELED (nothing was granted) plus an audit row. `EXPIRED` is audited as payment.expired. */
+  async applyFailure(
+    tx: Prisma.TransactionClient,
+    payment: Payment,
+    info: {
+      status: "FAILED" | "CANCELED";
+      failureCode: string;
+      at: Date;
+      source: "charge" | "webhook" | "reconcile";
+      providerTxId?: string;
+      actorId?: string;
+    },
+  ) {
+    const updated = await tx.payment.update({
+      where: { id: payment.id },
+      data: {
+        status: info.status,
+        failureCode: info.failureCode,
+        ...(info.providerTxId ? { providerTxId: info.providerTxId } : {}),
+        ...(info.status === "FAILED" ? { failedAt: info.at } : { canceledAt: info.at }),
+      },
+    });
+    await this.audit.record(
+      {
+        action: info.failureCode === "EXPIRED" ? "payment.expired" : "payment.failed",
+        workspaceId: payment.workspaceId,
+        actorId: info.actorId,
+        targetType: "payment",
+        targetId: payment.id,
+        payload: { tradeId: payment.tradeId, amount: payment.amount, status: info.status, failureCode: info.failureCode, source: info.source },
+      },
+      tx,
+    );
+    return updated;
   }
 
   async list(workspaceId: string, page: PageQuery) {
