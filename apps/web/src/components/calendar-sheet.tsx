@@ -9,7 +9,7 @@ import { type Calendar, type CalendarRole, canManage, type Workspace } from "@/l
 import { Button, cn, Field, IconButton, Notice, Select, Sheet, TextArea, TextInput } from "./ui";
 
 /** Muted tones that sit with the monochrome UI; graphite first (the default). */
-export const CALENDAR_COLORS = ["#3F3F46", "#34466B", "#3F7474", "#6B7A4F", "#B08A3E", "#B0684E", "#8C4A5A", "#6E5A8A"];
+export const CALENDAR_COLORS = ["#3F3F46", "#4A6FC4", "#3F7474", "#6B7A4F", "#B08A3E", "#B0684E", "#8C4A5A", "#6E5A8A"];
 const ROLE_LABEL: Record<CalendarRole, string> = { OWNER: "소유자", ADMIN: "관리", EDITOR: "편집", VIEWER: "보기" };
 
 type Member = { id: string; role: CalendarRole; user: { id: string; name: string | null; email: string } };
