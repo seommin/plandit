@@ -6,4 +6,5 @@ export const redisConnection = () => ({
 
 export const QUEUES = {
   paymentReconcile: "payment-reconcile",
+  reminders: "reminders",
 } as const;

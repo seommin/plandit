@@ -24,9 +24,12 @@ import {
   getWritableEvent,
 } from "./event-permissions";
 import { getUserId, type RequestWithUser } from "../request-user";
+import { ReminderService } from "../reminder/reminder.service";
 
 @Controller("events")
 export class EventsController {
+  constructor(private readonly reminders: ReminderService) {}
+
   @Get()
   async list(
     @Req() request: RequestWithUser,
@@ -163,6 +166,9 @@ export class EventsController {
         visibility: parsed.data.visibility,
       },
     });
+
+    // Time or calendar may have moved: schedule reminders at the new fire time (old jobs become stale).
+    await this.reminders.syncEvent(eventId);
 
     return { event: updatedEvent };
   }

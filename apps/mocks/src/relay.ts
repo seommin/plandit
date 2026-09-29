@@ -116,17 +116,33 @@ export function relayRouter(db: Db, config: RelayConfig) {
       res.status(400).json({ code: "VALIDATION_FAILED", message: "to(010-xxxx-xxxx), body(1~2000), kind(SMS|LMS|ALIMTALK) are required." });
       return;
     }
+    // Idempotent resend: a caller retrying after a lost response gets the original message, not a second SMS.
+    const findByRef = async () =>
+      clientRef
+        ? (await db.query<Message>("SELECT * FROM mock.relay_messages WHERE client_ref = $1", [clientRef])).rows[0]
+        : undefined;
+    const existing = await findByRef();
+    if (existing) {
+      res.status(200).json({ msgId: existing.msg_id, status: existing.status });
+      return;
+    }
     if (!allow()) {
       res.set("retry-after", "1").status(429).json({ code: "RATE_LIMITED", message: `Over ${config.rps} requests per second.` });
       return;
     }
 
     const msgId = newId("msg");
-    await db.query(
+    const inserted = await db.query(
       `INSERT INTO mock.relay_messages (msg_id, client_ref, phone, kind, body, status, callback_url)
-       VALUES ($1, $2, $3, $4, $5, 'ACCEPTED', $6)`,
+       VALUES ($1, $2, $3, $4, $5, 'ACCEPTED', $6)
+       ON CONFLICT (client_ref) WHERE client_ref IS NOT NULL DO NOTHING`,
       [msgId, clientRef ?? null, phone, kind, body, callbackUrl ?? config.webhookUrl],
     );
+    if (!inserted.rowCount) {
+      const winner = (await findByRef())!; // a concurrent request with the same clientRef got there first
+      res.status(200).json({ msgId: winner.msg_id, status: winner.status });
+      return;
+    }
     // ponytail: in-process timer like the PG mock; lost results are recovered by the caller re-querying GET below.
     setTimeout(() => void settle(msgId), config.delayMs);
     res.status(202).json({ msgId, status: "ACCEPTED" });
