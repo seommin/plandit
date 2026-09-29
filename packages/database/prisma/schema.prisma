@@ -153,7 +153,7 @@ model Calendar {
   workspaceId String
   name        String
   type        CalendarType @default(PERSONAL)
-  color       String   @default("#2F6BFF")
+  color       String   @default("#3F3F46")
   description String?
   timezone    String   @default("Asia/Seoul")
   isDefault   Boolean  @default(false)

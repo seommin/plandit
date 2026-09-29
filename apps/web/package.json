@@ -11,8 +11,6 @@
   },
   "dependencies": {
     "@auth/prisma-adapter": "2.9.1",
-    "@fontsource/pretendard": "5.2.5",
-    "@fontsource/satisfy": "5.2.7",
     "@plandit/database": "workspace:*",
     "@plandit/shared": "workspace:*",
     "bcryptjs": "3.0.3",

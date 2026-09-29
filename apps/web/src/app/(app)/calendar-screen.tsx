@@ -145,7 +145,7 @@ export function CalendarScreen({ initial, openCreate }: { initial: CalendarState
             </span>
 
             <div className="ml-auto flex items-center gap-1">
-              <Button className="rounded-full" onClick={() => setSelected(startOfDay(new Date()))} size="sm" variant="secondary">
+              <Button onClick={() => setSelected(startOfDay(new Date()))} size="sm" variant="secondary">
                 오늘
               </Button>
               <div className="hidden items-center lg:flex">
