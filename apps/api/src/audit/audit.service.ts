@@ -15,7 +15,9 @@ export type AuditAction =
   | "credit.adjusted"
   | "payment.approved"
   | "payment.failed"
-  | "payment.expired";
+  | "payment.expired"
+  | "api_key.created"
+  | "api_key.revoked";
 
 export type AuditEntry = {
   action: AuditAction;

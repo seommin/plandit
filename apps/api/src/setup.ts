@@ -19,6 +19,7 @@ export function configureApp(app: INestApplication) {
     .setVersion("0.1.0")
     .addApiKey({ type: "apiKey", in: "header", name: "x-api-secret" }, "internal-secret")
     .addApiKey({ type: "apiKey", in: "header", name: "x-user-id" }, "user-id")
+    .addBearerAuth({ type: "http", scheme: "bearer", description: "pk_… API key (public /v1 API)" }, "api-key")
     .addSecurityRequirements("internal-secret")
     .addSecurityRequirements("user-id")
     .build();
