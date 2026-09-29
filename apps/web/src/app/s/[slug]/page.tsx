@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 
+import { AuthCard } from "@/components/auth-card";
 import { readInternalApi } from "@/lib/api-client";
 
 export const dynamic = "force-dynamic";
@@ -42,28 +43,16 @@ export default async function SharePage({ params }: SharePageProps) {
   }).format(new Date(share.event.startsAt));
 
   return (
-    <main className="app-shell flex min-h-screen items-center justify-center px-4 py-10">
-      <section className="panel w-full max-w-[520px] p-6">
-        <p className="mobile-brand-script mb-8 text-center text-[34px] leading-none">
-          Plandit
-        </p>
-        <div className="mb-5 flex items-center justify-between gap-3">
-          <span className="rounded-full bg-[#efeee9] px-3 py-1 text-xs font-semibold text-[#34362f]">
-            Shared event
-          </span>
-          <span className="text-xs text-[var(--muted)]">{share.channel}</span>
-        </div>
-        <h1 className="text-2xl font-semibold leading-tight">{share.event.title}</h1>
-        <p className="mt-3 text-sm font-semibold text-[var(--muted)]">{startsAt}</p>
-        {share.includeLocation && share.event.location ? (
-          <p className="mt-5 rounded-lg border border-[var(--line)] bg-white p-3 text-sm">
-            {share.event.location}
-          </p>
-        ) : null}
-        {share.includeDescription && share.event.description ? (
-          <p className="mt-4 text-sm leading-6 text-[#34362f]">{share.event.description}</p>
-        ) : null}
-      </section>
-    </main>
+    <AuthCard>
+      <p className="text-[13px] font-semibold text-primary">공유된 일정</p>
+      <h1 className="mt-1 text-2xl font-bold leading-tight">{share.event.title}</h1>
+      <p className="mt-3 text-[15px] font-medium text-fg-2">{startsAt}</p>
+      {share.includeLocation && share.event.location ? (
+        <p className="mt-5 rounded-xl bg-surface-2 p-3 text-[15px]">{share.event.location}</p>
+      ) : null}
+      {share.includeDescription && share.event.description ? (
+        <p className="mt-4 whitespace-pre-wrap text-[15px] leading-6 text-fg-2">{share.event.description}</p>
+      ) : null}
+    </AuthCard>
   );
 }

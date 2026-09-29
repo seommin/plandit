@@ -1,132 +1,62 @@
 "use client";
 
 import Link from "next/link";
-import { FormEvent, useEffect, useState } from "react";
 import { signIn } from "next-auth/react";
+import { type FormEvent, useEffect, useState } from "react";
 
+import { AuthCard, safeCallbackUrl } from "@/components/auth-card";
 import SocialLoginButtons from "@/components/social-login-buttons";
-
-function getSafeCallbackUrl(value: string | null) {
-  return value?.startsWith("/") && !value.startsWith("//") ? value : "/";
-}
+import { Button, Field, Notice, TextInput } from "@/components/ui";
+import { api, errorMessage } from "@/lib/client-api";
 
 export default function SignupPage() {
   const [callbackUrl, setCallbackUrl] = useState("/");
-  const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [status, setStatus] = useState<string | null>(null);
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
 
-  useEffect(() => {
-    setCallbackUrl(getSafeCallbackUrl(new URLSearchParams(window.location.search).get("callbackUrl")));
-  }, []);
+  useEffect(() => setCallbackUrl(safeCallbackUrl(new URLSearchParams(window.location.search).get("callbackUrl"))), []);
 
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setIsSubmitting(true);
-    setStatus(null);
-
+    const data = new FormData(event.currentTarget);
+    const body = { name: String(data.get("name")).trim(), email: String(data.get("email")), password: String(data.get("password")) };
+    setSubmitting(true);
+    setError(null);
     try {
-      const response = await fetch("/api/auth/register", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ name, email, password }),
-      });
-
-      if (!response.ok) {
-        const result = await response.json();
-        throw new Error(result.message ?? result.error ?? "회원가입에 실패했습니다.");
-      }
-
-      const result = await signIn("credentials", {
-        email,
-        password,
-        redirect: false,
-      });
-
-      if (result?.error) {
-        throw new Error("가입은 완료됐지만 로그인에 실패했습니다.");
-      }
-
+      await api("/auth/register", { body });
+      const result = await signIn("credentials", { email: body.email, password: body.password, redirect: false });
+      if (result?.error) throw new Error("가입은 완료됐지만 로그인하지 못했어요. 로그인 화면에서 다시 시도해주세요.");
       window.location.href = callbackUrl;
-    } catch (error) {
-      setStatus(error instanceof Error ? error.message : "다시 시도해주세요.");
-    } finally {
-      setIsSubmitting(false);
+    } catch (e) {
+      setError((e as { status?: number }).status === 409 ? "이미 가입된 이메일이에요." : errorMessage(e));
+      setSubmitting(false);
     }
   }
 
   return (
-    <main className="app-shell flex min-h-screen items-center justify-center px-4">
-      <section className="panel w-full max-w-[420px] p-6">
-        <div className="mb-7 text-center">
-          <p className="mobile-brand-script text-[42px] leading-none">Plandit</p>
-        </div>
-
-        <form className="space-y-3" onSubmit={handleSubmit}>
-          <input
-            className="h-11 w-full rounded-lg border border-[var(--line)] bg-white px-3 outline-none focus:border-[#aeb3a6]"
-            name="name"
-            onChange={(event) => setName(event.target.value)}
-            placeholder="이름"
-            required
-            type="text"
-            value={name}
-          />
-          <input
-            className="h-11 w-full rounded-lg border border-[var(--line)] bg-white px-3 outline-none focus:border-[#aeb3a6]"
-            name="email"
-            onChange={(event) => setEmail(event.target.value)}
-            placeholder="you@example.com"
-            required
-            type="email"
-            value={email}
-          />
-          <input
-            className="h-11 w-full rounded-lg border border-[var(--line)] bg-white px-3 outline-none focus:border-[#aeb3a6]"
-            minLength={8}
-            name="password"
-            onChange={(event) => setPassword(event.target.value)}
-            placeholder="password"
-            required
-            type="password"
-            value={password}
-          />
-          <button
-            className="h-11 w-full rounded-lg bg-[var(--ink)] text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-55"
-            disabled={isSubmitting}
-            type="submit"
-          >
-            {isSubmitting ? "처리 중" : "회원가입"}
-          </button>
-        </form>
-
-        {status ? (
-          <p className="mt-3 rounded-lg bg-[#fff3f1] px-3 py-2 text-sm font-semibold text-[#b33a2f]">
-            {status}
-          </p>
-        ) : null}
-
-        <div className="my-5 flex items-center gap-3">
-          <div className="h-px flex-1 bg-[var(--line)]" />
-          <span className="text-xs font-semibold text-[var(--muted)]">또는</span>
-          <div className="h-px flex-1 bg-[var(--line)]" />
-        </div>
-
-        <SocialLoginButtons callbackUrl={callbackUrl} />
-
-        <div className="mt-5 text-center text-sm font-semibold text-[var(--muted)]">
-          <Link
-            className="hover:text-[var(--ink)]"
-            href={`/login?callbackUrl=${encodeURIComponent(callbackUrl)}`}
-          >
-            이미 계정이 있나요?
-          </Link>
-        </div>
-      </section>
-    </main>
+    <AuthCard subtitle="가입하면 개인 캘린더와 워크스페이스가 바로 만들어져요">
+      <form className="space-y-4" onSubmit={submit}>
+        <Field label="이름">
+          <TextInput autoComplete="name" maxLength={80} name="name" placeholder="홍길동" required />
+        </Field>
+        <Field label="이메일">
+          <TextInput autoComplete="email" name="email" placeholder="you@example.com" required type="email" />
+        </Field>
+        <Field hint="8자 이상" label="비밀번호">
+          <TextInput autoComplete="new-password" maxLength={100} minLength={8} name="password" required type="password" />
+        </Field>
+        {error ? <Notice>{error}</Notice> : null}
+        <Button block loading={submitting} type="submit">
+          가입하기
+        </Button>
+      </form>
+      <SocialLoginButtons callbackUrl={callbackUrl} />
+      <p className="mt-6 text-center text-sm text-fg-3">
+        이미 계정이 있나요?{" "}
+        <Link className="font-semibold text-primary" href={`/login?callbackUrl=${encodeURIComponent(callbackUrl)}`}>
+          로그인
+        </Link>
+      </p>
+    </AuthCard>
   );
 }
