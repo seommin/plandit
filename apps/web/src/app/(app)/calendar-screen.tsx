@@ -246,7 +246,23 @@ export function CalendarScreen({ initial, openCreate }: { initial: CalendarState
   );
 }
 
+/** Text tabs for a few workspaces; with many, one "name ▾" line that opens the device's own list. */
 function ScopePicker({ options, value, onChange }: { options: Array<{ id: string; label: string }>; value: string; onChange: (id: string) => void }) {
+  if (options.length > 4) {
+    return (
+      <label className="relative flex h-9 items-center gap-1 px-2 text-[14px] font-semibold">
+        <span className="truncate">{options.find((option) => option.id === value)?.label ?? "전체"}</span>
+        <ChevronDown className="shrink-0 text-fg-3" size={16} />
+        <select aria-label="워크스페이스" className="absolute inset-0 cursor-pointer opacity-0" onChange={(e) => onChange(e.target.value)} value={value}>
+          {options.map((option) => (
+            <option key={option.id} value={option.id}>
+              {option.label}
+            </option>
+          ))}
+        </select>
+      </label>
+    );
+  }
   return (
     <div aria-label="워크스페이스" className="flex gap-4 overflow-x-auto px-2 scrollbar-hide" role="radiogroup">
       {options.map((option) => (
