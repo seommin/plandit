@@ -3,7 +3,7 @@
 /*
  * Design tokens — monochrome. Black and white with zinc greys, hairline borders instead of shadows, tight corners.
  * No brand color: black is the only emphasis (main button, today, current time). Calendar colors are the user's data.
- * Red/green/yellow appear only where they carry meaning (delete, errors, payment results).
+ * Red/green/yellow appear only where they carry meaning (delete, errors, payment results, Sundays/holidays and Saturdays).
  * Every color in the app comes from here; html[data-theme] switches light/dark.
  * Tailwind utilities map to them through @theme inline: bg-surface, text-fg-2, border-line, bg-primary …
  */
@@ -28,6 +28,8 @@
   --success-weak: #ebf8f0;
   --warning: #e8a317;
   --warning-weak: #fdf6e3;
+  --sunday: #e5484d;
+  --saturday: #3e63dd;
   --scrim: rgb(9 9 11 / 0.32);
   --shadow-card: 0 0 0 1px var(--line);
   --shadow-float: 0 1px 2px rgb(0 0 0 / 0.06), 0 12px 40px rgb(0 0 0 / 0.12);
@@ -56,6 +58,8 @@ html[data-theme="dark"] {
   --success-weak: rgb(61 214 140 / 0.12);
   --warning: #f5c542;
   --warning-weak: rgb(245 197 66 / 0.12);
+  --sunday: #ff6369;
+  --saturday: #849dff;
   --scrim: rgb(0 0 0 / 0.6);
   --shadow-card: 0 0 0 1px var(--line);
   --shadow-float: 0 0 0 1px var(--line-strong), 0 16px 48px rgb(0 0 0 / 0.6);
@@ -83,6 +87,8 @@ html[data-theme="dark"] {
   --color-success-weak: var(--success-weak);
   --color-warning: var(--warning);
   --color-warning-weak: var(--warning-weak);
+  --color-sunday: var(--sunday);
+  --color-saturday: var(--saturday);
   --font-sans: "Pretendard Variable", "Pretendard", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   --shadow-card: var(--shadow-card);
   --shadow-float: var(--shadow-float);

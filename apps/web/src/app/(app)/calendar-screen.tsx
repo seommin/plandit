@@ -25,7 +25,7 @@ const VIEWS: Array<{ value: View; label: string }> = [
 /**
  * Phone: week strip (swipe for other weeks, pull down for the month) over one day's timeline.
  * Desktop: 일/주/월, week by default, with a mini month and the calendar list on wide screens.
- * Tap an empty time to add, tap an event to edit, drag to move, drag the bottom edge to change its length.
+ * Tap (or drag across) empty time to add, tap an event to edit, drag to move, drag the bottom edge to change its length.
  */
 export function CalendarScreen({ initial, openCreate }: { initial: CalendarState; openCreate: boolean }) {
   const router = useRouter();
@@ -47,7 +47,7 @@ export function CalendarScreen({ initial, openCreate }: { initial: CalendarState
 
   const writable = useMemo(() => new Set(calendars.filter(canWrite).map((c) => c.id)), [calendars]);
   const canEdit = (event: CalendarEvent) => writable.has(event.calendarId);
-  const create = (start: Date) => setEditor({ mode: "create", start });
+  const create = (start: Date, end?: Date) => setEditor({ mode: "create", start, end });
   const open = (event: CalendarEvent) => setEditor({ mode: "edit", event });
 
   // "+" in the tab bar / sidebar links to /?new=1.

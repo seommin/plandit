@@ -2,7 +2,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { buildMonthWeeks, formatEventTime, monthGridRange } from "./dates.ts";
+import { buildMonthWeeks, dayTone, formatEventTime, holidayName, monthGridRange } from "./dates.ts";
 import type { CalendarEvent } from "./types.ts";
 
 const event = (id: string, startsAt: Date, endsAt: Date, allDay = false) =>
@@ -73,5 +73,20 @@ describe("layoutDay", () => {
       event("allday", new Date(2026, 8, 29), new Date(2026, 8, 30), true),
     ]);
     assert.deepEqual(laid.map((p) => [p.event.id, p.startMin, p.endMin]), [["night", 0, 120]]);
+  });
+});
+
+describe("weekends and holidays", () => {
+  it("names official holidays, including substitutes", () => {
+    assert.equal(holidayName(new Date(2026, 8, 25)), "추석");
+    assert.equal(holidayName(new Date(2026, 9, 5)), "대체공휴일(개천절)");
+    assert.equal(holidayName(new Date(2026, 8, 29)), undefined);
+  });
+
+  it("colors Sundays and holidays red, Saturdays blue", () => {
+    assert.equal(dayTone(new Date(2026, 8, 27)), "text-sunday"); // Sunday
+    assert.equal(dayTone(new Date(2026, 9, 3)), "text-sunday"); // Saturday, but 개천절
+    assert.equal(dayTone(new Date(2026, 9, 10)), "text-saturday");
+    assert.equal(dayTone(new Date(2026, 8, 29)), "");
   });
 });

@@ -2,7 +2,7 @@
 
 import { type CSSProperties, type DragEvent, useMemo } from "react";
 
-import { buildMonthWeeks, formatTime, isAllDayLike, isSameDay, WEEKDAYS } from "@/lib/dates";
+import { buildMonthWeeks, dayTone, formatTime, holidayName, isAllDayLike, isSameDay, WEEKDAYS } from "@/lib/dates";
 import type { CalendarEvent } from "@/lib/types";
 
 import { cn } from "./ui";
@@ -37,8 +37,8 @@ export function MonthGrid({ month, events, onOpenDay, onCreate, onOpenEvent, onM
   return (
     <div className="flex min-h-full flex-col">
       <div className="grid grid-cols-7 border-b border-line">
-        {WEEKDAYS.map((label) => (
-          <div className="py-2 text-center text-[11px] font-semibold text-fg-3" key={label}>
+        {WEEKDAYS.map((label, i) => (
+          <div className={cn("py-2 text-center text-[11px] font-semibold", i === 0 ? "text-sunday" : i === 6 ? "text-saturday" : "text-fg-3")} key={label}>
             {label}
           </div>
         ))}
@@ -58,17 +58,20 @@ export function MonthGrid({ month, events, onOpenDay, onCreate, onOpenEvent, onM
                   onDragOver={(e) => e.preventDefault()}
                   onDrop={(e) => drop(e, date)}
                 >
+                  <div className="flex w-full min-w-0 items-center gap-1">
                   <button
                     aria-label={`${date.getMonth() + 1}월 ${date.getDate()}일 보기`}
                     className={cn(
                       "flex size-7 items-center justify-center rounded-full text-[13px] font-semibold tabular-nums transition-colors",
-                      isSameDay(date, today) ? "bg-primary text-on-primary" : !inMonth ? "text-fg-3/60 hover:bg-surface-2" : "hover:bg-surface-2",
+                      isSameDay(date, today) ? "bg-primary text-on-primary" : cn("hover:bg-surface-2", !inMonth ? "text-fg-3/60" : dayTone(date) || "text-fg"),
                     )}
                     onClick={() => onOpenDay(date)}
                     type="button"
                   >
                     {date.getDate()}
                   </button>
+                  {holidayName(date) ? <span className={cn("truncate text-[11px] font-medium", inMonth ? "text-sunday" : "text-sunday/50")}>{holidayName(date)}</span> : null}
+                  </div>
                   {hidden[i] ? (
                     <button className="mt-auto mb-1 rounded px-1 text-[11px] font-semibold text-fg-3 hover:bg-surface-2 hover:text-fg" onClick={() => onOpenDay(date)} type="button">
                       +{hidden[i]}개
