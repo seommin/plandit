@@ -52,3 +52,26 @@ describe("formatEventTime", () => {
     assert.equal(formatEventTime(event("z", new Date(2026, 8, 9, 10), new Date(2026, 8, 9, 11, 30))), "10:00 – 11:30");
   });
 });
+
+describe("layoutDay", () => {
+  const day = new Date(2026, 8, 29);
+  it("puts overlapping events side by side and a later one back to full width", async () => {
+    const { layoutDay } = await import("./dates.ts");
+    const laid = layoutDay(day, [
+      event("a", new Date(2026, 8, 29, 10), new Date(2026, 8, 29, 11)),
+      event("b", new Date(2026, 8, 29, 10, 30), new Date(2026, 8, 29, 12)),
+      event("c", new Date(2026, 8, 29, 14), new Date(2026, 8, 29, 15)),
+    ]);
+    const byId = Object.fromEntries(laid.map((p) => [p.event.id, [p.startMin, p.column, p.columns]]));
+    assert.deepEqual(byId, { a: [600, 0, 2], b: [630, 1, 2], c: [840, 0, 1] });
+  });
+
+  it("clips an event that started the day before and skips all-day ones", async () => {
+    const { layoutDay } = await import("./dates.ts");
+    const laid = layoutDay(day, [
+      event("night", new Date(2026, 8, 28, 22), new Date(2026, 8, 29, 2)),
+      event("allday", new Date(2026, 8, 29), new Date(2026, 8, 30), true),
+    ]);
+    assert.deepEqual(laid.map((p) => [p.event.id, p.startMin, p.endMin]), [["night", 0, 120]]);
+  });
+});

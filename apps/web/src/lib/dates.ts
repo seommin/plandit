@@ -60,6 +60,55 @@ export function buildMonthWeeks(month: Date, events: CalendarEvent[]): MonthWeek
   return weeks;
 }
 
+// --- Time grid ---
+
+export const minutesOfDay = (date: Date) => date.getHours() * 60 + date.getMinutes();
+export const atMinutes = (day: Date, minutes: number) => new Date(day.getFullYear(), day.getMonth(), day.getDate(), 0, minutes);
+export const snap = (minutes: number, step = 15) => Math.round(minutes / step) * step;
+
+/** Goes in the "종일" row rather than the hour grid: all-day, or long enough to cover whole days. */
+export const isAllDayLike = (event: Pick<CalendarEvent, "allDay" | "startsAt" | "endsAt">) =>
+  event.allDay || new Date(event.endsAt).getTime() - new Date(event.startsAt).getTime() >= DAY_MS;
+
+export type PositionedEvent = { event: CalendarEvent; startMin: number; endMin: number; column: number; columns: number };
+
+/**
+ * Timed events of one day, clipped to the day and laid out side by side where they overlap
+ * (greedy columns inside each cluster of overlapping events).
+ */
+export function layoutDay(day: Date, events: CalendarEvent[]): PositionedEvent[] {
+  const dayStart = startOfDay(day);
+  const dayEnd = addDays(dayStart, 1);
+  const items = events
+    .filter((e) => !isAllDayLike(e) && overlaps(e, dayStart, dayEnd))
+    .map((event) => {
+      const start = Math.max(new Date(event.startsAt).getTime(), dayStart.getTime());
+      const end = Math.min(new Date(event.endsAt).getTime(), dayEnd.getTime());
+      const startMin = (start - dayStart.getTime()) / 60_000;
+      return { event, startMin, endMin: Math.max(startMin + 15, (end - dayStart.getTime()) / 60_000), column: 0, columns: 1 };
+    })
+    .sort((a, b) => a.startMin - b.startMin || b.endMin - a.endMin);
+
+  let cluster: PositionedEvent[] = [];
+  let clusterEnd = -1;
+  const flush = () => {
+    const columns = Math.max(1, ...cluster.map((i) => i.column + 1));
+    cluster.forEach((i) => (i.columns = columns));
+    cluster = [];
+  };
+  for (const item of items) {
+    if (item.startMin >= clusterEnd) flush();
+    const taken = new Set(cluster.filter((i) => i.endMin > item.startMin).map((i) => i.column));
+    let column = 0;
+    while (taken.has(column)) column++;
+    item.column = column;
+    cluster.push(item);
+    clusterEnd = Math.max(clusterEnd, item.endMin);
+  }
+  flush();
+  return items;
+}
+
 const time = new Intl.DateTimeFormat("ko-KR", { hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
 const monthDay = new Intl.DateTimeFormat("ko-KR", { month: "long", day: "numeric", weekday: "short" });
 const fullDate = new Intl.DateTimeFormat("ko-KR", { year: "numeric", month: "long", day: "numeric", weekday: "short" });
