@@ -72,3 +72,26 @@ export function useHiddenCalendars() {
     });
   return { hidden, toggle };
 }
+
+const SCOPE_KEY = "plandit-calendar-scope";
+
+/** Which workspace the calendar screen shows ("all" = every workspace), remembered per browser. */
+export function useCalendarScope() {
+  const [scope, setScopeState] = useState("all");
+  useEffect(() => {
+    try {
+      setScopeState(window.localStorage.getItem(SCOPE_KEY) ?? "all");
+    } catch {
+      // not remembered
+    }
+  }, []);
+  const setScope = (next: string) => {
+    setScopeState(next);
+    try {
+      window.localStorage.setItem(SCOPE_KEY, next);
+    } catch {
+      // not remembered
+    }
+  };
+  return { scope, setScope };
+}
