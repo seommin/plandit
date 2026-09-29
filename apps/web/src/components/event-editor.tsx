@@ -342,7 +342,7 @@ function EditorForm({ state, calendars, onClose, onSaved, onRemoved }: Props & {
                   <button
                     className={cn(
                       "h-8 shrink-0 rounded-lg px-3 text-[13px] font-semibold transition-colors",
-                      duration === minutes ? "bg-surface text-fg ring-1 ring-fg" : "bg-surface-2 text-fg-2 hover:bg-surface-3",
+                      duration === minutes ? "bg-surface text-fg ring-1 ring-inset ring-fg" : "bg-surface-2 text-fg-2 hover:bg-surface-3",
                     )}
                     key={minutes}
                     onClick={() => setEnd(new Date(start.getTime() + minutes * MINUTE))}
@@ -362,7 +362,7 @@ function EditorForm({ state, calendars, onClose, onSaved, onRemoved }: Props & {
                   aria-checked={calendar.id === calendarId}
                   className={cn(
                     "flex h-9 shrink-0 items-center gap-2 rounded-lg px-3.5 text-[14px] font-semibold transition-colors",
-                    calendar.id === calendarId ? "bg-surface text-fg ring-1 ring-fg" : "bg-surface-2 text-fg-2 hover:bg-surface-3",
+                    calendar.id === calendarId ? "bg-surface text-fg ring-1 ring-inset ring-fg" : "bg-surface-2 text-fg-2 hover:bg-surface-3",
                   )}
                   key={calendar.id}
                   onClick={() => setCalendarId(calendar.id)}
@@ -459,7 +459,7 @@ function Chip({ active, danger, onClick, children }: { active: boolean; danger?:
       aria-expanded={active}
       className={cn(
         "h-10 rounded-xl px-3 text-[15px] font-semibold tabular-nums transition-colors",
-        active ? "bg-surface ring-1 ring-fg" : "bg-surface-2 hover:bg-surface-3",
+        active ? "bg-surface ring-1 ring-inset ring-fg" : "bg-surface-2 hover:bg-surface-3",
         danger && !active && "text-danger",
       )}
       onClick={onClick}

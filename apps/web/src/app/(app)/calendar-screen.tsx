@@ -1,16 +1,17 @@
 "use client";
 
-import { ChevronDown, ChevronLeft, ChevronRight, SlidersHorizontal } from "lucide-react";
+import { ChevronDown, ChevronLeft, ChevronRight } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 
+import { useApp } from "@/components/app-context";
 import { defaultStart, EventEditor, type EditorState } from "@/components/event-editor";
 import { DateNavigator, MiniMonth, useDayDots } from "@/components/mini-month";
 import { MonthGrid } from "@/components/month-grid";
 import { TimeGrid } from "@/components/time-grid";
 import { useToast } from "@/components/toast";
 import { Button, cn, IconButton, Notice, Segmented, Sheet } from "@/components/ui";
-import { useCalendarState, useHiddenCalendars } from "@/components/use-calendar-state";
+import { useCalendarScope, useCalendarState, useHiddenCalendars } from "@/components/use-calendar-state";
 import { api, errorMessage } from "@/lib/client-api";
 import { addDays, addMonths, formatMonthDay, formatMonthTitle, formatTime, isSameDay, monthGridRange, startOfDay, startOfMonth, startOfWeek } from "@/lib/dates";
 import { type Calendar, type CalendarEvent, type CalendarState, canWrite } from "@/lib/types";
@@ -42,8 +43,37 @@ export function CalendarScreen({ initial, openCreate }: { initial: CalendarState
   const range = useMemo(() => monthGridRange(startOfMonth(selected)), [selected.getFullYear(), selected.getMonth()]); // eslint-disable-line react-hooks/exhaustive-deps
   const { calendars, events, upsertEvent, removeEvent, loading, error } = useCalendarState(range.from, range.to, initial);
   const { hidden, toggle } = useHiddenCalendars();
-  const visible = useMemo(() => events.filter((e) => !hidden.includes(e.calendarId)), [events, hidden]);
+  const { workspaces } = useApp();
+  const { scope, setScope } = useCalendarScope();
+
+  // "전체" or one workspace: only that workspace's calendars are listed, shown and offered for new events.
+  const activeScope = scope !== "all" && (workspaces.some((w) => w.id === scope) || calendars.some((c) => c.workspaceId === scope)) ? scope : "all";
+  const scopedCalendars = useMemo(() => (activeScope === "all" ? calendars : calendars.filter((c) => c.workspaceId === activeScope)), [calendars, activeScope]);
+  const visible = useMemo(() => {
+    const ids = new Set(scopedCalendars.map((c) => c.id));
+    return events.filter((e) => ids.has(e.calendarId) && !hidden.includes(e.calendarId));
+  }, [events, hidden, scopedCalendars]);
   const dots = useDayDots(visible, range.from, range.to);
+
+  const scopeLabel = (id: string) => {
+    const workspace = workspaces.find((w) => w.id === id);
+    return !workspace ? "전체" : workspace.type === "PERSONAL" ? "개인" : workspace.name;
+  };
+  const ordered = [...workspaces].sort((a, b) => Number(b.type === "PERSONAL") - Number(a.type === "PERSONAL"));
+  const scopeOptions = [{ id: "all", label: "전체" }, ...ordered.map((w) => ({ id: w.id, label: scopeLabel(w.id) }))];
+  const sections =
+    activeScope !== "all" || workspaces.length < 2
+      ? [{ label: "", calendars: scopedCalendars }]
+      : [
+          ...ordered.map((w) => ({ label: scopeLabel(w.id), calendars: calendars.filter((c) => c.workspaceId === w.id) })),
+          { label: "공유받은 캘린더", calendars: calendars.filter((c) => !workspaces.some((w) => w.id === c.workspaceId)) },
+        ].filter((section) => section.calendars.length);
+  const calendarList = (
+    <div className="space-y-2">
+      {workspaces.length > 1 ? <ScopePicker onChange={setScope} options={scopeOptions} value={activeScope} /> : null}
+      <CalendarFilter hidden={hidden} onToggle={toggle} sections={sections} />
+    </div>
+  );
 
   const writable = useMemo(() => new Set(calendars.filter(canWrite).map((c) => c.id)), [calendars]);
   const canEdit = (event: CalendarEvent) => writable.has(event.calendarId);
@@ -123,8 +153,8 @@ export function CalendarScreen({ initial, openCreate }: { initial: CalendarState
       <aside className="hidden w-72 shrink-0 space-y-6 overflow-y-auto border-r border-line px-4 py-5 xl:block">
         <MiniMonth dots={dots} key={`${selected.getFullYear()}-${selected.getMonth()}`} month={selected} onSelect={setSelected} selected={selected} withHeader />
         <section>
-          <h2 className="mb-1 px-2 text-[12px] font-semibold text-fg-3">캘린더</h2>
-          <CalendarFilter calendars={calendars} hidden={hidden} onToggle={toggle} />
+          {workspaces.length > 1 ? null : <h2 className="mb-2 px-2 text-[12px] font-semibold text-fg-3">캘린더</h2>}
+          {calendarList}
         </section>
       </aside>
 
@@ -144,7 +174,16 @@ export function CalendarScreen({ initial, openCreate }: { initial: CalendarState
               <span className="sr-only">{loading ? "불러오는 중" : ""}</span>
             </span>
 
-            <div className="ml-auto flex items-center gap-1">
+            <div className="ml-auto flex min-w-0 items-center gap-1">
+              <button
+                aria-label={`보는 범위: ${scopeLabel(activeScope)}. 워크스페이스·캘린더 고르기`}
+                className="flex h-9 min-w-0 max-w-[40vw] items-center gap-1 rounded-xl px-2.5 text-sm font-semibold text-fg-2 transition-colors hover:bg-surface-2 xl:hidden"
+                onClick={() => setFilterOpen(true)}
+                type="button"
+              >
+                <span className="truncate">{scopeLabel(activeScope)}</span>
+                <ChevronDown className="shrink-0 text-fg-3" size={16} />
+              </button>
               <Button onClick={() => setSelected(startOfDay(new Date()))} size="sm" variant="secondary">
                 오늘
               </Button>
@@ -159,9 +198,6 @@ export function CalendarScreen({ initial, openCreate }: { initial: CalendarState
               <div className="ml-2 hidden lg:block">
                 <Segmented label="보기" onChange={setView} options={VIEWS} value={view} />
               </div>
-              <IconButton className="xl:hidden" label="표시할 캘린더" onClick={() => setFilterOpen(true)}>
-                <SlidersHorizontal size={19} />
-              </IconButton>
             </div>
           </div>
 
@@ -201,40 +237,67 @@ export function CalendarScreen({ initial, openCreate }: { initial: CalendarState
         </div>
       </div>
 
-      <EventEditor calendars={calendars} onClose={() => setEditor({ mode: "closed" })} onRemoved={removeEvent} onSaved={upsertEvent} state={editor} />
+      <EventEditor calendars={scopedCalendars} onClose={() => setEditor({ mode: "closed" })} onRemoved={removeEvent} onSaved={upsertEvent} state={editor} />
 
-      <Sheet onClose={() => setFilterOpen(false)} open={filterOpen} title="표시할 캘린더">
-        <CalendarFilter calendars={calendars} hidden={hidden} onToggle={toggle} />
+      <Sheet onClose={() => setFilterOpen(false)} open={filterOpen} title="캘린더 보기">
+        {calendarList}
       </Sheet>
     </div>
   );
 }
 
-function CalendarFilter({ calendars, hidden, onToggle }: { calendars: Calendar[]; hidden: string[]; onToggle: (id: string) => void }) {
+function ScopePicker({ options, value, onChange }: { options: Array<{ id: string; label: string }>; value: string; onChange: (id: string) => void }) {
   return (
-    <ul>
-      {calendars.map((calendar) => {
-        const shown = !hidden.includes(calendar.id);
-        return (
-          <li key={calendar.id}>
-            <button aria-pressed={shown} className="flex h-11 w-full items-center gap-3 rounded-xl px-2 text-left hover:bg-surface-2" onClick={() => onToggle(calendar.id)} type="button">
-              <span
-                aria-hidden="true"
-                className="flex size-[18px] items-center justify-center rounded-[5px] border-2 transition-colors"
-                style={{ borderColor: calendar.color, backgroundColor: shown ? calendar.color : "transparent" }}
-              >
-                {shown ? (
-                  <svg className="size-3 text-white" fill="none" stroke="currentColor" strokeWidth={3.5} viewBox="0 0 24 24">
-                    <path d="M5 12l5 5L20 7" />
-                  </svg>
-                ) : null}
-              </span>
-              <span className={cn("min-w-0 flex-1 truncate text-[15px] font-medium", !shown && "text-fg-3")}>{calendar.name}</span>
-              {calendar.type === "SHARED" ? <span className="text-xs text-fg-3">공유</span> : null}
-            </button>
-          </li>
-        );
-      })}
-    </ul>
+    <div aria-label="워크스페이스" className="flex gap-4 overflow-x-auto px-2 scrollbar-hide" role="radiogroup">
+      {options.map((option) => (
+        <button
+          aria-checked={option.id === value}
+          className={cn("relative h-9 shrink-0 text-[14px] font-semibold transition-colors", option.id === value ? "text-fg" : "text-fg-3 hover:text-fg-2")}
+          key={option.id}
+          onClick={() => onChange(option.id)}
+          role="radio"
+          type="button"
+        >
+          {option.label}
+          {option.id === value ? <span aria-hidden="true" className="absolute inset-x-0 bottom-1 h-0.5 rounded-full bg-fg" /> : null}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function CalendarFilter({ sections, hidden, onToggle }: { sections: Array<{ label: string; calendars: Calendar[] }>; hidden: string[]; onToggle: (id: string) => void }) {
+  return (
+    <div className="space-y-2">
+      {sections.map((section) => (
+        <div key={section.label || "all"}>
+          {section.label ? <p className="px-2 pb-0.5 pt-1 text-[12px] font-semibold text-fg-3">{section.label}</p> : null}
+          <ul>
+            {section.calendars.map((calendar) => {
+              const shown = !hidden.includes(calendar.id);
+              return (
+                <li key={calendar.id}>
+                  <button aria-pressed={shown} className="flex h-11 w-full items-center gap-3 rounded-xl px-2 text-left hover:bg-surface-2" onClick={() => onToggle(calendar.id)} type="button">
+                    <span
+                      aria-hidden="true"
+                      className="flex size-[18px] items-center justify-center rounded-[5px] border-2 transition-colors"
+                      style={{ borderColor: calendar.color, backgroundColor: shown ? calendar.color : "transparent" }}
+                    >
+                      {shown ? (
+                        <svg className="size-3 text-white" fill="none" stroke="currentColor" strokeWidth={3.5} viewBox="0 0 24 24">
+                          <path d="M5 12l5 5L20 7" />
+                        </svg>
+                      ) : null}
+                    </span>
+                    <span className={cn("min-w-0 flex-1 truncate text-[15px] font-medium", !shown && "text-fg-3")}>{calendar.name}</span>
+                    {calendar.type === "SHARED" ? <span className="text-xs text-fg-3">공유</span> : null}
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      ))}
+    </div>
   );
 }
