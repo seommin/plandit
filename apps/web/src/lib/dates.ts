@@ -1,3 +1,5 @@
+import * as holidayYears from "@hyunbinseo/holidays-kr/all";
+
 import type { CalendarEvent } from "./types";
 
 export const DAY_MS = 86_400_000;
@@ -59,6 +61,16 @@ export function buildMonthWeeks(month: Date, events: CalendarEvent[]): MonthWeek
   }
   return weeks;
 }
+
+// --- Weekends and public holidays ---
+
+/** Official public holidays from the government gazette (2018–2027); bump the package when a new year is announced. */
+const HOLIDAYS: Record<string, readonly string[]> = Object.assign({}, ...Object.values(holidayYears));
+
+export const holidayName = (date: Date) => HOLIDAYS[toDateInput(date)]?.join(", ");
+
+/** Date color: red for Sundays and holidays, blue for Saturdays, otherwise none. */
+export const dayTone = (date: Date) => (date.getDay() === 0 || holidayName(date) ? "text-sunday" : date.getDay() === 6 ? "text-saturday" : "");
 
 // --- Time grid ---
 
