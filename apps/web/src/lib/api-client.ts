@@ -66,7 +66,8 @@ export async function proxyInternalApi(
   const responseBody = await response.text();
   const contentType = response.headers.get("content-type") ?? "application/json";
 
-  return new NextResponse(responseBody, {
+  // 204/304 must not carry a body (the Response constructor throws).
+  return new NextResponse(response.status === 204 || response.status === 304 ? null : responseBody, {
     status: response.status,
     headers: {
       "content-type": contentType,

@@ -11,7 +11,8 @@
     "test": "jest",
     "test:e2e": "node ../../scripts/with-root-env.mjs jest -c test/jest-e2e.config.js --runInBand",
     "dev:worker": "node ../../scripts/with-root-env.mjs ts-node -r tsconfig-paths/register src/worker.ts",
-    "start:worker": "node dist/apps/api/src/worker.js"
+    "start:worker": "node dist/apps/api/src/worker.js",
+    "seed:demo": "node ../../scripts/with-root-env.mjs ts-node -r tsconfig-paths/register src/scripts/seed-demo.ts"
   },
   "dependencies": {
     "@nestjs/common": "11.1.9",
