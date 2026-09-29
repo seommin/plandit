@@ -9,7 +9,7 @@ import { type Calendar, type CalendarEvent, canWrite } from "@/lib/types";
 
 import { MiniMonth } from "./mini-month";
 import { useToast } from "./toast";
-import { Button, cn, IconButton, Notice, Select, Sheet } from "./ui";
+import { Button, cn, IconButton, Notice, Picker, Sheet } from "./ui";
 
 type Reminder = { minutesBefore: number; channel: "PUSH" | "SMS" | "ALIMTALK"; audience: "CREATOR" | "ATTENDEES" };
 
@@ -534,24 +534,9 @@ function ReminderEditor({ value, onChange }: { value: Reminder[]; onChange: (val
     <div className="pb-1">
       {value.map((reminder, index) => (
         <div className="flex items-center gap-2 py-1" key={index}>
-          <div className="min-w-0 flex-1">
-            <Select aria-label="알림 시점" onChange={(e) => update(index, { minutesBefore: Number(e.target.value) })} value={reminder.minutesBefore}>
-              {REMINDER_TIMES.map((t) => (
-                <option key={t.value} value={t.value}>
-                  {t.label}
-                </option>
-              ))}
-            </Select>
-          </div>
-          <div className="w-24 shrink-0">
-            <Select aria-label="알림 방법" onChange={(e) => update(index, { channel: e.target.value as Reminder["channel"] })} value={reminder.channel}>
-              {CHANNELS.map((c) => (
-                <option key={c.value} value={c.value}>
-                  {c.label}
-                </option>
-              ))}
-            </Select>
-          </div>
+          <Picker label="알림 시점" onChange={(minutesBefore) => update(index, { minutesBefore })} options={REMINDER_TIMES} value={reminder.minutesBefore} variant="text" />
+          <Picker label="알림 방법" onChange={(channel) => update(index, { channel })} options={[...CHANNELS]} value={reminder.channel} variant="text" />
+          <span className="flex-1" />
           <IconButton label="알림 삭제" onClick={() => onChange(value.filter((_, i) => i !== index))}>
             <X size={18} />
           </IconButton>
@@ -587,7 +572,7 @@ function Switch({ checked, onChange, label }: { checked: boolean; onChange: (che
       role="switch"
       type="button"
     >
-      <span className={cn("absolute top-0.5 size-6 rounded-full shadow-card transition-transform", checked ? "translate-x-[22px] bg-on-primary" : "translate-x-0.5 bg-white")} />
+      <span className={cn("absolute left-0 top-0.5 size-6 rounded-full shadow-card transition-transform", checked ? "translate-x-[22px] bg-on-primary" : "translate-x-0.5 bg-white")} />
     </button>
   );
 }
