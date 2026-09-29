@@ -20,6 +20,8 @@ erDiagram
     reminder_deliveries ||--o{ relay_events : "중계사 웹훅"
     workspaces ||--o{ audit_logs : ""
     workspaces ||--o{ ai_usages : ""
+    workspaces ||--o{ trip_plans : "AI 여행 초안"
+    trip_plans ||--o{ events : "적용 시 생성"
 ```
 
 ## ★ 변경되는 기존 테이블
@@ -193,11 +195,31 @@ UPDATE·DELETE는 트리거로 차단(원장과 같은 방식). 변경과 같은
 ## 2주차 추가 테이블 (AI)
 
 ### ai_usages
-workspace_id, user_id, feature(SCHEDULE_ASSISTANT / MEMORY_SEARCH), model, input_tokens, output_tokens, credits, debit_ledger_id, adjust_ledger_id, latency_ms, created_at.
+workspace_id, user_id, feature(SCHEDULE_ASSISTANT / MEMORY_SEARCH / TRIP_PLANNER), model, input_tokens, output_tokens, credits, debit_ledger_id, adjust_ledger_id, latency_ms, created_at.
 LLM 호출 전 예상 크레딧 DEBIT, 호출 후 실제 사용량으로 ADJUST.
 
 ### assistant_sessions / assistant_messages
 workspace_id, user_id, title / session_id, role, content, tool_calls(jsonb), tool_results(jsonb), ai_usage_id. Tool Calling 기록.
+
+### trip_plans — AI 여행 일정 초안 (PLANDIT-26)
+| 컬럼 | 타입 | 비고 |
+|---|---|---|
+| id | cuid PK | |
+| workspace_id | FK | 크레딧을 쓰는 워크스페이스 |
+| calendar_id | FK calendars | 일정을 넣을 캘린더(이 워크스페이스 소속) |
+| created_by | FK users | 초안은 만든 사람만 조회·수정·적용 |
+| request_key | text | `Idempotency-Key` 헤더. unique(created_by, request_key) — 두 번 눌러도 1건 |
+| input | jsonb | 양식 입력(목적지·기간·참석자 userId·스타일). LLM에는 인원 수만 보냄 |
+| draft | jsonb null | 검증을 통과한 모델 출력, 사용자가 `PATCH`로 고친 결과 |
+| status | enum GENERATING / READY / FAILED / APPLIED | GENERATING → READY·FAILED, READY → APPLIED |
+| failure_code | text null | LLM_ERROR / LLM_TIMEOUT / INVALID_OUTPUT / STALE |
+| ai_usage_id | FK ai_usages | 원장 멱등키 `"AI_USAGE:{ai_usage_id}:DEBIT / ADJUST / REFUND"` |
+| created_at, updated_at, applied_at | | |
+
+### events (변경)
+| 추가 컬럼 | 타입 | 비고 |
+|---|---|---|
+| trip_plan_id | FK trip_plans null | 여행 초안으로 만든 일정. "되돌리기"는 이 값으로 지운다 |
 
 ### documents / document_chunks — 회의록 파일 RAG (PLANDIT-22)
 documents: workspace_id, calendar_id null, event_id null, uploaded_by, filename, mime_type, size_bytes, storage_path, status(UPLOADED/PROCESSING/READY/FAILED), error, created_at.

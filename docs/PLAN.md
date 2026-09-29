@@ -236,6 +236,31 @@
 - PLANDIT-23 같은 도구를 **MCP 서버**로 노출(사용자 토큰 기반)
 - PLANDIT-24 AI 권한·한도: 워크스페이스별 월 AI 크레딧 상한, LLM 실패 시 환불
 - PLANDIT-25 README에 AI 데모 GIF
+- PLANDIT-26 **AI 여행 일정 만들기**(양식 → 초안 → 확인 → 한 번에 저장, 함께 갈 멤버는 참석자로). 아래 상세
+
+### PLANDIT-26 · AI 여행 일정 만들기
+양식으로 목적지·기간·함께 갈 멤버를 받으면 AI가 날짜별 여행 일정 초안을 만들고, 사용자가 확인·수정한 뒤 캘린더에 한 번에 넣는다.
+채팅으로 초안 고치기("둘째 날 오후는 쉬게 해줘")는 PLANDIT-21에서 같은 초안에 붙인다. **선행: PLANDIT-20**(`LlmClient`·Claude 어댑터·`ai_usages`·예상 선차감 → 정산).
+- [ ] 입력 스키마(`packages/shared/trips.ts`): calendarId, destination(1~80자), startDate·endDate(`YYYY-MM-DD`, 최대 7일), attendeeUserIds(0~20명, 본인 제외), pace(`RELAXED / NORMAL / PACKED`), interests(관광·맛집·휴식·쇼핑·액티비티 복수 선택), request(자유 요청 500자 이하)
+- [ ] 출력 스키마(같은 파일): `{ timezone, days: [{ date, items: [{ title, startTime "HH:mm", endTime "HH:mm", location?, description?, category: MOVE / MEAL / SIGHT / STAY / FREE }] }], notes? }`, 하루 최대 10개. 이 zod 스키마를 `z.toJSONSchema`로 바꿔 Claude 도구 `propose_itinerary`의 입력 형식으로 주고(이 도구만 쓰게 강제), 응답을 같은 스키마로 다시 검증
+- [ ] 서버 추가 검증: 날짜가 요청 기간 안, 종료 > 시작(자정을 넘는 항목 없음), timezone이 IANA 이름(`Intl.supportedValuesOf("timeZone")`). 어기면 1회 다시 요청, 또 어기면 FAILED + 전액 환불
+- [ ] 참석자: 대상 캘린더가 속한 **워크스페이스의 멤버이면서 그 캘린더의 멤버**인 사람만. 지금 일정 목록은 캘린더 멤버에게만 보이므로(`events.controller.ts` list), 캘린더 멤버가 아니면 참석자인데 일정을 못 본다. 개인 캘린더는 참석자 없음. 조건 밖이면 400 `ATTENDEE_NOT_ELIGIBLE`(details에 userId 목록)
+- [ ] LLM에는 인원 수(본인 포함)만 보낸다. 멤버 이름·이메일은 보내지 않는다
+- [ ] `TripPlan`(workspaceId, calendarId, createdById, requestKey(unique(createdById, requestKey)), input jsonb, draft jsonb, status `GENERATING → READY / FAILED`, `READY → APPLIED`, failureCode, aiUsageId, appliedAt) + `Event.tripPlanId`(null 허용) 마이그레이션
+- [ ] API `/workspaces/:workspaceId/trip-plans`(워크스페이스 멤버만, 캘린더가 이 워크스페이스 소속이 아니면 404)
+  - `POST`(`Idempotency-Key` 헤더 필수 — 두 번 눌러도 초안·차감 1건): 대상 캘린더 쓰기 권한(OWNER / ADMIN / EDITOR) 확인 → `TripPlan` GENERATING **선기록** + `AiUsage` + 예상 크레딧 DEBIT(`"AI_USAGE:{aiUsageId}:DEBIT"`)을 한 트랜잭션(잔액 부족이면 409 `INSUFFICIENT_CREDITS`, 행·LLM 호출 없음) → 큐 작업 `trip-plan.generate` 등록 → 202
+  - `GET /:id`(상태 폴링), `GET`(내 초안 목록, cursor·최신순), `PATCH /:id`(READY 초안의 항목·참석자 교체, 같은 스키마로 검증)
+  - `POST /:id/apply`: 초안 행 `FOR UPDATE` → 캘린더 쓰기 권한·참석자 자격 **다시 확인**(초안을 만든 뒤 바뀌었을 수 있음) → 일정 N건(공개 범위 CALENDAR, `tripPlanId`) + 일정마다 참석자(userId·email·name, NEEDS_ACTION) → APPLIED, 한 트랜잭션. 이미 APPLIED면 만든 일정을 그대로 돌려줌
+  - `DELETE /:id/events`: 이 초안으로 만든 일정만 삭제(되돌리기)
+  - 남의 초안·다른 워크스페이스는 404, 캘린더 쓰기 권한 없음 403
+- [ ] 워커 `trip-plan.generate`: GENERATING일 때만 실행(재시도해도 LLM 결과는 한 번만 반영) → `LlmClient` 호출(`LLM_TIMEOUT_MS`) → 검증 → READY + 실사용 정산(`"AI_USAGE:{aiUsageId}:ADJUST"`). LLM 오류·타임아웃·검증 실패 → FAILED + 환불(`"AI_USAGE:{aiUsageId}:REFUND"`). `TRIP_PLAN_STALE_MS` 넘게 GENERATING인 초안은 반복 작업이 FAILED + 환불
+- [ ] 시각 변환: 현지 날짜·시각 + timezone → UTC로 저장(서머타임 반영). 일정에는 시간대 필드가 없어 보는 사람 기준 시각으로 표시되므로, 캘린더 시간대와 다르면 설명 첫 줄에 현지 시각(`현지 10:00–12:00 · Europe/Paris`)을 적는다
+- [ ] web: 새 일정(`+`) 메뉴에 "AI로 여행 일정 짜기" → `Sheet` 양식(목적지, 기간, 캘린더 `Picker`, 멤버 선택 — 캘린더 멤버가 아닌 워크스페이스 멤버는 흐리게 + "이 캘린더 멤버만 함께 갈 수 있어요") → 예상 크레딧 표시 → 만드는 중(폴링) → 날짜별 미리보기(항목 끄기, 제목·시간 수정) → "캘린더에 N개 추가" → 완료 토스트 + "되돌리기". 미리보기에 "AI가 만든 초안이에요. 영업시간·휴무일은 한 번 더 확인해 주세요". 375px 먼저, 새 오류 코드는 `lib/client-api.ts`에서 한국어로
+- **완료 조건**:
+  - 단위: 출력 검증(기간 밖 날짜, 종료 ≤ 시작, 하루 항목 초과, 잘못된 시간대), 현지 시각 → UTC(`Europe/Paris` 서머타임 시작일 포함), 예상 크레딧 계산
+  - e2e(모의 `LlmClient` + 실제 BullMQ 워커): 생성 → READY → 적용 → 일정 N건·참석자 N×M행 / 같은 `Idempotency-Key`로 생성 두 번 → 초안·DEBIT 1건 / 적용 두 번·동시 적용 2건 → 일정 N건 유지 / 되돌리기 → 그 초안의 일정만 삭제 / VIEWER 403 / 다른 워크스페이스 캘린더·남의 초안 404 / 캘린더 멤버가 아닌 워크스페이스 멤버·워크스페이스 밖 사용자를 참석자로 → 400 / 초안 뒤 참석자가 워크스페이스를 떠남 → 적용 400 / 잔액 부족 409, LLM 호출 0회 / LLM 오류·스키마 위반·타임아웃 → FAILED + 전액 환불 / 불변식 `선차감(DEBIT) = 실사용 + 되돌려준 크레딧(ADJUST·REFUND)`
+  - 개발 서버: 팀 캘린더에 3박 4일 여행 일정 만들기 → 함께 가는 멤버 계정의 캘린더에도 보임
+- **확인 필요**: 캘린더 멤버가 아닌 워크스페이스 멤버도 참석자로 넣을지. 넣으려면 (a) 적용할 때 그 캘린더에 VIEWER로 자동 추가(요청자가 캘린더 OWNER / ADMIN이어야 함) 또는 (b) 참석자에게는 캘린더 멤버가 아니어도 그 일정이 보이도록 일정 목록 조건 변경(기존 권한 모델 변경). 정해질 때까지는 위의 "캘린더 멤버만"으로 둔다
 
 ## 3주차 — 규모·운영 (개요)
 
