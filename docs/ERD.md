@@ -214,6 +214,7 @@ workspace_id, user_id, title / session_id, role, content, tool_calls(jsonb), too
 | status | enum GENERATING / READY / FAILED / APPLIED | GENERATING → READY·FAILED, READY → APPLIED |
 | failure_code | text null | LLM_ERROR / LLM_TIMEOUT / INVALID_OUTPUT / STALE |
 | ai_usage_id | FK ai_usages | 원장 멱등키 `"AI_USAGE:{ai_usage_id}:DEBIT / ADJUST / REFUND"` |
+| added_calendar_member_ids | text[] | 적용 때 캘린더에 VIEWER로 자동 추가한 사용자. 되돌리기 안내용(되돌려도 멤버는 남음) |
 | created_at, updated_at, applied_at | | |
 
 ### events (변경)
