@@ -22,7 +22,6 @@ export function useDayDots(events: CalendarEvent[], from: Date, to: Date) {
 
 function DayCell({ date, selected, muted, dots, onSelect }: { date: Date; selected: boolean; muted?: boolean; dots?: string[]; onSelect: (date: Date) => void }) {
   const today = isSameDay(date, new Date());
-  const weekday = date.getDay();
   return (
     <button
       aria-current={today ? "date" : undefined}
@@ -35,8 +34,8 @@ function DayCell({ date, selected, muted, dots, onSelect }: { date: Date; select
       <span
         className={cn(
           "flex size-8 items-center justify-center rounded-full text-[15px] font-semibold tabular-nums transition-colors",
-          selected ? "bg-primary text-on-primary" : today ? "text-accent" : muted ? "text-fg-3/60" : weekday === 0 ? "text-sunday" : weekday === 6 ? "text-saturday" : "text-fg",
-          !selected && "hover:bg-surface-2",
+          today ? "bg-primary text-on-primary" : selected ? "ring-1 ring-fg" : muted ? "text-fg-3/60" : "text-fg",
+          !today && !selected && "hover:bg-surface-2",
         )}
       >
         {date.getDate()}
@@ -53,8 +52,8 @@ function DayCell({ date, selected, muted, dots, onSelect }: { date: Date; select
 export function WeekdayHeader() {
   return (
     <div className="grid grid-cols-7">
-      {WEEKDAYS.map((label, i) => (
-        <span className={cn("py-1 text-center text-[11px] font-semibold", i === 0 ? "text-sunday/80" : i === 6 ? "text-saturday/80" : "text-fg-3")} key={label}>
+      {WEEKDAYS.map((label) => (
+        <span className="py-1 text-center text-[11px] font-semibold text-fg-3" key={label}>
           {label}
         </span>
       ))}

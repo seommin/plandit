@@ -27,6 +27,7 @@ const CHANNELS = [
   { value: "ALIMTALK", label: "알림톡", cost: 1 },
 ] as const;
 const DURATIONS = [30, 60, 90, 120];
+const DEFAULT_COLOR = "#3F3F46";
 const MINUTE = 60_000;
 
 export type EditorState = { mode: "closed" } | { mode: "edit"; event: CalendarEvent } | { mode: "create"; start: Date; allDay?: boolean };
@@ -43,9 +44,9 @@ export function withCalendar(raw: Omit<CalendarEvent, "calendar" | "isImportant"
   const calendar = calendars.find((c) => c.id === raw.calendarId);
   return {
     ...raw,
-    color: raw.color ?? calendar?.color ?? "#3182f6",
+    color: raw.color ?? calendar?.color ?? DEFAULT_COLOR,
     isImportant,
-    calendar: { id: raw.calendarId, name: calendar?.name ?? "캘린더", type: calendar?.type ?? "PERSONAL", color: calendar?.color ?? "#3182f6" },
+    calendar: { id: raw.calendarId, name: calendar?.name ?? "캘린더", type: calendar?.type ?? "PERSONAL", color: calendar?.color ?? DEFAULT_COLOR },
   };
 }
 
@@ -230,7 +231,7 @@ function EditorForm({ state, calendars, onClose, onSaved, onRemoved }: Props & {
         event ? (
           <div className="flex">
             <IconButton aria-pressed={important} label={important ? "중요 해제" : "중요 표시"} onClick={toggleImportant}>
-              <Star className={important ? "fill-warning text-warning" : ""} size={19} />
+              <Star className={important ? "fill-fg text-fg" : ""} size={19} />
             </IconButton>
             <IconButton label="공유 링크" onClick={share}>
               <Link2 size={19} />
@@ -340,8 +341,8 @@ function EditorForm({ state, calendars, onClose, onSaved, onRemoved }: Props & {
                 {DURATIONS.map((minutes) => (
                   <button
                     className={cn(
-                      "h-8 shrink-0 rounded-full px-3 text-[13px] font-semibold transition-colors",
-                      duration === minutes ? "bg-fg text-bg" : "bg-surface-2 text-fg-2 hover:bg-surface-3",
+                      "h-8 shrink-0 rounded-lg px-3 text-[13px] font-semibold transition-colors",
+                      duration === minutes ? "bg-surface text-fg ring-1 ring-fg" : "bg-surface-2 text-fg-2 hover:bg-surface-3",
                     )}
                     key={minutes}
                     onClick={() => setEnd(new Date(start.getTime() + minutes * MINUTE))}
@@ -360,8 +361,8 @@ function EditorForm({ state, calendars, onClose, onSaved, onRemoved }: Props & {
                 <button
                   aria-checked={calendar.id === calendarId}
                   className={cn(
-                    "flex h-9 shrink-0 items-center gap-2 rounded-full px-3.5 text-[14px] font-semibold transition-colors",
-                    calendar.id === calendarId ? "bg-fg text-bg" : "bg-surface-2 text-fg-2 hover:bg-surface-3",
+                    "flex h-9 shrink-0 items-center gap-2 rounded-lg px-3.5 text-[14px] font-semibold transition-colors",
+                    calendar.id === calendarId ? "bg-surface text-fg ring-1 ring-fg" : "bg-surface-2 text-fg-2 hover:bg-surface-3",
                   )}
                   key={calendar.id}
                   onClick={() => setCalendarId(calendar.id)}
@@ -458,7 +459,7 @@ function Chip({ active, danger, onClick, children }: { active: boolean; danger?:
       aria-expanded={active}
       className={cn(
         "h-10 rounded-xl px-3 text-[15px] font-semibold tabular-nums transition-colors",
-        active ? "bg-fg text-bg" : "bg-surface-2 hover:bg-surface-3",
+        active ? "bg-surface ring-1 ring-fg" : "bg-surface-2 hover:bg-surface-3",
         danger && !active && "text-danger",
       )}
       onClick={onClick}
@@ -492,14 +493,14 @@ function TimeList({ slots, value, onPick, describe }: { slots: Date[]; value: Da
         return (
           <button
             aria-selected={selected}
-            className={cn("flex h-11 w-full items-center gap-3 rounded-xl px-3 text-left text-[15px] tabular-nums", selected ? "bg-fg font-semibold text-bg" : "hover:bg-surface-3")}
+            className={cn("flex h-11 w-full items-center gap-3 rounded-xl px-3 text-left text-[15px] tabular-nums", selected ? "bg-surface-3 font-semibold" : "hover:bg-surface-3")}
             key={slot.getTime()}
             onClick={() => onPick(slot)}
             role="option"
             type="button"
           >
             {formatTime(slot)}
-            {describe ? <span className={cn("text-[13px]", selected ? "text-bg/70" : "text-fg-3")}>{describe(slot)}</span> : null}
+            {describe ? <span className={cn("text-[13px]", selected ? "text-fg-2" : "text-fg-3")}>{describe(slot)}</span> : null}
           </button>
         );
       })}

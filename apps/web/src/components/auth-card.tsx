@@ -6,7 +6,7 @@ export function AuthCard({ children, subtitle }: { children: ReactNode; subtitle
     <main className="flex min-h-dvh flex-col items-center justify-center bg-bg px-4 py-10">
       <div className="w-full max-w-[400px]">
         <div className="mb-8 text-center">
-          <p className="brand-script text-[44px] leading-none text-fg">Plandit</p>
+          <p className="wordmark text-[32px] text-fg">PLANDIT</p>
           {subtitle ? <p className="mt-3 text-[15px] text-fg-2">{subtitle}</p> : null}
         </div>
         <div className="rounded-3xl bg-surface p-6 shadow-card">{children}</div>

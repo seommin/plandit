@@ -37,8 +37,8 @@ export function MonthGrid({ month, events, onOpenDay, onCreate, onOpenEvent, onM
   return (
     <div className="flex min-h-full flex-col">
       <div className="grid grid-cols-7 border-b border-line">
-        {WEEKDAYS.map((label, i) => (
-          <div className={cn("py-2 text-center text-[11px] font-semibold", i === 0 ? "text-sunday" : i === 6 ? "text-saturday" : "text-fg-3")} key={label}>
+        {WEEKDAYS.map((label) => (
+          <div className="py-2 text-center text-[11px] font-semibold text-fg-3" key={label}>
             {label}
           </div>
         ))}
@@ -62,8 +62,7 @@ export function MonthGrid({ month, events, onOpenDay, onCreate, onOpenEvent, onM
                     aria-label={`${date.getMonth() + 1}월 ${date.getDate()}일 보기`}
                     className={cn(
                       "flex size-7 items-center justify-center rounded-full text-[13px] font-semibold tabular-nums transition-colors",
-                      isSameDay(date, today) ? "bg-accent text-white" : "hover:bg-surface-2",
-                      !isSameDay(date, today) && (!inMonth ? "text-fg-3/60" : i === 0 ? "text-sunday" : i === 6 ? "text-saturday" : "text-fg"),
+                      isSameDay(date, today) ? "bg-primary text-on-primary" : !inMonth ? "text-fg-3/60 hover:bg-surface-2" : "hover:bg-surface-2",
                     )}
                     onClick={() => onOpenDay(date)}
                     type="button"

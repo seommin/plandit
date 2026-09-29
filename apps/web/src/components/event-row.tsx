@@ -12,7 +12,7 @@ export function EventRow({ event, onOpen }: { event: CalendarEvent; onOpen: (eve
       <span className="min-w-0 flex-1">
         <span className="flex items-center gap-1.5">
           <span className="truncate text-[15px] font-semibold text-fg">{event.title}</span>
-          {event.isImportant ? <Star aria-label="중요" className="size-3.5 shrink-0 fill-warning text-warning" /> : null}
+          {event.isImportant ? <Star aria-label="중요" className="size-3.5 shrink-0 fill-fg text-fg" /> : null}
         </span>
         <span className="mt-0.5 block truncate text-[13px] text-fg-2">
           {formatEventTime(event)} · {event.calendar.name}
