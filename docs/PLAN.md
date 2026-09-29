@@ -53,7 +53,7 @@
   - 타입별 부호 검증(CHARGE/REFUND > 0, DEBIT < 0, ADJUST ≠ 0)
 - [x] `CreditLedger` UPDATE/DELETE 차단 트리거(SQL 마이그레이션). TRUNCATE는 테스트 DB 초기화용으로 허용
 - [x] 잔액 조회(MEMBER), 원장 조회(ADMIN+, id cursor, type 필터, 기본 최신순)
-- [x] 수동 조정: **플랫폼 운영자**(`PLATFORM_ADMIN_EMAILS`)만 — 워크스페이스 ADMIN이 스스로 크레딧을 만들 수 없게. memo·`Idempotency-Key` 헤더 필수. 감사 로그는 PLANDIT-8에서 연결
+- [x] 수동 조정: **플랫폼 운영자**(`PLATFORM_ADMIN_EMAILS`)만 — 워크스페이스 ADMIN이 스스로 크레딧을 만들 수 없게. memo·`Idempotency-Key` 헤더 필수. 감사 로그 `credit.adjusted`(재시도는 기록 안 함, PLANDIT-8)
 - [x] `LedgerService.recalculate(accountId)`: 원장 합계로 캐시 재계산
 - **완료 조건**: ✅
   - 단위: 타입별 부호 검증
@@ -88,7 +88,7 @@
   - 처리 결과를 이벤트 행에 기록: APPLIED / ALREADY_APPLIED / UNKNOWN_PAYMENT / AMOUNT_MISMATCH / CONFLICT_STATE(닫힌 결제에 승인 도착 → 운영자 확인) / UNHANDLED(CANCELED, PLANDIT-31)
 - [x] 승인 처리 `PaymentService.applyApproval(tx, …)`는 웹훅과 PLANDIT-6 재조회가 같은 멱등키로 공유
 - [x] 결제 목록(cursor)·단건 조회(ADMIN 이상)
-- 감사 로그 `payment.approved`, `payment.failed`는 PLANDIT-8에서 연결
+- 감사 로그 `payment.approved`, `payment.failed`(PLANDIT-8에서 연결, 실패 처리도 `applyFailure()`로 통합)
 - **완료 조건**: ✅ e2e(실제 모의 PG 프로세스를 띄워서 실행) — 정상(원장 1행, APPROVED) / 시나리오 `03` 중복(이벤트 1행, 원장 1행) / 잘못된 서명 401·변화 없음 / 다른 eventId로 APPROVED 재수신 → 이벤트 저장, 원장 1행 유지 / 금액 불일치 미반영 / `01` 실패 / PG 다운 → 502 + UNKNOWN / 권한·입력 검증. 개발 서버에서도 10,000원 충전 → 결제 페이지 승인 → 1,000크레딧 확인
 
 ### PLANDIT-6 · 미확정 결제 재조회 (worker) [M]
@@ -100,7 +100,7 @@
   - PG가 모르는 거래(우리 reserve가 도달 못 함) → FAILED `PG_NOT_FOUND`(아무도 결제할 수 없으므로 안전)
   - PG에서 아직 미결제 → 대기, `PAYMENT_EXPIRE_AFTER_MS`(24시간) 지나면 FAILED `EXPIRED`
   - 그사이 웹훅이 먼저 처리했으면 손대지 않음(`settled`), 금액 불일치는 반영하지 않고 오류 로그
-- 감사 로그(만료)는 PLANDIT-8에서 연결
+- 감사 로그 `payment.expired`, 처리 경로(`source: webhook|reconcile`) 기록(PLANDIT-8)
 - **완료 조건**: ✅ e2e — 시나리오 `05` 충전 → 재조회 → APPROVED, 원장 1행 → 늦은 웹훅(원 이벤트 재전송) → `ALREADY_APPLIED`, 원장 1행 유지 / PG 미도달 UNKNOWN → FAILED / 미결제 대기 → 25시간 후 만료 / 웹훅이 먼저 처리한 건 무시 / 최소 경과 시간 / **실제 BullMQ 워커가 스케줄로 스스로 실행**해 승인. `pnpm dev`에 워커 포함
 
 ### PLANDIT-7 · 리마인더 발송 큐 [M]
@@ -122,9 +122,11 @@
   - 개발 서버에서 문자 리마인더 → 가상 수신함 도착 확인
 
 ### PLANDIT-8 · 감사 로그 [M]
-- [ ] `AuditService.record()`: 워크스페이스 멤버 초대·역할 변경·제거, 결제 승인/실패/취소, 수동 조정
-- [ ] 조회 API(ADMIN 이상, cursor, action 필터)
-- **완료 조건**: PLANDIT-2·5의 e2e에서 감사 로그 행 수를 함께 검증
+- [x] `AuditLog`(append-only 트리거) + 전역 `AuditService.record(entry, tx)`: **변경과 같은 트랜잭션**에 기록 → 변경이 커밋될 때만 감사 행이 남음
+- [x] 기록 대상: `workspace.created / renamed / member_added / member_role_changed / member_removed`, `credit.adjusted`, `payment.approved / failed / expired`(payload에 `source`: charge·webhook·reconcile). 시스템 작업은 actor null
+- [x] 요청 컨텍스트(AsyncLocalStorage, `traceMiddleware`): traceId·IP·user agent를 서비스 깊이까지 전달. web 프록시가 사용자 IP(`x-forwarded-for`)·기기(`x-client-user-agent`)를 전달
+- [x] 조회 API `GET /workspaces/:id/audit-logs`(ADMIN 이상, 최신순, id cursor, action 정확 일치 또는 `payment.`처럼 접두어)
+- **완료 조건**: ✅ PLANDIT-2(워크스페이스)·3(수동 조정)·5(결제)·6(재조회) e2e에서 감사 행 수를 함께 검증 — 성공한 변경당 정확히 1행, 거부된 시도·중복 웹훅·재시도는 0행. traceId·IP·기기 기록, 목록 권한·필터·페이지네이션, DB 수정·삭제 차단
 
 ### PLANDIT-9 · 모바일 우선 UI 전면 개편 [M]
 모바일이 주 화면, PC는 같은 컴포넌트를 넓게 펼친 보조 화면.

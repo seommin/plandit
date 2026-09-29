@@ -2,6 +2,7 @@ import { Injectable } from "@nestjs/common";
 
 import { type CreditLedger, type LedgerType, prisma } from "@plandit/database/prisma";
 
+import { AuditService } from "../audit/audit.service";
 import { ApiError, ErrorCode } from "../common/api-error";
 import type { PageQuery } from "../common/pagination";
 import { LedgerService } from "./ledger.service";
@@ -22,7 +23,10 @@ export function toLedgerDto(entry: CreditLedger) {
 
 @Injectable()
 export class CreditService {
-  constructor(private readonly ledger: LedgerService) {}
+  constructor(
+    private readonly ledger: LedgerService,
+    private readonly audit: AuditService,
+  ) {}
 
   async accountOf(workspaceId: string) {
     const account = await prisma.creditAccount.findUnique({ where: { workspaceId } });
@@ -62,16 +66,34 @@ export class CreditService {
 
   async adjust(workspaceId: string, operatorId: string, amount: number, memo: string, requestKey: string) {
     const account = await this.accountOf(workspaceId);
-    const { entry, replayed } = await this.ledger.append({
-      accountId: account.id,
-      type: "ADJUST",
-      amount,
-      refType: "MANUAL",
-      refId: requestKey,
-      idempotencyKey: `MANUAL:${workspaceId}:${requestKey}`,
-      memo,
-      createdById: operatorId,
+    return prisma.$transaction(async (tx) => {
+      const { entry, replayed } = await this.ledger.append(
+        {
+          accountId: account.id,
+          type: "ADJUST",
+          amount,
+          refType: "MANUAL",
+          refId: requestKey,
+          idempotencyKey: `MANUAL:${workspaceId}:${requestKey}`,
+          memo,
+          createdById: operatorId,
+        },
+        tx,
+      );
+      if (!replayed) {
+        await this.audit.record(
+          {
+            action: "credit.adjusted",
+            workspaceId,
+            actorId: operatorId,
+            targetType: "credit_ledger",
+            targetId: entry.id.toString(),
+            payload: { amount, memo, balanceAfter: Number(entry.balanceAfter), requestKey },
+          },
+          tx,
+        );
+      }
+      return { entry: toLedgerDto(entry), replayed };
     });
-    return { entry: toLedgerDto(entry), replayed };
   }
 }
