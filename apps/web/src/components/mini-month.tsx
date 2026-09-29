@@ -3,7 +3,7 @@
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { type TouchEvent, useMemo, useRef, useState } from "react";
 
-import { addDays, addMonths, dayKey, formatMonthTitle, isSameDay, monthGridRange, overlaps, startOfMonth, startOfWeek, WEEKDAYS } from "@/lib/dates";
+import { addDays, addMonths, dayKey, dayTone, formatMonthTitle, isSameDay, monthGridRange, overlaps, startOfMonth, startOfWeek, WEEKDAYS } from "@/lib/dates";
 import type { CalendarEvent } from "@/lib/types";
 
 import { cn, IconButton } from "./ui";
@@ -34,7 +34,8 @@ function DayCell({ date, selected, muted, dots, onSelect }: { date: Date; select
       <span
         className={cn(
           "flex size-8 items-center justify-center rounded-full text-[15px] font-semibold tabular-nums transition-colors",
-          today ? "bg-primary text-on-primary" : selected ? "ring-1 ring-fg" : muted ? "text-fg-3/60" : "text-fg",
+          today ? "bg-primary text-on-primary" : muted ? "text-fg-3/60" : dayTone(date) || "text-fg",
+          selected && !today && "ring-1 ring-fg",
           !today && !selected && "hover:bg-surface-2",
         )}
       >
@@ -52,8 +53,8 @@ function DayCell({ date, selected, muted, dots, onSelect }: { date: Date; select
 export function WeekdayHeader() {
   return (
     <div className="grid grid-cols-7">
-      {WEEKDAYS.map((label) => (
-        <span className="py-1 text-center text-[11px] font-semibold text-fg-3" key={label}>
+      {WEEKDAYS.map((label, i) => (
+        <span className={cn("py-1 text-center text-[11px] font-semibold", i === 0 ? "text-sunday/80" : i === 6 ? "text-saturday/80" : "text-fg-3")} key={label}>
           {label}
         </span>
       ))}

@@ -30,7 +30,7 @@ const DURATIONS = [30, 60, 90, 120];
 const DEFAULT_COLOR = "#3F3F46";
 const MINUTE = 60_000;
 
-export type EditorState = { mode: "closed" } | { mode: "edit"; event: CalendarEvent } | { mode: "create"; start: Date; allDay?: boolean };
+export type EditorState = { mode: "closed" } | { mode: "edit"; event: CalendarEvent } | { mode: "create"; start: Date; end?: Date; allDay?: boolean };
 
 /** Start for a new event on `day`: the next half hour if it's today, otherwise 09:00. */
 export function defaultStart(day: Date) {
@@ -70,7 +70,7 @@ type Props = {
  */
 export function EventEditor({ state, calendars, onClose, onSaved, onRemoved }: Props) {
   if (state.mode === "closed") return null;
-  const key = state.mode === "edit" ? state.event.id : `new-${state.start.getTime()}`;
+  const key = state.mode === "edit" ? state.event.id : `new-${state.start.getTime()}-${state.end?.getTime()}`;
   return <EditorForm calendars={calendars} key={key} onClose={onClose} onRemoved={onRemoved} onSaved={onSaved} state={state} />;
 }
 
@@ -87,7 +87,7 @@ function EditorForm({ state, calendars, onClose, onSaved, onRemoved }: Props & {
   const [calendarId, setCalendarId] = useState(event?.calendarId ?? writableCalendars.find((c) => c.isDefault)?.id ?? writableCalendars[0]?.id ?? "");
   const [allDay, setAllDay] = useState(event?.allDay ?? (state.mode === "create" && Boolean(state.allDay)));
   const [start, setStart] = useState(() => (event ? new Date(event.startsAt) : state.mode === "create" && state.allDay ? startOfDay(state.start) : state.mode === "create" ? state.start : new Date()));
-  const [end, setEnd] = useState(() => (event ? new Date(event.endsAt) : state.mode === "create" && state.allDay ? addDays(startOfDay(state.start), 1) : new Date((state.mode === "create" ? state.start : new Date()).getTime() + 60 * MINUTE)));
+  const [end, setEnd] = useState(() => (event ? new Date(event.endsAt) : state.mode === "create" && state.allDay ? addDays(startOfDay(state.start), 1) : state.mode === "create" && state.end ? state.end : new Date((state.mode === "create" ? state.start : new Date()).getTime() + 60 * MINUTE)));
   const [location, setLocation] = useState(event?.location ?? "");
   const [description, setDescription] = useState(event?.description ?? "");
   const [reminders, setReminders] = useState<Reminder[]>([]);
