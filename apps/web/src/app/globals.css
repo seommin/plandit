@@ -1,61 +1,69 @@
 @import "tailwindcss";
 
 /*
- * Design tokens. Every color in the app comes from here, so light/dark is one switch (html[data-theme]).
+ * Design tokens — modern, minimal. Neutral zinc greys, black primary actions, hairline borders instead of shadows.
+ * One accent (--accent) is reserved for "today" and the current-time line.
+ * Every color in the app comes from here; html[data-theme] switches light/dark.
  * Tailwind utilities map to them through @theme inline: bg-surface, text-fg-2, border-line, bg-primary …
  */
 :root {
-  --bg: #f4f5f7;
+  --bg: #ffffff;
   --surface: #ffffff;
-  --surface-2: #f2f4f6;
-  --surface-3: #e8ebee;
-  --line: #e5e8eb;
-  --fg: #191f28;
-  --fg-2: #4e5968;
-  --fg-3: #8b95a1;
-  --primary: #3182f6;
-  --primary-strong: #1b64da;
-  --primary-weak: #e8f3ff;
+  --surface-2: #f4f4f5;
+  --surface-3: #e9e9ec;
+  --line: #ececef;
+  --line-strong: #dcdce0;
+  --fg: #111113;
+  --fg-2: #52525b;
+  --fg-3: #a1a1aa;
+  --primary: #111113;
+  --primary-strong: #000000;
+  --primary-weak: #f4f4f5;
   --on-primary: #ffffff;
-  --danger: #f04452;
-  --danger-weak: #ffeeee;
-  --success: #03b26c;
-  --success-weak: #e5f8ef;
-  --warning: #f59f00;
-  --warning-weak: #fff4e0;
-  --sunday: #f04452;
-  --saturday: #3182f6;
-  --scrim: rgb(0 0 0 / 0.4);
-  --shadow-card: 0 1px 2px rgb(0 0 0 / 0.04), 0 2px 8px rgb(0 0 0 / 0.04);
-  --shadow-float: 0 12px 32px rgb(0 0 0 / 0.14);
-  --tabbar-h: 64px;
+  --accent: #ff3b30;
+  --accent-weak: #fff1f0;
+  --danger: #e5484d;
+  --danger-weak: #fff0f0;
+  --success: #12a150;
+  --success-weak: #ebf8f0;
+  --warning: #e8a317;
+  --warning-weak: #fdf6e3;
+  --sunday: #e5484d;
+  --saturday: #3e63dd;
+  --scrim: rgb(9 9 11 / 0.32);
+  --shadow-card: 0 0 0 1px var(--line);
+  --shadow-float: 0 1px 2px rgb(0 0 0 / 0.06), 0 12px 40px rgb(0 0 0 / 0.12);
+  --tabbar-h: 60px;
   color-scheme: light;
 }
 
 html[data-theme="dark"] {
-  --bg: #0f1013;
-  --surface: #1a1c20;
-  --surface-2: #23262b;
-  --surface-3: #2d3137;
-  --line: #2c3036;
-  --fg: #f2f4f6;
-  --fg-2: #b0b8c1;
-  --fg-3: #6f7a86;
-  --primary: #4c94ff;
-  --primary-strong: #74acff;
-  --primary-weak: rgb(76 148 255 / 0.16);
-  --on-primary: #ffffff;
-  --danger: #ff5c68;
-  --danger-weak: rgb(255 92 104 / 0.14);
-  --success: #2ecc8b;
-  --success-weak: rgb(46 204 139 / 0.14);
-  --warning: #ffb33d;
-  --warning-weak: rgb(255 179 61 / 0.14);
-  --sunday: #ff6b76;
-  --saturday: #6aa6ff;
+  --bg: #0b0b0c;
+  --surface: #121214;
+  --surface-2: #1c1c1f;
+  --surface-3: #27272b;
+  --line: #222226;
+  --line-strong: #2e2e33;
+  --fg: #f4f4f5;
+  --fg-2: #a1a1aa;
+  --fg-3: #63636b;
+  --primary: #f4f4f5;
+  --primary-strong: #ffffff;
+  --primary-weak: #1c1c1f;
+  --on-primary: #0b0b0c;
+  --accent: #ff453a;
+  --accent-weak: rgb(255 69 58 / 0.14);
+  --danger: #ff6369;
+  --danger-weak: rgb(255 99 105 / 0.12);
+  --success: #3dd68c;
+  --success-weak: rgb(61 214 140 / 0.12);
+  --warning: #f5c542;
+  --warning-weak: rgb(245 197 66 / 0.12);
+  --sunday: #ff6369;
+  --saturday: #849dff;
   --scrim: rgb(0 0 0 / 0.6);
-  --shadow-card: 0 0 0 1px rgb(255 255 255 / 0.03);
-  --shadow-float: 0 12px 32px rgb(0 0 0 / 0.5);
+  --shadow-card: 0 0 0 1px var(--line);
+  --shadow-float: 0 0 0 1px var(--line-strong), 0 16px 48px rgb(0 0 0 / 0.6);
   color-scheme: dark;
 }
 
@@ -65,6 +73,7 @@ html[data-theme="dark"] {
   --color-surface-2: var(--surface-2);
   --color-surface-3: var(--surface-3);
   --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
   --color-fg: var(--fg);
   --color-fg-2: var(--fg-2);
   --color-fg-3: var(--fg-3);
@@ -72,6 +81,8 @@ html[data-theme="dark"] {
   --color-primary-strong: var(--primary-strong);
   --color-primary-weak: var(--primary-weak);
   --color-on-primary: var(--on-primary);
+  --color-accent: var(--accent);
+  --color-accent-weak: var(--accent-weak);
   --color-danger: var(--danger);
   --color-danger-weak: var(--danger-weak);
   --color-success: var(--success);
@@ -85,37 +96,43 @@ html[data-theme="dark"] {
   --shadow-float: var(--shadow-float);
 }
 
-html {
-  background: var(--bg);
-  color: var(--fg);
-  -webkit-text-size-adjust: 100%;
-  text-size-adjust: 100%;
-}
+/* Element defaults live in the base layer so Tailwind utilities (text-on-primary, outline-none …) can override them. */
+@layer base {
+  html {
+    background: var(--bg);
+    color: var(--fg);
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
 
-body {
-  min-height: 100dvh;
-  margin: 0;
-  background: var(--bg);
-  font-family: var(--font-sans);
-  -webkit-font-smoothing: antialiased;
-  -webkit-tap-highlight-color: transparent;
-}
+  body {
+    min-height: 100dvh;
+    margin: 0;
+    background: var(--bg);
+    font-family: var(--font-sans);
+    font-feature-settings: "tnum" 0;
+    letter-spacing: -0.01em;
+    -webkit-font-smoothing: antialiased;
+    -webkit-tap-highlight-color: transparent;
+  }
 
-button,
-input,
-select,
-textarea {
-  font: inherit;
-  color: inherit;
-}
+  button,
+  input,
+  select,
+  textarea {
+    font: inherit;
+    color: inherit;
+    letter-spacing: inherit;
+  }
 
-button {
-  cursor: pointer;
-}
+  button {
+    cursor: pointer;
+  }
 
-:focus-visible {
-  outline: 2px solid var(--primary);
-  outline-offset: 2px;
+  :focus-visible {
+    outline: 2px solid var(--fg);
+    outline-offset: 2px;
+  }
 }
 
 .scrollbar-hide {
@@ -132,7 +149,17 @@ button {
   letter-spacing: 0;
 }
 
-/* Bottom sheet (mobile) / dialog (≥ md): slide up, fade in. */
+/* Event block: tinted with its calendar color, colored edge, readable text in both themes. */
+.event-tint {
+  background: color-mix(in srgb, var(--event-color) 14%, var(--surface));
+  box-shadow: inset 3px 0 0 var(--event-color);
+  color: var(--fg);
+}
+
+.event-tint:hover {
+  background: color-mix(in srgb, var(--event-color) 22%, var(--surface));
+}
+
 @keyframes sheet-up {
   from {
     transform: translateY(24px);
@@ -144,56 +171,35 @@ button {
   }
 }
 
-@keyframes scrim-in {
+@keyframes fade-in {
   from {
     opacity: 0;
   }
 }
 
+@keyframes toast-in {
+  from {
+    transform: translateY(12px);
+    opacity: 0;
+  }
+}
+
 .animate-sheet {
-  animation: sheet-up 180ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  animation: sheet-up 200ms cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
 .animate-scrim {
-  animation: scrim-in 150ms ease-out;
+  animation: fade-in 150ms ease-out;
+}
+
+.animate-toast {
+  animation: toast-in 180ms cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
 @media (prefers-reduced-motion: reduce) {
   .animate-sheet,
-  .animate-scrim {
+  .animate-scrim,
+  .animate-toast {
     animation: none;
   }
 }
-
-/* Month grid: multi-day events render as one continuous bar across the days they cover. */
-.event-bar {
-  display: block;
-  height: 18px;
-  overflow: hidden;
-  border-radius: 4px;
-  padding: 0 5px;
-  color: #fff;
-  font-size: 11px;
-  font-weight: 600;
-  line-height: 18px;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-}
-
-.event-bar[data-segment="start"] {
-  margin-right: -1px;
-  border-top-right-radius: 0;
-  border-bottom-right-radius: 0;
-}
-
-.event-bar[data-segment="middle"] {
-  margin: 0 -1px;
-  border-radius: 0;
-}
-
-.event-bar[data-segment="end"] {
-  margin-left: -1px;
-  border-top-left-radius: 0;
-  border-bottom-left-radius: 0;
-}
-

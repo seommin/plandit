@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { auth } from "@/auth";
 import { AppProvider } from "@/components/app-context";
 import { AppShell } from "@/components/app-shell";
+import { ToastProvider } from "@/components/toast";
 
 /** Every signed-in screen: session check once here, then the shared shell (tab bar / sidebar). */
 export default async function AppLayout({ children }: { children: ReactNode }) {
@@ -12,7 +13,9 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
 
   return (
     <AppProvider user={{ id: session.user.id, name: session.user.name ?? "Plandit 사용자", email: session.user.email ?? "" }}>
-      <AppShell>{children}</AppShell>
+      <ToastProvider>
+        <AppShell>{children}</AppShell>
+      </ToastProvider>
     </AppProvider>
   );
 }
