@@ -1,9 +1,7 @@
-import { createHmac } from "crypto";
-
 import { z } from "zod";
 
 import { ApiError, ErrorCode } from "../common/api-error";
-import { safeEqual } from "../common/safe-equal";
+import { isValidHmacSha256 } from "../common/safe-equal";
 import {
   type PaymentGateway,
   PaymentGatewayError,
@@ -88,9 +86,7 @@ export class MockPgAdapter implements PaymentGateway {
   }
 
   parseWebhook(rawBody: Buffer, headers: Record<string, string | string[] | undefined>): PaymentWebhookEvent | null {
-    const signature = headers["x-mock-signature"];
-    const expected = createHmac("sha256", this.secret).update(rawBody).digest("hex");
-    if (typeof signature !== "string" || !safeEqual(signature, expected)) return null;
+    if (!isValidHmacSha256(rawBody, headers["x-mock-signature"], this.secret)) return null;
 
     let raw: unknown;
     try {

@@ -9,7 +9,8 @@
     "./events": "./src/events.ts",
     "./push": "./src/push.ts",
     "./workspaces": "./src/workspaces.ts",
-    "./credits": "./src/credits.ts"
+    "./credits": "./src/credits.ts",
+    "./reminders": "./src/reminders.ts"
   },
   "scripts": {
     "build": "tsc --noEmit",

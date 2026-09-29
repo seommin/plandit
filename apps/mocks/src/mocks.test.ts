@@ -197,6 +197,17 @@ describe("mock relay", () => {
     assert.match(await (await fetch(`${base}/inbox?phone=010-0000-0001`)).text(), /인박스 확인용 문자/);
   });
 
+  it("the same clientRef is the same message (no second SMS on retry)", async () => {
+    const payload = { to: "010-0000-0003", body: "재시도 테스트", kind: "SMS", clientRef: `idem-${Date.now()}` };
+    const first = await post("/relay/v1/messages", payload);
+    const retry = await post("/relay/v1/messages", payload);
+    assert.deepEqual([first.status, retry.status], [202, 200]);
+    const [a, b] = (await Promise.all([first.json(), retry.json()])) as { msgId: string }[];
+    assert.equal(a.msgId, b.msgId);
+    const { rows } = await db.query("SELECT count(*)::int AS n FROM mock.relay_messages WHERE client_ref = $1", [payload.clientRef]);
+    assert.equal(rows[0].n, 1);
+  });
+
   it("numbers ending in 9 fail with INVALID_NUMBER", async () => {
     await new Promise((resolve) => setTimeout(resolve, 1_000)); // fresh rate-limit window
     const { msgId } = (await (await send("010-0000-0009")).json()) as { msgId: string };
