@@ -57,7 +57,7 @@ function ChargeResult() {
     <div className="mx-auto flex min-h-[70dvh] max-w-md flex-col justify-center px-4">
       <Card className="p-6 text-center">
         <div className="mx-auto mb-4 flex size-16 items-center justify-center rounded-3xl bg-surface-2">
-          {done ? <CheckCircle2 className="text-success" size={34} /> : failed ? <XCircle className="text-danger" size={34} /> : timedOut ? <Clock className="text-warning" size={32} /> : <Spinner className="size-7 text-primary" />}
+          {done ? <CheckCircle2 className="text-fg" size={34} /> : failed ? <XCircle className="text-danger" size={34} /> : timedOut ? <Clock className="text-fg-3" size={32} /> : <Spinner className="size-7 text-primary" />}
         </div>
         <h1 className="text-xl font-bold">{done ? "충전 완료" : failed ? "결제 실패" : timedOut ? "확인이 늦어지고 있어요" : "결제를 확인하고 있어요"}</h1>
         <p className="mt-2 text-[15px] text-fg-2">

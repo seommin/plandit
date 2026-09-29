@@ -6,7 +6,7 @@ import { useParams } from "next/navigation";
 import { type FormEvent, useCallback, useEffect, useState } from "react";
 
 import { useApp } from "@/components/app-context";
-import { Button, Card, Field, IconButton, Notice, SectionTitle, Select, Sheet, TextInput } from "@/components/ui";
+import { Button, Card, Field, IconButton, Notice, Picker, SectionTitle, Sheet, TextInput } from "@/components/ui";
 import { ROLE_LABELS } from "@/components/workspace-switcher";
 import { api, errorMessage } from "@/lib/client-api";
 import { formatDateTime } from "@/lib/dates";
@@ -113,15 +113,14 @@ export default function WorkspacePage() {
                 </div>
                 {manageable ? (
                   <>
-                    <select aria-label="역할" className="h-9 rounded-lg border border-line bg-surface px-2 text-sm" onChange={(e) => changeRole(member, e.target.value as WorkspaceRole)} value={member.role}>
-                      {(["OWNER", "ADMIN", "MEMBER"] as const)
-                        .filter((role) => RANK[role] <= RANK[myRole])
-                        .map((role) => (
-                          <option key={role} value={role}>
-                            {ROLE_LABELS[role]}
-                          </option>
-                        ))}
-                    </select>
+                    <Picker
+                      align="right"
+                      label="역할"
+                      onChange={(role) => changeRole(member, role)}
+                      options={(["OWNER", "ADMIN", "MEMBER"] as const).filter((role) => RANK[role] <= RANK[myRole]).map((role) => ({ value: role, label: ROLE_LABELS[role] }))}
+                      value={member.role}
+                      variant="text"
+                    />
                     <IconButton className="text-danger hover:text-danger" label="내보내기" onClick={() => remove(member)}>
                       <UserMinus size={18} />
                     </IconButton>
@@ -189,15 +188,12 @@ function InviteMember({ workspaceId, myRole, onAdded }: { workspaceId: string; m
           <TextInput aria-label="추가할 멤버 이메일" name="email" placeholder="가입된 사용자의 이메일" required type="email" />
         </div>
         <div className="w-28 shrink-0">
-          <Select aria-label="역할" defaultValue="MEMBER" name="role">
-            {(["MEMBER", "ADMIN", "OWNER"] as const)
-              .filter((role) => RANK[role] <= RANK[myRole])
-              .map((role) => (
-                <option key={role} value={role}>
-                  {ROLE_LABELS[role]}
-                </option>
-              ))}
-          </Select>
+          <Picker
+            defaultValue="MEMBER"
+            label="역할"
+            name="role"
+            options={(["MEMBER", "ADMIN", "OWNER"] as const).filter((role) => RANK[role] <= RANK[myRole]).map((role) => ({ value: role, label: ROLE_LABELS[role] }))}
+          />
         </div>
         <Button type="submit" variant="secondary">
           추가
@@ -327,12 +323,17 @@ function ApiKeys({ workspaceId, admin }: { workspaceId: string; admin: boolean }
               </div>
             </fieldset>
             <Field label="만료">
-              <Select defaultValue="90" name="expiresInDays">
-                <option value="30">30일</option>
-                <option value="90">90일</option>
-                <option value="365">1년</option>
-                <option value="">만료 없음</option>
-              </Select>
+              <Picker
+                defaultValue="90"
+                label="만료"
+                name="expiresInDays"
+                options={[
+                  { value: "30", label: "30일" },
+                  { value: "90", label: "90일" },
+                  { value: "365", label: "1년" },
+                  { value: "", label: "만료 없음" },
+                ]}
+              />
             </Field>
             {error ? <Notice>{error}</Notice> : null}
             <Button block type="submit">

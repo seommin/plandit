@@ -1,10 +1,10 @@
 "use client";
 
-import { ArrowDownLeft, ArrowUpRight, Coins, MessageSquare, Plus, Receipt, RotateCcw, SlidersHorizontal } from "lucide-react";
+import { ArrowDownLeft, ArrowUpRight, ChevronDown, Coins, MessageSquare, Plus, Receipt, RotateCcw, SlidersHorizontal } from "lucide-react";
 import { type FormEvent, useCallback, useEffect, useState } from "react";
 
 import { useApp } from "@/components/app-context";
-import { Button, Card, cn, EmptyState, Field, Notice, Segmented, Sheet, TextInput } from "@/components/ui";
+import { Button, Card, cn, EmptyState, Field, Notice, Sheet, Tabs, TextInput } from "@/components/ui";
 import { WorkspaceSwitcher } from "@/components/workspace-switcher";
 import { api, errorMessage } from "@/lib/client-api";
 import { formatDateTime } from "@/lib/dates";
@@ -92,7 +92,7 @@ export default function CreditsPage() {
 
       {admin && workspace ? (
         <section className="mt-6 pb-6">
-          <Segmented
+          <Tabs
             label="내역"
             onChange={setTab}
             options={[
@@ -165,7 +165,7 @@ function CursorList<T>({ path, render, empty, icon }: { path: string; render: (i
 }
 
 function Badge({ tone, children }: { tone: "neutral" | "success" | "warning" | "danger"; children: React.ReactNode }) {
-  const tones = { neutral: "bg-surface-2 text-fg-2", success: "bg-success-weak text-success", warning: "bg-warning-weak text-warning", danger: "bg-danger-weak text-danger" };
+  const tones = { neutral: "bg-surface-2 text-fg-2", success: "bg-surface-2 text-fg", warning: "bg-surface-2 text-fg-3", danger: "bg-danger-weak text-danger" };
   return <span className={cn("rounded-md px-1.5 py-0.5 text-[11px] font-bold", tones[tone])}>{children}</span>;
 }
 
@@ -258,7 +258,7 @@ function ChargeSheet({ open, onClose, workspaceId }: { open: boolean; onClose: (
         <div className="grid grid-cols-2 gap-2">
           {PRESETS.map((preset) => (
             <button
-              className={cn("h-14 rounded-xl text-[15px] font-semibold transition-colors", amount === preset ? "bg-primary text-on-primary" : "bg-surface-2 hover:bg-surface-3")}
+              className={cn("h-14 rounded-xl text-[15px] font-semibold transition-colors", amount === preset ? "bg-surface ring-1 ring-inset ring-fg" : "bg-surface-2 text-fg-2 hover:bg-surface-3")}
               key={preset}
               onClick={() => setAmount(preset)}
               type="button"
@@ -274,8 +274,11 @@ function ChargeSheet({ open, onClose, workspaceId }: { open: boolean; onClose: (
           <span className="text-sm text-fg-2">받는 크레딧</span>
           <span className="text-lg font-bold tabular-nums">{Math.floor(amount / CREDIT_PRICE).toLocaleString("ko-KR")} 크레딧</span>
         </div>
-        <details className="rounded-xl bg-primary-weak px-4 py-3 text-sm text-fg-2">
-          <summary className="cursor-pointer font-semibold text-primary">테스트 결제 안내</summary>
+        <details className="group rounded-xl bg-surface-2 px-4 py-3 text-sm text-fg-2">
+          <summary className="flex cursor-pointer list-none items-center justify-between font-semibold text-fg [&::-webkit-details-marker]:hidden">
+            테스트 결제 안내
+            <ChevronDown className="size-4 text-fg-3 transition-transform group-open:rotate-180" />
+          </summary>
           <p className="mt-2">실제 결제는 일어나지 않아요. 금액 끝 두 자리로 상황을 재현할 수 있어요.</p>
           <ul className="mt-1 list-inside list-disc space-y-0.5">
             <li>…00 정상 승인</li>
