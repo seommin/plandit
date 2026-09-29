@@ -28,8 +28,8 @@ export function AppShell({ children }: { children: ReactNode }) {
   return (
     <div className="min-h-dvh lg:flex">
       <aside className="sticky top-0 hidden h-dvh w-64 shrink-0 flex-col border-r border-line bg-surface px-4 py-6 lg:flex">
-        <Link className="wordmark mb-8 px-2 text-[24px] text-fg" href="/">
-          PLANDIT
+        <Link className="brand-script mb-8 px-2 text-[34px] leading-none text-fg" href="/">
+          Plandit
         </Link>
         <Link
           className="mb-6 flex h-12 items-center justify-center gap-2 rounded-xl bg-primary text-[15px] font-semibold text-on-primary transition-colors hover:bg-primary-strong"
