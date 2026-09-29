@@ -23,7 +23,7 @@ const isActive = (pathname: string, href: string) => (href === "/" ? pathname ==
  */
 export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
-  const { user, workspace } = useApp();
+  const { user } = useApp();
 
   return (
     <div className="min-h-dvh lg:flex">
@@ -53,10 +53,15 @@ export function AppShell({ children }: { children: ReactNode }) {
             </Link>
           ))}
         </nav>
-        <div className="mt-auto rounded-2xl bg-surface-2 p-3">
-          <p className="truncate text-sm font-semibold">{user.name}</p>
-          <p className="truncate text-xs text-fg-3">{workspace ? workspace.name : user.email}</p>
-        </div>
+        <Link className="mt-auto flex items-center gap-3 rounded-2xl p-2.5 transition-colors hover:bg-surface-2" href="/settings" title="내 계정 설정">
+          <span aria-hidden="true" className="flex size-9 shrink-0 items-center justify-center rounded-full bg-surface-3 text-[14px] font-semibold">
+            {user.name.slice(0, 1)}
+          </span>
+          <span className="min-w-0">
+            <span className="block truncate text-sm font-semibold">{user.name}</span>
+            <span className="block truncate text-xs text-fg-3">{user.email}</span>
+          </span>
+        </Link>
       </aside>
 
       <main className="min-w-0 flex-1 pb-[calc(var(--tabbar-h)+env(safe-area-inset-bottom)+8px)] lg:pb-0">{children}</main>
