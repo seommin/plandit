@@ -2,7 +2,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { buildMonthWeeks, dayTone, formatEventTime, holidayName, monthGridRange } from "./dates.ts";
+import { buildMonthWeeks, dayTone, formatEventTime, holidayName, monthGridRange, rangeCovers } from "./dates.ts";
 import type { CalendarEvent } from "./types.ts";
 
 const event = (id: string, startsAt: Date, endsAt: Date, allDay = false) =>
@@ -13,6 +13,24 @@ describe("monthGridRange", () => {
     const { from, to } = monthGridRange(new Date(2026, 8, 1)); // September 2026 starts on a Tuesday
     assert.equal(from.toDateString(), new Date(2026, 7, 30).toDateString());
     assert.equal(to.toDateString(), new Date(2026, 9, 4).toDateString());
+  });
+});
+
+describe("rangeCovers", () => {
+  const grid = monthGridRange(new Date(2026, 9, 1)); // October 2026 in this machine's zone
+  const iso = (d: Date) => d.toISOString();
+
+  it("uses fetched data only when it holds the whole range", () => {
+    const wide = { from: iso(new Date(grid.from.getTime() - 86_400_000)), to: iso(new Date(grid.to.getTime() + 86_400_000)) };
+    assert.equal(rangeCovers(wide, grid.from, grid.to), true);
+    assert.equal(rangeCovers({ from: iso(grid.from), to: iso(grid.to) }, grid.from, grid.to), true);
+  });
+
+  it("refetches when the server fetched another zone's month (e.g. September while the viewer is already on October 1st)", () => {
+    const september = monthGridRange(new Date(2026, 8, 1));
+    assert.equal(rangeCovers({ from: iso(september.from), to: iso(september.to) }, grid.from, grid.to), false);
+    assert.equal(rangeCovers({ from: iso(grid.from), to: iso(new Date(grid.to.getTime() - 9 * 3_600_000)) }, grid.from, grid.to), false);
+    assert.equal(rangeCovers(undefined, grid.from, grid.to), false);
   });
 });
 
