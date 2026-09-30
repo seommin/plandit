@@ -30,4 +30,17 @@ export const reminderDeliveries = counter("plandit_reminder_deliveries_total", "
 /** outcome: completed | failed (a failed attempt may still be retried) */
 export const jobRuns = counter("plandit_jobs_total", "Background job attempts", ["queue", "name", "outcome"]);
 
+/** outcome: SUCCEEDED or the failure code (LLM_TIMEOUT, LLM_REFUSED, INVALID_OUTPUT …) */
+export const aiCalls = counter("plandit_ai_calls_total", "Metered LLM calls by result", ["provider", "outcome"]);
+/** kind: input | output | cache_read | cache_write — every attempt, including refunded calls */
+export const aiTokens = counter("plandit_ai_tokens_total", "LLM tokens used", ["model", "kind"]);
+export const aiCallDuration =
+  (register.getSingleMetric("plandit_ai_call_duration_seconds") as Histogram<"provider"> | undefined) ??
+  new Histogram({
+    name: "plandit_ai_call_duration_seconds",
+    help: "LLM call latency (SDK retries included)",
+    labelNames: ["provider"],
+    buckets: [1, 5, 15, 30, 60, 120, 300, 600],
+  });
+
 export { register };

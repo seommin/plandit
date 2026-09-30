@@ -71,6 +71,10 @@ pnpm dev
 
 `pnpm seed:demo`는 데모 계정 2개(`demo@plandit.dev`, `teammate@plandit.dev`), 팀 워크스페이스 "Plandit 데모팀"(크레딧 300), 이번 주 일정을 만듭니다. 여러 번 실행해도 한 번만 만듭니다.
 
+### 인터넷에 공개하기
+
+무료 서버 한 대(Oracle Cloud)에 도커로 전부 띄우고 무료 주소(DuckDNS)와 HTTPS(Caddy)를 붙이는 방법은 [docs/deploy.md](docs/deploy.md)에 있습니다. main에 합치면 GitHub Actions가 검사 후 서버에 자동 배포합니다(설정한 경우).
+
 ## 10분 시나리오
 
 ### 1. 충전 — 웹훅이 두 번 와도 한 번만 (3분)
@@ -140,7 +144,7 @@ docker compose up -d        # e2e는 실제 DB·Redis를 씁니다(별도 DB pla
 pnpm lint && pnpm typecheck && pnpm test && pnpm test:e2e
 ```
 
-- `pnpm test`: 단위 테스트(원장 부호 규칙, 서명 검증, 역할 판정, 발송 시각 계산, 달력 배치 계산)
+- `pnpm test`: 단위 테스트(원장 부호 규칙, 서명 검증, 역할 판정, 발송 시각 계산, 달력 배치 계산, AI 크레딧 환산, 로컬 가짜 서버로 Claude 어댑터)
 - `pnpm test:e2e`: api e2e(모의 PG·중계사 프로세스와 BullMQ 워커를 테스트가 직접 띄움) + 모의 서버 테스트
 - 네 가지가 모두 통과해야 커밋합니다.
 
@@ -152,6 +156,7 @@ pnpm lint && pnpm typecheck && pnpm test && pnpm test:e2e
 | [0002](docs/adr/0002-reserve-before-external-call.md) | 외부 서비스를 부르기 전에 우리 쪽 상태를 먼저 기록한다(RESERVE·QUEUED → 재조회로 확정) |
 | [0003](docs/adr/0003-webhook-idempotency.md) | 웹훅은 서명을 확인하고, 이벤트 id와 원장 멱등키로 두 번 걸러낸다 |
 | [0004](docs/adr/0004-reminder-job-versioning.md) | 리마인더 예약 작업은 발송 시각을 id에 담고, 옛 작업은 실행할 때 스스로 버린다 |
+| [0005](docs/adr/0005-ai-credit-reserve-settle.md) | AI 호출은 최대 금액을 먼저 잡고, 끝나면 쓴 만큼만 청구한다(실패하면 전액 환불) |
 
 더 짧은 요약과 이슈별 완료 조건은 [docs/PLAN.md](docs/PLAN.md), 데이터 모델은 [docs/ERD.md](docs/ERD.md)에 있습니다.
 
@@ -164,7 +169,7 @@ pnpm lint && pnpm typecheck && pnpm test && pnpm test:e2e
 | 권한 | **워크스페이스 역할**(OWNER > ADMIN > MEMBER: 결제·크레딧·멤버 관리) + **캘린더 역할**(OWNER·ADMIN·EDITOR·VIEWER: 일정 데이터). 둘을 섞지 않습니다 |
 | 크레딧·결제 | 원장([0001](docs/adr/0001-ledger-append-only.md)), 모의 PG 충전·웹훅·재조회([0002](docs/adr/0002-reserve-before-external-call.md), [0003](docs/adr/0003-webhook-idempotency.md)) |
 | Redis/Queue | BullMQ 리마인더 발송·재조회 작업([0004](docs/adr/0004-reminder-job-versioning.md)) |
-| LLM · RAG · Tool Calling · MCP | 2주차 계획: 일정 비서 에이전트(도구 호출 루프, 쓰기 도구는 사용자 승인 후 실행), 회의록 업로드 RAG(pgvector), 같은 도구의 MCP 서버, AI 크레딧 한도 → [PLAN.md](docs/PLAN.md#2주차--ai-일정-비서-개요) |
+| LLM · RAG · Tool Calling · MCP | `LlmClient` + Claude 어댑터와 토큰 기준 크레딧 과금(선차감 → 정산, 실패 환불, [0005](docs/adr/0005-ai-credit-reserve-settle.md)). AI 여행 일정: 목적지·기간·함께 갈 멤버로 초안을 만들고 확인 후 캘린더에 한 번에 넣기(구조화 출력, 참석자 캘린더 권한 자동 추가). 2주차 계획: 일정 비서 에이전트(도구 호출 루프, 쓰기 도구는 사용자 승인 후 실행), 회의록 업로드 RAG(pgvector), 같은 도구의 MCP 서버, AI 크레딧 한도 → [PLAN.md](docs/PLAN.md#2주차--ai-일정-비서-개요) |
 
 ## AI 개발 도구로 일한 방식
 

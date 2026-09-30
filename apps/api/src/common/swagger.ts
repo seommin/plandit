@@ -32,6 +32,8 @@ const DESCRIPTIONS: Record<ErrorCode, string> = {
   [ErrorCode.PAYMENT_GATEWAY_ERROR]: "PG 호출 실패(결제는 RESERVE로 남고 재조회로 확정)",
   [ErrorCode.RATE_LIMITED]: "요청 수 제한 초과(Retry-After 헤더)",
   [ErrorCode.SERVICE_UNAVAILABLE]: "의존 서비스(DB·Redis) 응답 없음",
+  [ErrorCode.ATTENDEE_NOT_ELIGIBLE]: "함께 갈 수 없는 사람(워크스페이스 멤버가 아님, 개인 캘린더). details에 userId 목록",
+  [ErrorCode.CALENDAR_MEMBERS_CHANGED]: "캘린더에 새로 추가될 사람이 확인한 목록과 다름. details.newCalendarMemberIds로 다시 확인",
 };
 
 const MESSAGES: Record<ErrorCode, string> = {
@@ -50,6 +52,8 @@ const MESSAGES: Record<ErrorCode, string> = {
   [ErrorCode.PAYMENT_GATEWAY_ERROR]: "Payment gateway request failed.",
   [ErrorCode.RATE_LIMITED]: "Too many requests.",
   [ErrorCode.SERVICE_UNAVAILABLE]: "Service unavailable.",
+  [ErrorCode.ATTENDEE_NOT_ELIGIBLE]: "Some attendees cannot join this trip.",
+  [ErrorCode.CALENDAR_MEMBERS_CHANGED]: "The people to add to the calendar changed.",
 };
 
 const TRACE_ID = "0d85ad5d-c5b6-4cf3-ba9f-b27e7906d209";
@@ -95,6 +99,8 @@ export const TAGS: Array<[name: string, description: string]> = [
   ["크레딧", "잔액과 원장(append-only). 잔액은 원장에서 파생된 캐시이고 직접 바꾸지 않는다"],
   ["결제", "충전: RESERVE 기록 → PG 결제 페이지 → 웹훅으로 승인·실패 확정. 웹훅이 없어도 재조회 작업이 확정"],
   ["리마인더", "일정 알림 설정과 발송 내역. 유료 채널(문자·알림톡)은 발송 전에 차감, 실패하면 환불"],
+  ["AI 여행 일정", "목적지·기간·함께 갈 멤버로 AI가 여행 일정 초안을 만들고, 확인·수정한 뒤 캘린더에 한 번에 넣는다. 초안은 만든 사람만 본다"],
+  ["AI", "LLM 호출 과금 내역. 호출 전에 최대 크레딧을 선차감하고, 끝나면 실사용만 청구하고 나머지를 돌려준다. 실패하면 전액 환불"],
   ["캘린더", "캘린더·멤버·초대. 캘린더 역할(OWNER/ADMIN/EDITOR/VIEWER)은 데이터 권한"],
   ["일정", "일정 만들기·수정·삭제·중요 표시"],
   ["공유", "공개 일정 링크"],

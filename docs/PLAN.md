@@ -178,6 +178,9 @@
   - [x] 선택 표시는 모두 1px 검정 테두리(충전 금액 포함). 상태 표시는 완료=검정 글씨, 대기=회색, 실패만 빨강. 성공 알림도 회색 바탕
   - [x] "하루 종일" 스위치가 꺼져 있어도 동그라미가 오른쪽에 있던 버그, "테스트 결제 안내"의 기본 삼각형 표시
   - [x] 테마 적용 코드를 `next/script`(첫 화면 전)로
+- 8차(버그: 시간대 — 배포 서버가 UTC이고 사용자가 한국 시간일 때):
+  - [x] 캘린더 첫 화면에서 서버가 그린 화면과 브라우저가 그린 화면이 달라 React 경고가 나고 화면을 다시 그리던 문제. "오늘"·보이는 달·일정 위치가 보는 사람의 시간대에 따라 달라서였음 → 서버와 첫 화면은 같은 뼈대만 그리고 캘린더는 브라우저에서 그림(`useHydrated`). 한국·UTC·미국 서부 시간대로 모든 화면 확인
+  - [x] 서버가 **서버 시간대의** 이번 달 일정을 넘겨서, 한국 시간 매달 1일 0~9시에는 이번 달 일정이 빠진 채 보이던 문제 → 앞뒤로 하루 여유를 두고 가져온 기간(`range`)을 함께 넘김. 브라우저의 기간을 다 덮지 못하면 다시 가져옴(`rangeCovers`, 단위 테스트). 배포용 빌드에서 평소 추가 요청 0번, 10월 1일 새벽 5시(한국)에는 10월 1번 확인
 - 디자인 검토 대기: 4차 결과 확인 후 피드백 반영
 
 ### PLANDIT-10 · Swagger·README·ADR [M]
@@ -195,11 +198,15 @@
 - **완료 조건**: 처음 보는 사람이 README만 읽고 10분 안에 충전·리마인더 시나리오를 재현 ✅ 새로 받은 폴더에서 README 절차 그대로 실행 — 설치·마이그레이션·데모 데이터(위 postinstall 수정 후) → 10,003원 충전: 웹훅 2회 발송·이벤트 1행·원장 1행, 잔액 +1,000 → 팀 일정 문자 리마인더: 가상 수신함 도착
 
 ### PLANDIT-11 · 무료 배포 [S]
-- [ ] Oracle Cloud Always Free ARM VM 한 대에 `docker-compose.prod.yml`(web, api, worker, mocks, postgres, redis)
-- [ ] DuckDNS 무료 서브도메인 + Caddy 자동 HTTPS. `/`(web), `/pg/*`·`/inbox/*`(mocks 화면). api·웹훅·mock 관리 API는 외부 비공개(내부 네트워크)
-- [ ] 데모 계정 README 공개, 매일 04시 DB 리셋
-- [ ] GitHub Actions: main push → SSH `git pull && docker compose up -d --build`
-- **완료 조건**: 휴대폰 LTE에서 HTTPS로 로그인 → 충전 시나리오 재현. 재부팅 후 자동 복구
+- [x] 이미지 하나(`Dockerfile`, `node:24-bookworm` — Prisma 마이그레이션 엔진이 쓰는 OpenSSL이 있어 apt 단계 없음)를 모든 프로세스가 명령만 바꿔 씀. 컴파일된 api는 `register-dist.cjs`로 `@plandit/*`를 dist 사본에 연결
+- [x] `docker-compose.prod.yml`: migrate(마이그레이션 후 종료) → api·worker·mocks·web, postgres(pgvector)·redis(AOF). 전부 `restart: unless-stopped`, 밖으로 열린 포트는 Caddy(80·443)뿐
+- [x] Caddy 자동 HTTPS(`deploy/Caddyfile`). 공개 경로는 `/`(web), `/pg/pay/*`(결제 화면), `/inbox`(가상 수신함)만. api·웹훅·모의 서버 관리 API(`/pg/v1`, `/pg/admin`)는 내부 네트워크에서만
+- [x] 스크립트: `deploy/init-env.sh`(무작위 비밀값으로 `.env.production`, 덮어쓰기 거부), `deploy.sh`, `seed-demo.sh`, `reset-demo.sh`(매일 04시 KST cron 예시), `github-secrets.sh`(배포 명령만 실행 가능한 SSH 키 + GitHub 비밀값 출력)
+- [x] GitHub Actions(`.github/workflows/ci.yml`): 모든 push에 lint·typecheck·test·e2e(Postgres·Redis 서비스 컨테이너). main push는 검사 통과 후 SSH로 `deploy/deploy.sh` — `DEPLOY_*` 비밀값이 있을 때만
+- [x] 한국어 설치 안내 `docs/deploy.md`(Oracle 가입 → ARM 서버 → 방화벽 2곳 → DuckDNS → 도커 → 띄우기 → 휴대폰 확인 → 자동 배포·초기화). 공개 데모는 `LLM_PROVIDER=mock` 유지(모의 결제로 크레딧이 공짜라 진짜 키를 넣으면 남이 쓸 수 있음)
+- [x] 로컬 도커로 운영 구성 확인(`DOMAIN=localhost`): 빌드·기동, HTTPS 로그인 → 10,000원 충전 → "1,000 크레딧" → AI 여행 일정 생성·적용, 비공개 경로 404·401, http → https, 도커 재시작 후 자동 복구·데이터 유지, `reset-demo.sh`
+- [ ] **사용자 작업**: Oracle 서버 생성·DuckDNS 등록 후 `docs/deploy.md` 순서대로 띄우기, README에 공개 주소 적기, (선택) GitHub 비밀값·cron 등록
+- **완료 조건**: 휴대폰 LTE에서 HTTPS로 로그인 → 충전 시나리오 재현. 재부팅 후 자동 복구 — 로컬 도커로는 확인, 실제 ARM 서버에서는 아직
 
 ### PLANDIT-12 · 정합성 검증 도구 [S]
 - [ ] `pnpm check:ledger`: 계정별 원장 합계 = 캐시, `balance_after` 연속성 검사. 불일치 시 종료 코드 1
@@ -237,12 +244,62 @@
 
 ## 2주차 — AI 일정 비서 (개요)
 
-- PLANDIT-20 `LlmClient` + Claude 어댑터, 토큰→크레딧 환산표, 예상 선차감(DEBIT) → 실사용 정산(ADJUST), `ai_usages`. 임베딩은 Anthropic API에 없으므로 별도 제공자(예: Voyage AI)를 `EmbeddingClient` 인터페이스 뒤에 둔다
+- PLANDIT-20 `LlmClient` + Claude 어댑터, 토큰→크레딧 환산표, 예상 선차감(DEBIT) → 실사용 정산(ADJUST), 실패 환불, `ai_usages`. 아래 상세
 - PLANDIT-21 **AI 에이전트(Tool Calling 루프)**: "다음 주에 팀 전원이 되는 시간에 회의 잡아줘" → 모델이 도구를 여러 단계 호출(`list_events` → `find_free_slots` → `create_event`). 최대 단계 수·크레딧 한도·타임아웃, 쓰기 도구는 **사용자 승인 후 실행**(승인 대기 상태 저장), 단계별 도구 호출·결과 기록
-- PLANDIT-22 **RAG**: 일정(제목·설명·장소) + **회의록 파일(PDF·TXT) 업로드** → 텍스트 추출·청킹·임베딩(pgvector)은 큐 작업으로 비동기 처리(진행 상태 표시, 크기·형식 검증) → "지난달 A사 미팅에서 뭐 정했지?"에 근거 인용과 함께 답변. 권한 범위 밖 문서·일정은 검색 대상에서 제외
+- PLANDIT-22 **RAG**: 임베딩은 Anthropic API에 없으므로 별도 제공자(예: Voyage AI)를 `EmbeddingClient` 인터페이스 뒤에 둔다(PLANDIT-20에서 옮김). 일정(제목·설명·장소) + **회의록 파일(PDF·TXT) 업로드** → 텍스트 추출·청킹·임베딩(pgvector)은 큐 작업으로 비동기 처리(진행 상태 표시, 크기·형식 검증) → "지난달 A사 미팅에서 뭐 정했지?"에 근거 인용과 함께 답변. 권한 범위 밖 문서·일정은 검색 대상에서 제외
 - PLANDIT-23 같은 도구를 **MCP 서버**로 노출(사용자 토큰 기반)
-- PLANDIT-24 AI 권한·한도: 워크스페이스별 월 AI 크레딧 상한, LLM 실패 시 환불
+- PLANDIT-24 AI 권한·한도: 워크스페이스별 월 AI 크레딧 상한(LLM 실패 환불은 PLANDIT-20에서)
 - PLANDIT-25 README에 AI 데모 GIF
+- PLANDIT-26 **AI 여행 일정 만들기**(양식 → 초안 → 확인 → 한 번에 저장, 함께 갈 멤버는 참석자로, 캘린더 멤버가 아니면 자동 추가). 아래 상세
+
+### PLANDIT-20 · LLM 연결 + AI 크레딧 과금
+AI 기능이 함께 쓰는 바닥. 기능(PLANDIT-21·26)은 `AiUsageService`만 부르고, 모델 호출·과금·환불은 여기서 끝낸다.
+- [x] `LlmClient` 인터페이스(`apps/api/src/ai/llm-client.ts`): `complete({ system, messages, maxOutputTokens, effort?, jsonSchema? })` → `{ model, text, stopReason(end / max_tokens / refusal / other), attempts[] }`. `attempts`는 시도별 토큰(모델·입력·출력·캐시 읽기·캐시 쓰기)으로 과금의 근거. 오류는 `LlmError(code)`: `LLM_TIMEOUT / LLM_RATE_LIMITED / LLM_OVERLOADED / LLM_UNAVAILABLE / LLM_BAD_REQUEST / LLM_AUTH / LLM_ERROR`. `servingModels`: 요청을 처리할 수 있는 모든 모델(설정 모델 + 서버 측 대체 모델)
+- [x] 구현체는 `LLM_PROVIDER`로 고른다(`mock` 기본 — API 키 없이 로컬·테스트가 돈다 / `anthropic`)
+  - Claude 어댑터: 공식 SDK(`@anthropic-ai/sdk`), 모델 `LLM_MODEL`(기본 `claude-opus-5-5`). 구조화 출력은 `output_config.format`(json_schema) — 이 모델은 강제 `tool_choice`가 400이라 도구 강제 호출로 JSON을 받지 않는다. 사고(thinking)는 끌 수 없어 `output_config.effort`로 조절(모델 기본값 `medium`을 명시). 안전 분류기 거절에 대비해 서버 측 대체(`fallbacks: "default"`, beta `server-side-fallback-2026-07-01`. `LLM_REFUSAL_FALLBACK=off`로 끔). 과금 근거는 `usage.iterations`(대체 시도 포함, 시도마다 그 모델 단가), 없으면 최상위 `usage`. SDK 재시도 `LLM_MAX_RETRIES`(2), 요청 타임아웃 `LLM_TIMEOUT_MS`(5분). 비스트리밍이라 출력 상한은 16,000토큰(더 필요한 기능은 스트리밍으로 바꾼 뒤에). 구조화 출력이 받지 않는 조건(글자 수·최솟값·개수·정규식)은 `toLlmJsonSchema`가 걷어 내고 응답을 받은 뒤 zod로 검사(PLANDIT-26에서 발견, troubleshooting 13)
+  - 모의 구현: 네트워크 없음. JSON 스키마를 주면 스키마에 맞는 표본을, 아니면 고정 문장을 돌려준다. e2e는 다음 응답·오류·대기를 미리 넣어 둔다
+- [x] 환산표(`packages/shared/ai.ts`): 모델별 100만 토큰당 크레딧(입력·출력·캐시 읽기·캐시 쓰기). 1크레딧 = 10원, 표시 가격(USD) × 1,400원 ÷ 10, 마진 없음. 호출 한 번의 크레딧 = 시도별 합을 **올림**(토큰을 썼으면 최소 1). 표에 없는 모델을 설정하면 기동 실패
+- [x] `AiUsage`(workspaceId, userId, feature `SCHEDULE_ASSISTANT / MEMORY_SEARCH / TRIP_PLANNER`, status `RESERVED → CALLING → SUCCEEDED / FAILED`, provider, model, maxOutputTokens, estimatedCredits, credits, 토큰 4종, attempts jsonb, failureCode, latencyMs, debit·adjust·refund ledgerId, createdAt·startedAt·finishedAt)
+- [x] `AiUsageService`(기능은 이것만 부른다)
+  - `reserve(input, tx?)`: 선차감액 = 입력 토큰 추정(UTF-8 바이트 ÷ 2, 넉넉하게) + `maxOutputTokens`를 `servingModels` 중 가장 비싼 단가로. `AiUsage` RESERVED + DEBIT(`"AI_USAGE:{id}:DEBIT"`)을 한 트랜잭션(호출자 트랜잭션에 합류 가능). 잔액 부족이면 409 `INSUFFICIENT_CREDITS`, 행 없음
+  - `execute(id, request, { parse, onSuccess?, onFailure? })`: `RESERVED → CALLING`을 조건부 UPDATE로 **먼저 기록**(동시에 두 번 불려도 LLM은 한 번) → LLM 호출(트랜잭션 밖) → 거절·잘림·`parse` 실패는 실패 처리 → 성공이면 행 `FOR UPDATE` → `min(실사용, 선차감)`을 청구하고 차액은 ADJUST(`"AI_USAGE:{id}:ADJUST"`, +) → SUCCEEDED + `onSuccess(tx)`를 한 트랜잭션. 선차감을 넘는 실사용은 청구하지 않는다(사용자가 본 금액이 상한)
+  - `fail(id, code, { tx?, onFailure? })`: 끝나지 않은 건이면 REFUND(`"AI_USAGE:{id}:REFUND"`, 선차감 전액) + FAILED + `onFailure(tx)`. 이미 끝났으면 아무것도 하지 않는다. 실패한 호출의 토큰도 기록한다(청구는 0)
+  - `run(input, hooks)`: `reserve` + `execute`(동기 호출용, PLANDIT-21)
+- [x] 멈춘 사용 건 정리: `AI_USAGE_STALE_MS`(30분 — `LLM_TIMEOUT_MS` 5분 × (재시도 2 + 1)보다 길게)를 넘긴 RESERVED(생성 시각 기준)·CALLING(호출 시작 기준)은 워커 주기 작업(`AI_USAGE_RECONCILE_EVERY_MS`)이 FAILED(`STALE`) + 환불. 그 뒤에 돌아온 호출은 행이 CALLING이 아니므로 정산하지 않는다. 운영자 즉시 실행 `POST /admin/jobs/ai-usage-reconcile?minAgeMs=`
+- [x] `GET /workspaces/:workspaceId/ai-usages`(ADMIN+, cursor·최신순, status·feature 필터)
+- [x] 지표: `plandit_ai_calls_total{provider, outcome}`, `plandit_ai_tokens_total{model, kind}`, `plandit_ai_call_duration_seconds`, `plandit_ai_usages_unsettled{status}`. 런북에 "G. AI 사용 건이 정산되지 않는다"
+- [x] `pnpm --filter @plandit/api llm:smoke`: 설정된 `LlmClient`로 짧은 구조화 출력 요청 한 번 → 모델·토큰·환산 크레딧 출력(크레딧은 움직이지 않음. `anthropic`이면 실제 API 호출 1회). 실제 키 확인용
+- **완료 조건**: ✅
+  - 단위: 환산(모델별 단가, 올림, 최소 1, 시도별 합산), 선차감(가장 비싼 모델 단가, 캐시 쓰기 단가 포함), Claude 어댑터(로컬 가짜 HTTP 서버): 요청 본문(모델·max_tokens·effort·json_schema·fallbacks·beta 헤더), 텍스트·stop_reason 변환, `usage.iterations` 합산, 오류 분류(400·401·429·500·529·타임아웃), 모의 구현의 스키마 표본
+  - e2e(실제 Postgres, 모의 `LlmClient`): 성공 → DEBIT 1 + ADJUST 1, 잔액 = 처음 − 청구 / 실사용이 선차감을 넘음 → 선차감만 청구, ADJUST 없음 / LLM 오류·거절·잘림·`parse` 실패 → REFUND 전액, 잔액 원래대로, 토큰 기록 / 잔액 부족 409, 행 0, LLM 호출 0회 / 같은 건 `execute` 두 번·동시 두 번 → LLM 1회, 원장 그대로 / `onSuccess`가 던지면 정산이 롤백되고 환불 / 멈춘 건 정리 → FAILED + REFUND 1행(두 번 돌려도 1행), 늦게 돌아온 호출은 정산 안 함 / 호출자 트랜잭션에 합류한 `reserve`는 호출자가 롤백하면 DEBIT도 없음 / 불변식: 사용 건마다 `DEBIT + ADJUST + REFUND = −credits`, 원장 합계 = 잔액 / 목록 MEMBER 403·다른 워크스페이스 404·cursor
+
+### PLANDIT-26 · AI 여행 일정 만들기
+양식으로 목적지·기간·함께 갈 멤버를 받으면 AI가 날짜별 여행 일정 초안을 만들고, 사용자가 확인·수정한 뒤 캘린더에 한 번에 넣는다.
+채팅으로 초안 고치기("둘째 날 오후는 쉬게 해줘")는 PLANDIT-21에서 같은 초안에 붙인다. **선행: PLANDIT-20**(`LlmClient`·Claude 어댑터·`ai_usages`·예상 선차감 → 정산).
+- [x] 입력 스키마(`packages/shared/trips.ts`): calendarId, destination(1~80자), startDate·endDate(`YYYY-MM-DD`, 최대 7일), attendeeUserIds(0~20명, 본인 제외), pace(`RELAXED / NORMAL / PACKED`), interests(관광·맛집·휴식·쇼핑·액티비티 복수 선택), request(자유 요청 500자 이하)
+- [x] 출력 스키마(같은 파일): `{ timezone, days: [{ date, items: [{ title, startTime "HH:mm", endTime "HH:mm", location?, description?, category: MOVE / MEAL / SIGHT / STAY / FREE }] }], notes? }`, 하루 최대 10개. 이 zod 스키마를 구조화 출력(`output_config.format`)으로 준다(Opus 5.5는 강제 `tool_choice`가 400이라 도구로 받지 않음). 구조화 출력이 받지 않는 조건(글자 수·최솟값·개수·정규식)은 `toLlmJsonSchema`가 걷어 내고, 응답을 원래 zod 스키마로 다시 검증
+- [x] 서버 추가 검증: 날짜가 요청 기간 안, 종료 > 시작(자정을 넘는 항목 없음), timezone이 IANA 이름(`Intl.supportedValuesOf("timeZone")`). 어기면 FAILED(`INVALID_OUTPUT`) + 전액 환불, 화면에서 "다시 만들기"(자동 재요청은 하지 않음 — 재요청마다 과금되는 호출이 하나 더 생기므로)
+- [x] 참석자: 대상 캘린더가 속한 **워크스페이스의 멤버**만(밖이면 400 `ATTENDEE_NOT_ELIGIBLE`, details에 userId 목록). 개인 캘린더는 참석자 없음. 일정 목록은 캘린더 멤버에게만 보이므로(`events.controller.ts` list — 이 규칙은 바꾸지 않는다), 캘린더 멤버가 아닌 참석자는 **적용할 때 그 캘린더에 VIEWER로 자동 추가**한다
+  - 자동 추가는 요청자가 그 캘린더의 OWNER / ADMIN일 때만(기존 초대와 같은 기준, `getManageableCalendar`). EDITOR는 이미 캘린더 멤버인 사람만 고를 수 있고, 아니면 403(생성·수정·적용 모두)
+  - 이미 캘린더 멤버면 역할을 바꾸지 않는다. 초대 API는 역할을 덮어쓰지만 여기서는 없는 사람만 넣는다(`createMany` + `skipDuplicates` — 그사이 초대로 들어온 사람도 역할 유지)
+  - VIEWER가 되면 그 캘린더의 다른 일정(공개 범위 CALENDAR)도 보이므로, 적용 요청은 새로 추가할 사람 목록 `newCalendarMemberIds`를 **명시적으로** 보낸다. 서버가 계산한 목록과 다르면(그사이 누가 멤버가 됐거나 떠남) 409 `CALENDAR_MEMBERS_CHANGED`(details에 서버 목록), 아무것도 바꾸지 않음 → 화면이 다시 확인받음
+  - 캘린더 멤버 변경은 기존에도 감사 로그 대상이 아니므로 기록하지 않는다(워크스페이스 멤버·역할 변경이 아님)
+- [x] LLM에는 인원 수(본인 포함)만 보낸다. 멤버 이름·이메일은 보내지 않는다
+- [x] `TripPlan`(workspaceId, calendarId, createdById, requestKey(unique(createdById, requestKey)), input jsonb, draft jsonb, status `GENERATING → READY / FAILED`, `READY → APPLIED`, failureCode, aiUsageId, addedCalendarMemberIds, appliedAt) + `Event.tripPlanId`(null 허용) 마이그레이션
+- [x] API `/workspaces/:workspaceId/trip-plans`(워크스페이스 멤버만, 캘린더가 이 워크스페이스 소속이 아니면 404)
+  - `POST`(`Idempotency-Key` 헤더 필수 — 두 번 눌러도 초안·차감 1건): 대상 캘린더 쓰기 권한(OWNER / ADMIN / EDITOR) 확인 → `TripPlan` GENERATING **선기록** + `AiUsage` + 예상 크레딧 DEBIT(`"AI_USAGE:{aiUsageId}:DEBIT"`)을 한 트랜잭션(잔액 부족이면 409 `INSUFFICIENT_CREDITS`, 행·LLM 호출 없음) → 큐 작업 `trip-plan.generate` 등록 → 202
+  - `GET /options?calendarId=`(양식 준비: 함께 갈 수 있는 멤버와 `selectable`, 기간별 최대 크레딧, 잔액), `GET /:id`(상태 폴링), `GET`(내 초안 목록, cursor·최신순), `PATCH /:id`(READY 초안의 항목·참석자 교체, 같은 스키마로 검증)
+  - `POST /:id/apply`(body `newCalendarMemberIds`): 초안 행 `FOR UPDATE` → 이미 APPLIED면 만든 일정을 그대로 돌려줌(목록 대조 없이 — 재시도·동시 적용이 409가 되지 않게) → 캘린더 쓰기 권한·참석자 자격 **다시 확인**(초안을 만든 뒤 바뀌었을 수 있음) → 새로 추가할 멤버 목록 대조 → 캘린더 멤버 VIEWER 추가 + 일정 N건(공개 범위 CALENDAR, `tripPlanId`) + 일정마다 참석자(userId·email·name, NEEDS_ACTION) → APPLIED(`addedCalendarMemberIds` 기록), 한 트랜잭션
+  - `DELETE /:id/events`: 이 초안으로 만든 일정만 삭제(되돌리기)하고 초안은 READY로 돌아간다. 자동 추가한 캘린더 멤버는 남긴다(그사이 다른 일정에 참여했을 수 있음). 빼려면 기존 캘린더 멤버 관리에서
+  - 남의 초안·다른 워크스페이스는 404, 캘린더 쓰기 권한 없음 403. 새 `ErrorCode`: `ATTENDEE_NOT_ELIGIBLE`(400), `CALENDAR_MEMBERS_CHANGED`(409)
+- [x] 워커 `trip-plan.generate`: GENERATING일 때만 실행(재시도해도 LLM 결과는 한 번만 반영) → `LlmClient` 호출(`LLM_TIMEOUT_MS`) → 검증 → READY + 실사용 정산(`"AI_USAGE:{aiUsageId}:ADJUST"`). LLM 오류·타임아웃·검증 실패 → FAILED + 환불(`"AI_USAGE:{aiUsageId}:REFUND"`). 초안 상태는 AI 사용 건을 따른다: `AiUsageService.onFeatureFailure("TRIP_PLANNER")`가 모든 실패 경로(멈춘 건 정리 포함)의 환불 트랜잭션 안에서 GENERATING 초안을 FAILED로 바꾼다(별도 정리 작업·설정값 없음). 동시성 `TRIP_PLAN_CONCURRENCY`
+- [x] 시각 변환: 현지 날짜·시각 + timezone → UTC로 저장(서머타임 반영). 일정에는 시간대 필드가 없어 보는 사람 기준 시각으로 표시되므로, 캘린더 시간대와 다르면 설명 첫 줄에 현지 시각(`현지 10:00–12:00 · Europe/Paris`)을 적는다
+- [x] web: 새 일정 시트 머리에 "AI 여행 일정" 버튼 → `Sheet` 양식(목적지, 기간, 캘린더 `Picker`, 워크스페이스 멤버 선택 — 캘린더 멤버가 아닌 사람 옆에 "캘린더에 추가돼요", 요청자가 EDITOR면 그 사람은 흐리게 + "캘린더 관리자만 새 멤버와 함께 갈 수 있어요") → 예상 크레딧 표시 → 만드는 중(폴링) → 날짜별 미리보기(항목 끄기, 제목·시간 수정) → 새 멤버가 있으면 확인("A님, B님이 이 캘린더에 보기 권한으로 추가돼요. 이 캘린더의 다른 일정도 볼 수 있어요") → "캘린더에 N개 추가" → 완료 토스트 + "되돌리기"(되돌려도 "캘린더 멤버는 그대로예요"). 409 `CALENDAR_MEMBERS_CHANGED`면 새 목록으로 다시 확인. 미리보기에 "AI가 만든 초안이에요. 영업시간·휴무일은 한 번 더 확인해 주세요". 375px 먼저, 새 오류 코드는 `lib/client-api.ts`에서 한국어로. 끝나지 않은 초안은 기억해 두고 시트를 다시 열면 이어서 보여준다(닫아도 선차감한 크레딧이 버려지지 않게). web 프록시가 `Idempotency-Key` 헤더를 api로 넘긴다
+- **완료 조건**: ✅
+  - 단위: 출력 검증(기간 밖 날짜, 종료 ≤ 시작, 하루 항목 초과, 잘못된 시간대), 현지 시각 → UTC(`Europe/Paris` 서머타임 시작일 포함), 예상 크레딧 계산
+  - e2e(모의 `LlmClient` + 실제 BullMQ 워커): 생성 → READY → 적용 → 일정 N건·참석자 N×M행 / 같은 `Idempotency-Key`로 생성 두 번 → 초안·DEBIT 1건 / 적용 두 번·동시 적용 2건 → 일정 N건 유지 / 되돌리기 → 그 초안의 일정만 삭제 / VIEWER 403 / 다른 워크스페이스 캘린더·남의 초안 404 / 워크스페이스 밖 사용자를 참석자로 → 400 / 초안 뒤 참석자가 워크스페이스를 떠남 → 적용 400 / **자동 추가**: 캘린더 OWNER가 캘린더 밖 워크스페이스 멤버와 적용 → 그 멤버가 VIEWER로 추가되고 그 계정의 일정 목록에 N건 / 이미 EDITOR인 멤버는 EDITOR 유지 / 적용 두 번 → 캘린더 멤버 행 1건 / EDITOR인 요청자가 캘린더 밖 멤버를 고름 → 403 / `newCalendarMemberIds`가 서버 목록과 다름 → 409, 멤버·일정 0건 / 되돌리기 → 일정만 삭제, 추가된 멤버는 남음 / 잔액 부족 409, LLM 호출 0회 / LLM 오류·스키마 위반·타임아웃 → FAILED + 전액 환불 / 불변식 `선차감(DEBIT) = 실사용 + 되돌려준 크레딧(ADJUST·REFUND)`
+  - 개발 서버(모의 AI): 375px·1440px에서 만들기 → 미리보기(항목 빼기·고치기) → 캘린더에 넣기 → 되돌리기 토스트, 가로 스크롤 없음. 함께 가는 멤버 계정에 보이는지는 e2e(그 계정의 일정 목록)로 확인
+- **결정**: 캘린더 멤버가 아닌 참석자는 적용 때 그 캘린더에 VIEWER로 자동 추가한다(검토한 다른 안: 참석자에게는 캘린더 멤버가 아니어도 그 일정만 보이게 일정 목록 조건을 바꾸기 — 기존 권한 모델을 바꾸므로 택하지 않음)
 
 ## 3주차 — 규모·운영 (개요)
 
