@@ -45,6 +45,8 @@ jobs:
       - uses: actions/setup-node@v5
         with:
           node-version: 24
+          # Its automatic cache needs pnpm before corepack has installed it; the pnpm store is cached below instead.
+          package-manager-cache: false
 
       - name: Enable pnpm (version from package.json)
         run: npm install -g corepack@latest && corepack enable

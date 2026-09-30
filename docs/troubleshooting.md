@@ -120,3 +120,9 @@
 - **증상**: 이미지를 작게 하려고 slim을 쓰면 Prisma 마이그레이션 엔진이 쓰는 OpenSSL 라이브러리(`libssl.so.3`)가 없다(slim 이미지에서 `libssl` 파일 0개 확인). 설치하려면 `apt-get install openssl`이 필요한데, 이 작업 환경의 네트워크는 운영체제 패키지 저장소를 막아 두어 apt 단계가 403으로 실패했다
 - **해결**: 기본 이미지를 `node:24-bookworm`(slim 아님)으로 바꿨다. `libssl.so.3`과 인증서가 이미 들어 있어 apt 단계가 없다. 이미지는 커지지만 서버 한 대에 이미지 하나라 감수한다
 - **덤**: 회사망처럼 TLS를 가로채는 프록시 뒤에서 빌드하면 `pnpm install`이 인증서 오류를 낸다. `Dockerfile`은 선택 비밀값 `extra_ca`가 있으면 `NODE_EXTRA_CA_CERTS`로 쓴다(`docker build --secret id=extra_ca,src=<CA 묶음 파일>`). 일반 서버에서는 넘기지 않는다
+
+## 18. GitHub Actions에서 `actions/setup-node@v5`가 `Unable to locate executable file: pnpm`으로 멈춘다
+
+- **증상**: 처음 올린 CI가 설치 단계 전에 실패. 로그에 `package-manager-cache: true`와 위 오류
+- **원인**: setup-node v5는 `package.json`의 `packageManager`를 보고 그 도구의 캐시를 자동으로 켠다. 우리는 pnpm을 corepack으로 그다음 단계에서 켜서, 그 시점엔 pnpm이 없다
+- **해결**: `package-manager-cache: false`로 끄고, pnpm 저장소는 `actions/cache`로 따로 캐시한다(`pnpm store path`)
