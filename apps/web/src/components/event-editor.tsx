@@ -9,6 +9,7 @@ import { type Calendar, type CalendarEvent, canWrite } from "@/lib/types";
 
 import { MiniMonth } from "./mini-month";
 import { useToast } from "./toast";
+import { PlanTripButton } from "./trip-planner";
 import { Button, cn, IconButton, Notice, Picker, Sheet } from "./ui";
 
 type Reminder = { minutesBefore: number; channel: "PUSH" | "SMS" | "ALIMTALK"; audience: "CREATOR" | "ATTENDEES" };
@@ -62,19 +63,21 @@ type Props = {
   onClose: () => void;
   onSaved: (event: CalendarEvent) => void;
   onRemoved: (eventId: string) => void;
+  /** Shown on a new event: switch to the AI travel itinerary sheet instead */
+  onPlanTrip?: () => void;
 };
 
 /**
  * One sheet for creating, viewing and editing. An existing event opens straight into its (editable) form;
  * delete happens immediately with "되돌리기" in a toast instead of a confirm dialog.
  */
-export function EventEditor({ state, calendars, onClose, onSaved, onRemoved }: Props) {
+export function EventEditor({ state, calendars, onClose, onSaved, onRemoved, onPlanTrip }: Props) {
   if (state.mode === "closed") return null;
   const key = state.mode === "edit" ? state.event.id : `new-${state.start.getTime()}-${state.end?.getTime()}`;
-  return <EditorForm calendars={calendars} key={key} onClose={onClose} onRemoved={onRemoved} onSaved={onSaved} state={state} />;
+  return <EditorForm calendars={calendars} key={key} onClose={onClose} onPlanTrip={onPlanTrip} onRemoved={onRemoved} onSaved={onSaved} state={state} />;
 }
 
-function EditorForm({ state, calendars, onClose, onSaved, onRemoved }: Props & { state: Exclude<EditorState, { mode: "closed" }> }) {
+function EditorForm({ state, calendars, onClose, onSaved, onRemoved, onPlanTrip }: Props & { state: Exclude<EditorState, { mode: "closed" }> }) {
   const toast = useToast();
   const formId = useId();
   const event = state.mode === "edit" ? state.event : null;
@@ -258,6 +261,8 @@ function EditorForm({ state, calendars, onClose, onSaved, onRemoved }: Props & {
               </IconButton>
             ) : null}
           </div>
+        ) : onPlanTrip ? (
+          <PlanTripButton onClick={onPlanTrip} />
         ) : undefined
       }
       onClose={onClose}

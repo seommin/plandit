@@ -28,7 +28,8 @@ export type CalendarEvent = {
   calendar: { id: string; name: string; type: Calendar["type"]; color: string };
 };
 
-export type CalendarState = { calendars: Calendar[]; events: CalendarEvent[] };
+/** `range`: the instants the events were fetched for (the server adds it to the first page load). */
+export type CalendarState = { calendars: Calendar[]; events: CalendarEvent[]; range?: { from: string; to: string } };
 
 export type Workspace = { id: string; name: string; type: "PERSONAL" | "TEAM"; role: WorkspaceRole; createdAt: string };
 

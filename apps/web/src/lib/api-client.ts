@@ -61,6 +61,9 @@ export async function proxyInternalApi(
   const userAgent = request.headers.get("user-agent");
   if (forwardedFor) headers.set("x-forwarded-for", forwardedFor);
   if (userAgent) headers.set("x-client-user-agent", userAgent);
+  // Lets the api recognise a retried request (e.g. "만들기" pressed twice) and do the work once.
+  const idempotencyKey = request.headers.get("idempotency-key");
+  if (idempotencyKey) headers.set("idempotency-key", idempotencyKey);
 
   const response = await fetchInternalApi(path, { body, method, userId, headers });
   const responseBody = await response.text();

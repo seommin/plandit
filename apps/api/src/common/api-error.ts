@@ -14,6 +14,8 @@ export enum ErrorCode {
   PAYMENT_GATEWAY_ERROR = "PAYMENT_GATEWAY_ERROR",
   RATE_LIMITED = "RATE_LIMITED",
   SERVICE_UNAVAILABLE = "SERVICE_UNAVAILABLE",
+  ATTENDEE_NOT_ELIGIBLE = "ATTENDEE_NOT_ELIGIBLE",
+  CALENDAR_MEMBERS_CHANGED = "CALENDAR_MEMBERS_CHANGED",
 }
 
 export const ERROR_STATUS: Record<ErrorCode, number> = {
@@ -32,6 +34,8 @@ export const ERROR_STATUS: Record<ErrorCode, number> = {
   [ErrorCode.PAYMENT_GATEWAY_ERROR]: 502,
   [ErrorCode.RATE_LIMITED]: 429,
   [ErrorCode.SERVICE_UNAVAILABLE]: 503,
+  [ErrorCode.ATTENDEE_NOT_ELIGIBLE]: 400,
+  [ErrorCode.CALENDAR_MEMBERS_CHANGED]: 409,
 };
 
 export class ApiError extends Error {

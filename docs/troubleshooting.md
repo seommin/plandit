@@ -86,3 +86,24 @@
 - **원인**: Prisma 7부터 `prisma migrate dev`가 클라이언트 생성(`prisma generate`)을 자동으로 하지 않고, 설치 때도 만들지 않음. 원래 폴더에는 예전에 만든 클라이언트가 남아 있어서 드러나지 않았음
 - **해결**: 루트 `package.json`에 `"postinstall": "pnpm --filter @plandit/database prisma:generate"`. 설치할 때마다 클라이언트를 만든다(설정 파일에 기본 DB 주소가 있어 `.env`가 없어도 된다)
 - **재발 방지**: README 실행 절차는 새로 받은 폴더에서 처음부터 따라 해서 확인한다(PLANDIT-10 완료 조건 확인 때 발견)
+- **같은 원인, 다른 모습**(PLANDIT-20): 스키마에 모델을 추가하고 `pnpm prisma:migrate`로 마이그레이션까지 적용했는데, api 타입 검사가 `Property 'aiUsage' does not exist`로 실패. 설치가 끝난 뒤의 스키마 변경은 postinstall이 다시 돌지 않으므로 `pnpm --filter @plandit/database prisma:generate`를 직접 실행한다
+
+## 13. AI 구조화 출력에 zod 스키마를 그대로 넘기면 조건이 거절된다
+
+- **증상**: 여행 일정 형식(`tripDraftSchema`)을 `z.toJSONSchema`로 바꿔 모델에 주면 `minLength`·`maxLength`·`minimum`·`maximum`·`pattern`·`minItems`가 그대로 들어간다. Claude 구조화 출력(`output_config.format`)의 문서에는 글자 수·숫자 범위·배열 개수 조건이 "지원하지 않음"으로 적혀 있어서, 실제 키로 부르면 요청이 거절(400 → `LLM_BAD_REQUEST`)되고 모든 초안이 환불로 끝날 수 있었다. 모의 모델은 형식을 검사하지 않아서 테스트로는 드러나지 않았고, 구현 중 문서를 확인하다 발견했다
+- **원인**: SDK의 `messages.parse()` 도우미는 이런 조건을 알아서 걷어 내지만, 우리는 공급자를 바꿀 수 있게 `messages.create()`에 JSON 스키마를 직접 넘긴다(PLANDIT-20)
+- **해결**: `toLlmJsonSchema`가 지원되는 키워드(type·properties·required·items·enum·const·anyOf·description, 지원 format)만 남기고 모든 객체에 `additionalProperties: false`를 붙인다. 걷어 낸 조건은 응답을 받은 뒤 원래 zod 스키마로 검사한다(`parseDraft`). 선택 항목은 `optional` 대신 `nullable`로 둬서 모든 키를 `required`에 넣는다
+- **재발 방지**: `llm-client.spec.ts`가 변환 결과를 통째로 비교한다. 모의 모델은 네트워크를 타지 않아 이 문제를 못 잡으므로, 새 형식을 추가하면 `pnpm --filter @plandit/api llm:smoke`처럼 실제 키로 한 번 확인한다
+
+## 14. 웹에서 보낸 `Idempotency-Key`가 api에 닿지 않는다
+
+- **증상**: 여행 초안 "만들기"를 두 번 누르면 초안이 두 개 생길 수 있는 구조였다. api는 `Idempotency-Key` 헤더로 중복을 막는데, 브라우저 요청을 api로 넘기는 web 프록시(`lib/api-client.ts`의 `proxyInternalApi`)가 content-type·IP·기기 헤더만 옮겨 담고 나머지는 버리고 있었다
+- **해결**: 프록시가 `idempotency-key`도 넘긴다. 화면은 양식 내용이 같으면 같은 키를 쓰고(두 번 눌러도, 연결이 끊겨 다시 보내도 초안·차감 1건), "다시 만들기"에서만 새 키를 만든다
+- **재발 방지**: 헤더로 멱등성을 받는 API를 새로 만들면 프록시를 거친 요청으로 한 번 확인한다(e2e는 api를 직접 부르므로 이 경로를 지나지 않는다)
+
+## 15. 서버와 보는 사람의 시간대가 다르면 캘린더 첫 화면이 어긋난다
+
+- **증상**: 개발 서버(UTC)에 한국 시간 브라우저로 접속하면 캘린더 첫 화면에서 "Hydration failed because the server rendered HTML didn't match the client"가 나고 화면을 통째로 다시 그렸다. UTC 브라우저로는 재현되지 않았다. 원인을 찾다가 코드에서 더 큰 문제를 발견했다: 한국 시간 10월 1일 새벽 5시(서버는 아직 9월 30일)에 열면 서버가 **9월** 화면의 일정을 넘기고, 브라우저는 그걸 10월 화면의 첫 데이터로 그대로 써서 10월 4일 오전 9시 이후 일정이 다른 달로 넘어갔다 올 때까지 빠진다(고친 뒤 브라우저 시계를 그 시각으로 맞춰 10월 일정을 다시 가져오는 것을 확인)
+- **원인**: 캘린더 화면(클라이언트 컴포넌트)도 서버에서 한 번 그려지는데, "오늘"·보이는 달·일정이 놓일 시각을 `new Date()`와 지역 시각 함수로 계산한다. 서버 프로세스의 시간대(UTC)와 브라우저의 시간대가 다르면 두 결과가 다르다. 서버가 넘기는 첫 데이터의 기간도 서버 시간대의 달이었고, 브라우저는 기간을 확인하지 않고 첫 요청을 건너뛰었다
+- **해결**: 시간대에 따라 달라지는 캘린더는 브라우저에서만 그리고, 서버와 수화(hydration) 중의 첫 화면은 같은 뼈대를 그린다(`components/use-hydrated.ts`). 서버는 앞뒤 하루 여유를 두고 가져온 기간을 `range`로 함께 넘기고, 브라우저는 자기 기간을 다 덮을 때만 첫 요청을 건너뛴다(`rangeCovers`)
+- **재발 방지**: 서버와 다른 시간대의 브라우저로 확인한다(Playwright `timezoneId: "Asia/Seoul"`, 서버는 UTC). `TZ=Asia/Seoul`로 서버 시간대를 맞추는 방법은 한국 밖 사용자에게 같은 문제가 남아서 택하지 않았다
