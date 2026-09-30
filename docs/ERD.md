@@ -194,9 +194,26 @@ UPDATE·DELETE는 트리거로 차단(원장과 같은 방식). 변경과 같은
 
 ## 2주차 추가 테이블 (AI)
 
-### ai_usages
-workspace_id, user_id, feature(SCHEDULE_ASSISTANT / MEMORY_SEARCH / TRIP_PLANNER), model, input_tokens, output_tokens, credits, debit_ledger_id, adjust_ledger_id, latency_ms, created_at.
-LLM 호출 전 예상 크레딧 DEBIT, 호출 후 실제 사용량으로 ADJUST.
+### ai_usages — LLM 호출 한 번의 과금 기록 (PLANDIT-20)
+| 컬럼 | 타입 | 비고 |
+|---|---|---|
+| id | cuid PK | 원장 멱등키 `"AI_USAGE:{id}:DEBIT / ADJUST / REFUND"` |
+| workspace_id, user_id | FK | 크레딧을 쓰는 워크스페이스, 요청한 사람 |
+| feature | enum SCHEDULE_ASSISTANT / MEMORY_SEARCH / TRIP_PLANNER | |
+| status | enum RESERVED / CALLING / SUCCEEDED / FAILED | RESERVED(선차감) → CALLING(호출 직전 기록) → SUCCEEDED·FAILED. RESERVED → FAILED도 있음(멈춘 건 정리) |
+| provider | text | anthropic / mock |
+| model | text null | 답을 만든 모델(서버 측 대체 시 대체 모델) |
+| max_output_tokens | int | 선차감 계산에 쓴 출력 상한. 실행 요청이 이보다 크면 거절 |
+| estimated_credits | int | 선차감액(DEBIT). 청구 상한 |
+| credits | int | 청구액 = min(실사용, 선차감). 실패는 0 |
+| input_tokens, output_tokens, cache_read_input_tokens, cache_write_input_tokens | int | 모든 시도의 합. 실패한 호출도 기록 |
+| attempts | jsonb null | 시도별 `{ model, inputTokens, outputTokens, cacheRead…, cacheWrite… }` |
+| failure_code | text null | LLM_TIMEOUT / LLM_RATE_LIMITED / LLM_OVERLOADED / LLM_UNAVAILABLE / LLM_BAD_REQUEST / LLM_AUTH / LLM_ERROR / LLM_REFUSED / LLM_TRUNCATED / INVALID_OUTPUT / STALE / INTERNAL |
+| latency_ms | int null | |
+| debit_ledger_id, adjust_ledger_id, refund_ledger_id | FK credit_ledger unique null | |
+| created_at, started_at, finished_at | | started_at = CALLING 기록 시각 |
+
+사용 건마다 `DEBIT + ADJUST + REFUND = −credits`.
 
 ### assistant_sessions / assistant_messages
 workspace_id, user_id, title / session_id, role, content, tool_calls(jsonb), tool_results(jsonb), ai_usage_id. Tool Calling 기록.

@@ -86,3 +86,4 @@
 - **원인**: Prisma 7부터 `prisma migrate dev`가 클라이언트 생성(`prisma generate`)을 자동으로 하지 않고, 설치 때도 만들지 않음. 원래 폴더에는 예전에 만든 클라이언트가 남아 있어서 드러나지 않았음
 - **해결**: 루트 `package.json`에 `"postinstall": "pnpm --filter @plandit/database prisma:generate"`. 설치할 때마다 클라이언트를 만든다(설정 파일에 기본 DB 주소가 있어 `.env`가 없어도 된다)
 - **재발 방지**: README 실행 절차는 새로 받은 폴더에서 처음부터 따라 해서 확인한다(PLANDIT-10 완료 조건 확인 때 발견)
+- **같은 원인, 다른 모습**(PLANDIT-20): 스키마에 모델을 추가하고 `pnpm prisma:migrate`로 마이그레이션까지 적용했는데, api 타입 검사가 `Property 'aiUsage' does not exist`로 실패. 설치가 끝난 뒤의 스키마 변경은 postinstall이 다시 돌지 않으므로 `pnpm --filter @plandit/database prisma:generate`를 직접 실행한다

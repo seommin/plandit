@@ -1,6 +1,7 @@
 import { Module } from "@nestjs/common";
 import { APP_FILTER, APP_GUARD } from "@nestjs/core";
 
+import { AiModule } from "./ai/ai.module";
 import { ApiKeyModule } from "./apikey/api-key.module";
 import { AuditModule } from "./audit/audit.module";
 import { AuthController } from "./auth/auth.controller";
@@ -22,7 +23,7 @@ import { RolesGuard } from "./workspace/roles";
 import { WorkspaceModule } from "./workspace/workspace.module";
 
 @Module({
-  imports: [loggerModule, AuditModule, WorkspaceModule, CreditModule, PaymentModule, ReminderModule, ApiKeyModule, MetricsModule],
+  imports: [loggerModule, AuditModule, WorkspaceModule, CreditModule, PaymentModule, ReminderModule, ApiKeyModule, AiModule, MetricsModule],
   controllers: [
     AuthController,
     CalendarController,
