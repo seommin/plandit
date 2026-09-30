@@ -69,8 +69,31 @@ export function requestText(request: LlmRequest) {
   return [request.system, ...request.messages.map((m) => m.content), schema].join("\n");
 }
 
-/** `jsonSchema` from the zod schema that will also validate the reply in `parse`. */
+/** Keywords structured output accepts; everything else (minLength, maximum, pattern, minItems …) is dropped. */
+const KEPT_KEYWORDS = new Set(["type", "properties", "required", "items", "enum", "const", "anyOf", "allOf", "$ref", "$defs", "description", "title"]);
+const KEPT_FORMATS = new Set(["date-time", "time", "date", "duration", "email", "hostname", "uri", "ipv4", "ipv6", "uuid"]);
+
+function keepSupported(node: unknown): unknown {
+  if (Array.isArray(node)) return node.map(keepSupported);
+  if (!node || typeof node !== "object") return node;
+  const out: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(node)) {
+    if (key === "properties" || key === "$defs") {
+      out[key] = Object.fromEntries(Object.entries(value as Record<string, unknown>).map(([k, v]) => [k, keepSupported(v)]));
+    } else if (key === "format") {
+      if (KEPT_FORMATS.has(value as string)) out.format = value;
+    } else if (KEPT_KEYWORDS.has(key)) {
+      out[key] = key === "enum" || key === "const" || key === "required" ? value : keepSupported(value);
+    }
+  }
+  if (out.type === "object") out.additionalProperties = false;
+  return out;
+}
+
+/**
+ * `jsonSchema` from the zod schema that will also validate the reply in `parse`. Structured output rejects numeric,
+ * length and array-size constraints, so they are stripped here and enforced by that zod schema afterwards.
+ */
 export function toLlmJsonSchema(schema: z.ZodType): Record<string, unknown> {
-  const { $schema, ...json } = z.toJSONSchema(schema) as Record<string, unknown>;
-  return json;
+  return keepSupported(z.toJSONSchema(schema)) as Record<string, unknown>;
 }

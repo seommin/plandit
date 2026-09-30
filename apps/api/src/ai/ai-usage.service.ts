@@ -79,12 +79,21 @@ export class AiUsageService {
   private readonly logger = new Logger(AiUsageService.name);
   /** Priced once at boot: a configured model without credit rates stops the app here. */
   private readonly ceiling: TokenRates;
+  private readonly featureFailures = new Map<AiFeature, (tx: Tx, usage: AiUsage) => Promise<void>>();
 
   constructor(
     @Inject(LLM_CLIENT) private readonly llm: LlmClient,
     private readonly ledger: LedgerService,
   ) {
     this.ceiling = ceilingRates(llm.servingModels);
+  }
+
+  /**
+   * A feature whose own row follows its usage (a trip plan's GENERATING → FAILED) registers here, so every way a
+   * usage fails — including the stale sweep, which knows nothing about features — updates it in the refund transaction.
+   */
+  onFeatureFailure(feature: AiFeature, handler: (tx: Tx, usage: AiUsage) => Promise<void>) {
+    this.featureFailures.set(feature, handler);
   }
 
   private get staleMs() {
@@ -278,6 +287,7 @@ export class AiUsageService {
           finishedAt: new Date(),
         },
       });
+      await this.featureFailures.get(failed.feature)?.(tx, failed);
       await options.onFailure?.(tx, code, failed);
       return { usage: failed, refunded: true };
     };

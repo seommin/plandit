@@ -111,6 +111,7 @@ model User {
   remindersCreated EventReminder[]
   reminderDeliveries ReminderDelivery[]
   aiUsages       AiUsage[]
+  tripPlans      TripPlan[]
 }
 
 model Account {
@@ -167,6 +168,7 @@ model Calendar {
   invites      CalendarInvite[]
   integrations CalendarIntegration[]
   widgets      WidgetPreference[]
+  tripPlans    TripPlan[]
 
   @@index([workspaceId])
 }
@@ -189,6 +191,7 @@ model Workspace {
   auditLogs     AuditLog[]
   apiKeys       ApiKey[]
   aiUsages      AiUsage[]
+  tripPlans     TripPlan[]
 }
 
 model WorkspaceMember {
@@ -373,10 +376,13 @@ model Event {
   color       String?
   recurrence  Json?
   externalId  String?
+  /// Set when the event came from an AI trip plan (PLANDIT-26); "되돌리기" deletes by it
+  tripPlanId  String?
   createdAt   DateTime    @default(now())
   updatedAt   DateTime    @updatedAt
 
   calendar  Calendar        @relation(fields: [calendarId], references: [id], onDelete: Cascade)
+  tripPlan  TripPlan?       @relation(fields: [tripPlanId], references: [id], onDelete: SetNull)
   creator   User            @relation("EventCreator", fields: [createdById], references: [id])
   attendees EventAttendee[]
   shares    EventShare[]
@@ -387,6 +393,7 @@ model Event {
   @@index([createdById])
   @@index([visibility])
   @@index([externalId])
+  @@index([tripPlanId])
 }
 
 model EventShare {
@@ -713,7 +720,47 @@ model AiUsage {
   debitLedger  CreditLedger? @relation("AiUsageDebit", fields: [debitLedgerId], references: [id], onDelete: Restrict)
   adjustLedger CreditLedger? @relation("AiUsageAdjust", fields: [adjustLedgerId], references: [id], onDelete: Restrict)
   refundLedger CreditLedger? @relation("AiUsageRefund", fields: [refundLedgerId], references: [id], onDelete: Restrict)
+  tripPlan     TripPlan?
 
   @@index([workspaceId, createdAt])
   @@index([status, createdAt])
+}
+
+/// GENERATING (credits reserved, waiting for the model) → READY (draft to review) | FAILED (refunded). READY → APPLIED (events created); "되돌리기" → READY.
+enum TripPlanStatus {
+  GENERATING
+  READY
+  FAILED
+  APPLIED
+}
+
+/// AI travel itinerary draft (PLANDIT-26). Its AiUsage carries the credits; the draft only becomes events on apply.
+model TripPlan {
+  id                     String         @id @default(cuid())
+  workspaceId            String
+  calendarId             String
+  createdById            String
+  /// Idempotency-Key of the create request: pressing "만들기" twice makes one plan and one reservation
+  requestKey             String
+  /// The form as validated (tripInputSchema)
+  input                  Json
+  /// The model's itinerary after validation, then the user's edits (tripDraftSchema)
+  draft                  Json?
+  status                 TripPlanStatus @default(GENERATING)
+  failureCode            String?
+  aiUsageId              String         @unique
+  /// Attendees added to the calendar as VIEWER when the plan was applied
+  addedCalendarMemberIds String[]       @default([])
+  createdAt              DateTime       @default(now())
+  updatedAt              DateTime       @updatedAt
+  appliedAt              DateTime?
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+  calendar  Calendar  @relation(fields: [calendarId], references: [id], onDelete: Cascade)
+  createdBy User      @relation(fields: [createdById], references: [id], onDelete: Cascade)
+  aiUsage   AiUsage   @relation(fields: [aiUsageId], references: [id], onDelete: Restrict)
+  events    Event[]
+
+  @@unique([createdById, requestKey])
+  @@index([workspaceId, createdById, createdAt])
 }

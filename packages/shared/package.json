@@ -12,7 +12,8 @@
     "./credits": "./src/credits.ts",
     "./reminders": "./src/reminders.ts",
     "./api-keys": "./src/api-keys.ts",
-    "./ai": "./src/ai.ts"
+    "./ai": "./src/ai.ts",
+    "./trips": "./src/trips.ts"
   },
   "scripts": {
     "build": "tsc --noEmit",

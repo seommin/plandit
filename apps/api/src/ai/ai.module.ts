@@ -19,6 +19,6 @@ export function llmClientFromEnv(): LlmClient {
   imports: [CreditModule],
   controllers: [AiController],
   providers: [AiUsageService, { provide: LLM_CLIENT, useFactory: llmClientFromEnv }],
-  exports: [AiUsageService],
+  exports: [AiUsageService, LLM_CLIENT],
 })
 export class AiModule {}

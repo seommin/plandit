@@ -16,7 +16,7 @@
 3. **끝나면 실사용만 청구하고 나머지를 돌려준다(ADJUST +).** 실사용은 시도별(`usage.iterations`) 토큰을 그 시도 모델의 단가로 더해 올림한다. 청구액은 `min(실사용, 선차감)`이다. 어림이 빗나가 실사용이 더 커도 사용자가 본 금액이 상한이고, 차이는 플랫폼이 부담하며 로그에 남는다.
 4. **실패하면 선차감 전액을 환불한다(REFUND).** LLM 오류, 거절, 출력 잘림, 기능의 응답 검증 실패, 정산 트랜잭션 실패가 모두 해당한다. 실패한 호출의 토큰도 기록한다(원가 추적용, 청구는 0).
 5. **멈춘 건은 워커가 닫는다.** `AI_USAGE_STALE_MS`(30분, `LLM_TIMEOUT_MS` × (재시도 + 1)보다 길게)를 넘긴 `RESERVED`·`CALLING`은 `FAILED(STALE)` + 환불. 그 뒤에 돌아온 응답은 행이 `CALLING`이 아니므로 정산하지 않는다. LLM에는 PG처럼 다시 물어볼 조회 API가 없어서, 확인할 수 없는 건은 사용자에게 유리하게(환불) 닫는다.
-6. **기능의 상태 변경과 정산은 한 트랜잭션이다.** `execute(..., { onSuccess(tx), onFailure(tx) })`로 기능(예: 여행 초안 READY)과 ADJUST·REFUND가 함께 커밋되거나 함께 롤백된다. `reserve(input, tx)`도 호출자 트랜잭션에 합류할 수 있다.
+6. **기능의 상태 변경과 정산은 한 트랜잭션이다.** `execute(..., { onSuccess(tx), onFailure(tx) })`로 기능(예: 여행 초안 READY)과 ADJUST·REFUND가 함께 커밋되거나 함께 롤백된다. `reserve(input, tx)`도 호출자 트랜잭션에 합류할 수 있다. 기능별 실패 처리(`onFeatureFailure(feature, handler)`)를 등록하면, 기능을 모르는 멈춘 건 정리 작업이 환불할 때도 같은 트랜잭션에서 기능 상태(여행 초안 FAILED)가 바뀐다.
 7. 원장 멱등키는 `AI_USAGE:{id}:DEBIT / ADJUST / REFUND`. 사용 건마다 `DEBIT + ADJUST + REFUND = −credits`.
 
 ## 버린 대안

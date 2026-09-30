@@ -10,6 +10,7 @@ import { DateNavigator, MiniMonth, useDayDots } from "@/components/mini-month";
 import { MonthGrid } from "@/components/month-grid";
 import { TimeGrid } from "@/components/time-grid";
 import { useToast } from "@/components/toast";
+import { TripPlanner } from "@/components/trip-planner";
 import { Button, cn, IconButton, Notice, Picker, Segmented, Sheet, Tabs } from "@/components/ui";
 import { useCalendarScope, useCalendarState, useHiddenCalendars } from "@/components/use-calendar-state";
 import { api, errorMessage } from "@/lib/client-api";
@@ -36,12 +37,13 @@ export function CalendarScreen({ initial, openCreate }: { initial: CalendarState
   const [expanded, setExpanded] = useState(false);
   const [filterOpen, setFilterOpen] = useState(false);
   const [editor, setEditor] = useState<EditorState>({ mode: "closed" });
+  const [tripOpen, setTripOpen] = useState(false);
   const gridRef = useRef<HTMLDivElement>(null);
   const scrollerRef = useRef<HTMLDivElement>(null);
   const headerRef = useRef<HTMLElement>(null);
 
   const range = useMemo(() => monthGridRange(startOfMonth(selected)), [selected.getFullYear(), selected.getMonth()]); // eslint-disable-line react-hooks/exhaustive-deps
-  const { calendars, events, upsertEvent, removeEvent, loading, error } = useCalendarState(range.from, range.to, initial);
+  const { calendars, events, upsertEvent, removeEvent, loading, error, reload } = useCalendarState(range.from, range.to, initial);
   const { hidden, toggle } = useHiddenCalendars();
   const { workspaces } = useApp();
   const { scope, setScope } = useCalendarScope();
@@ -76,6 +78,11 @@ export function CalendarScreen({ initial, openCreate }: { initial: CalendarState
   );
 
   const writable = useMemo(() => new Set(calendars.filter(canWrite).map((c) => c.id)), [calendars]);
+  // AI trips go into a calendar you can write to, in a workspace you belong to (credits are charged there); this view's first.
+  const tripCalendars = useMemo(() => {
+    const eligible = scopedCalendars.concat(calendars.filter((c) => !scopedCalendars.includes(c)));
+    return eligible.filter((c) => canWrite(c) && c.type !== "SUBSCRIBED" && workspaces.some((w) => w.id === c.workspaceId));
+  }, [calendars, scopedCalendars, workspaces]);
   const canEdit = (event: CalendarEvent) => writable.has(event.calendarId);
   const create = (start: Date, end?: Date) => setEditor({ mode: "create", start, end });
   const open = (event: CalendarEvent) => setEditor({ mode: "edit", event });
@@ -237,7 +244,22 @@ export function CalendarScreen({ initial, openCreate }: { initial: CalendarState
         </div>
       </div>
 
-      <EventEditor calendars={scopedCalendars} onClose={() => setEditor({ mode: "closed" })} onRemoved={removeEvent} onSaved={upsertEvent} state={editor} />
+      <EventEditor
+        calendars={scopedCalendars}
+        onClose={() => setEditor({ mode: "closed" })}
+        onPlanTrip={
+          tripCalendars.length
+            ? () => {
+                setEditor({ mode: "closed" });
+                setTripOpen(true);
+              }
+            : undefined
+        }
+        onRemoved={removeEvent}
+        onSaved={upsertEvent}
+        state={editor}
+      />
+      <TripPlanner calendars={tripCalendars} defaultDate={selected} onApplied={() => void reload()} onClose={() => setTripOpen(false)} open={tripOpen} />
 
       <Sheet onClose={() => setFilterOpen(false)} open={filterOpen} title="캘린더 보기">
         {calendarList}
