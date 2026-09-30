@@ -1,0 +1,146 @@
+# Production on one server: every process in Docker, only Caddy (ports 80/443) reachable from outside.
+# Start or update: deploy/deploy.sh  (= docker compose --env-file .env.production -f docker-compose.prod.yml up -d --build)
+# First time: deploy/init-env.sh <domain> writes .env.production. docs/deploy.md walks through the whole setup.
+name: plandit
+
+x-app: &app
+  image: plandit-app:latest
+  env_file: .env.production
+  restart: unless-stopped
+  environment:
+    NODE_ENV: production
+    DATABASE_URL: postgresql://plandit:${POSTGRES_PASSWORD}@postgres:5432/plandit
+    DIRECT_URL: postgresql://plandit:${POSTGRES_PASSWORD}@postgres:5432/plandit
+    REDIS_URL: redis://redis:6379
+    API_INTERNAL_URL: http://api:4000
+    WEB_ORIGIN: https://${DOMAIN}
+    NEXTAUTH_URL: https://${DOMAIN}
+    AUTH_URL: https://${DOMAIN}
+    # Caddy sits in front, so Auth.js must trust the forwarded host
+    AUTH_TRUST_HOST: "true"
+    # Mock PG / carrier: pages for browsers on the public domain, everything else over the internal network
+    MOCKS_PUBLIC_URL: https://${DOMAIN}
+    MOCK_PG_BASE_URL: http://mocks:4100/pg
+    MOCK_RELAY_BASE_URL: http://mocks:4100/relay
+    MOCK_PG_WEBHOOK_URL: http://api:4000/webhooks/payments/mock
+    MOCK_RELAY_WEBHOOK_URL: http://api:4000/webhooks/relay/mock
+    MOCKS_PORT: "4100"
+    API_PORT: "4000"
+
+x-needs-data: &needs-data
+  postgres:
+    condition: service_healthy
+  redis:
+    condition: service_healthy
+
+services:
+  # Applies Prisma migrations and exits; the app services wait for it. It also builds the shared image.
+  migrate:
+    <<: *app
+    build:
+      context: .
+      args:
+        NEXT_PUBLIC_DEMO_EMAIL: ${NEXT_PUBLIC_DEMO_EMAIL:-}
+        NEXT_PUBLIC_DEMO_PASSWORD: ${NEXT_PUBLIC_DEMO_PASSWORD:-}
+        NEXT_PUBLIC_VAPID_PUBLIC_KEY: ${NEXT_PUBLIC_VAPID_PUBLIC_KEY:-}
+    working_dir: /app/packages/database
+    command: ["node_modules/.bin/prisma", "migrate", "deploy", "--config", "prisma.config.ts"]
+    restart: "no"
+    depends_on: *needs-data
+
+  api:
+    <<: *app
+    pull_policy: never
+    working_dir: /app/apps/api
+    command: ["node", "-r", "./register-dist.cjs", "dist/apps/api/src/main.js"]
+    depends_on:
+      <<: *needs-data
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:4000/health').then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 20s
+
+  worker:
+    <<: *app
+    pull_policy: never
+    working_dir: /app/apps/api
+    command: ["node", "-r", "./register-dist.cjs", "dist/apps/api/src/worker.js"]
+    depends_on:
+      <<: *needs-data
+      migrate:
+        condition: service_completed_successfully
+
+  mocks:
+    <<: *app
+    pull_policy: never
+    working_dir: /app/apps/mocks
+    command: ["node", "src/main.ts"]
+    depends_on: *needs-data
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:4100/health').then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+
+  web:
+    <<: *app
+    pull_policy: never
+    working_dir: /app/apps/web
+    command: ["node_modules/.bin/next", "start", "-p", "3000"]
+    depends_on:
+      api:
+        condition: service_healthy
+
+  postgres:
+    image: pgvector/pgvector:0.8.1-pg18
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: plandit
+      POSTGRES_USER: plandit
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env.production}
+    volumes:
+      - postgres_data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U plandit -d plandit"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+  redis:
+    image: redis:7.4-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      DOMAIN: ${DOMAIN:?Set DOMAIN in .env.production}
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - web
+      - mocks
+
+volumes:
+  postgres_data:
+  redis_data:
+  caddy_data:
+  caddy_config:

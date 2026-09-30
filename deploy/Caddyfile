@@ -1,0 +1,15 @@
+# The only thing reachable from the internet. HTTPS certificates are issued and renewed automatically for $DOMAIN.
+{$DOMAIN} {
+	encode zstd gzip
+
+	# The mock PG's payment page and the virtual SMS inbox are pages people open in a browser. The rest of the mocks
+	# (reserve, admin, webhook resend), the api and the webhooks stay inside the Docker network.
+	@mockPages path /pg/pay/* /inbox /inbox/*
+	handle @mockPages {
+		reverse_proxy mocks:4100
+	}
+
+	handle {
+		reverse_proxy web:3000
+	}
+}
