@@ -5,16 +5,19 @@
   "scripts": {
     "dev": "node ../../scripts/with-root-env.mjs ts-node -r tsconfig-paths/register src/main.ts",
     "build": "nest build",
-    "start": "node dist/apps/api/src/main.js",
+    "start": "node -r ./register-dist.cjs dist/apps/api/src/main.js",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "test": "jest",
     "test:e2e": "node ../../scripts/with-root-env.mjs jest -c test/jest-e2e.config.js --runInBand",
     "dev:worker": "node ../../scripts/with-root-env.mjs ts-node -r tsconfig-paths/register src/worker.ts",
-    "start:worker": "node dist/apps/api/src/worker.js",
-    "seed:demo": "node ../../scripts/with-root-env.mjs ts-node -r tsconfig-paths/register src/scripts/seed-demo.ts"
+    "start:worker": "node -r ./register-dist.cjs dist/apps/api/src/worker.js",
+    "seed:demo:dist": "node -r ./register-dist.cjs dist/apps/api/src/scripts/seed-demo.js",
+    "seed:demo": "node ../../scripts/with-root-env.mjs ts-node -r tsconfig-paths/register src/scripts/seed-demo.ts",
+    "llm:smoke": "node ../../scripts/with-root-env.mjs ts-node -r tsconfig-paths/register src/scripts/llm-smoke.ts"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "0.129.0",
     "@nestjs/common": "11.1.9",
     "@nestjs/core": "11.1.9",
     "@nestjs/platform-express": "11.1.9",

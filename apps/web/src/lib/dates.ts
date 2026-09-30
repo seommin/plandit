@@ -19,6 +19,13 @@ export const overlaps = (event: Pick<CalendarEvent, "startsAt" | "endsAt">, from
 export const byStart = (a: CalendarEvent, b: CalendarEvent) =>
   new Date(a.startsAt).getTime() - new Date(b.startsAt).getTime() || new Date(b.endsAt).getTime() - new Date(a.endsAt).getTime();
 
+/**
+ * Whether data fetched for `fetched` (ISO instants) holds everything in [from, to). The server fetches the first month
+ * in its own time zone, which can be hours — or, around the 1st, a whole month — away from the viewer's.
+ */
+export const rangeCovers = (fetched: { from: string; to: string } | undefined, from: Date, to: Date) =>
+  Boolean(fetched) && Date.parse(fetched!.from) <= from.getTime() && Date.parse(fetched!.to) >= to.getTime();
+
 /** Visible range of a month grid: from the Sunday before the 1st to the Saturday after the last day. */
 export function monthGridRange(month: Date) {
   const from = startOfWeek(startOfMonth(month));

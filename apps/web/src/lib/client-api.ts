@@ -11,6 +11,10 @@ const MESSAGES: Record<string, string> = {
   INSUFFICIENT_CREDITS: "크레딧이 부족해요.",
   PAYMENT_GATEWAY_ERROR: "결제 서비스에 연결하지 못했어요. 잠시 후 다시 시도해주세요.",
   RATE_LIMITED: "요청이 너무 많아요. 잠시 후 다시 시도해주세요.",
+  CONFLICT: "지금 상태에서는 할 수 없어요. 새로 고친 뒤 다시 시도해주세요.",
+  IDEMPOTENCY_CONFLICT: "같은 요청이 이미 다른 내용으로 처리됐어요. 새로 고친 뒤 다시 시도해주세요.",
+  ATTENDEE_NOT_ELIGIBLE: "함께 갈 수 없는 사람이 있어요. 워크스페이스 멤버인지 확인해주세요.",
+  CALENDAR_MEMBERS_CHANGED: "캘린더에 새로 추가될 사람이 바뀌었어요. 다시 확인해주세요.",
 };
 
 export class ApiRequestError extends Error {
@@ -18,24 +22,25 @@ export class ApiRequestError extends Error {
     message: string,
     readonly status: number,
     readonly code?: string,
+    readonly details?: unknown,
   ) {
     super(message);
   }
 }
 
-export async function api<T = unknown>(path: string, init: { method?: string; body?: unknown } = {}): Promise<T> {
+export async function api<T = unknown>(path: string, init: { method?: string; body?: unknown; headers?: Record<string, string> } = {}): Promise<T> {
   const response = await fetch(`/api${path}`, {
     method: init.method ?? (init.body === undefined ? "GET" : "POST"),
-    headers: init.body === undefined ? undefined : { "content-type": "application/json" },
+    headers: { ...(init.body === undefined ? {} : { "content-type": "application/json" }), ...init.headers },
     body: init.body === undefined ? undefined : JSON.stringify(init.body),
     cache: "no-store",
   });
   if (response.status === 204) return undefined as T;
 
-  const data = (await response.json().catch(() => ({}))) as { code?: string; message?: string; error?: string };
+  const data = (await response.json().catch(() => ({}))) as { code?: string; message?: string; error?: string; details?: unknown };
   if (!response.ok) {
     const message = (data.code && MESSAGES[data.code]) || data.message || data.error || "잠시 후 다시 시도해주세요.";
-    throw new ApiRequestError(message, response.status, data.code);
+    throw new ApiRequestError(message, response.status, data.code, data.details);
   }
   return data as T;
 }

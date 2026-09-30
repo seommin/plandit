@@ -3,18 +3,20 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { api } from "@/lib/client-api";
+import { rangeCovers } from "@/lib/dates";
 import type { Calendar, CalendarEvent, CalendarState } from "@/lib/types";
 
 /**
  * Calendars + events for [from, to), refetched when the range changes. Mutations update the local copy right
- * away (setEvents) so the UI never waits for a refetch.
+ * away (setEvents) so the UI never waits for a refetch. `initial` (from the server) is shown right away and only
+ * replaces the first fetch when it covers this range.
  */
 export function useCalendarState(from: Date, to: Date, initial?: CalendarState) {
   const [calendars, setCalendars] = useState<Calendar[]>(initial?.calendars ?? []);
   const [events, setEvents] = useState<CalendarEvent[]>(initial?.events ?? []);
-  const [loading, setLoading] = useState(!initial);
+  const skipFirst = useRef(rangeCovers(initial?.range, from, to));
+  const [loading, setLoading] = useState(!skipFirst.current);
   const [error, setError] = useState<string | null>(null);
-  const skipFirst = useRef(Boolean(initial));
   const key = `${from.toISOString()}|${to.toISOString()}`;
 
   const load = useCallback(async () => {

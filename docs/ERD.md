@@ -20,6 +20,8 @@ erDiagram
     reminder_deliveries ||--o{ relay_events : "중계사 웹훅"
     workspaces ||--o{ audit_logs : ""
     workspaces ||--o{ ai_usages : ""
+    workspaces ||--o{ trip_plans : "AI 여행 초안"
+    trip_plans ||--o{ events : "적용 시 생성"
 ```
 
 ## ★ 변경되는 기존 테이블
@@ -192,12 +194,50 @@ UPDATE·DELETE는 트리거로 차단(원장과 같은 방식). 변경과 같은
 
 ## 2주차 추가 테이블 (AI)
 
-### ai_usages
-workspace_id, user_id, feature(SCHEDULE_ASSISTANT / MEMORY_SEARCH), model, input_tokens, output_tokens, credits, debit_ledger_id, adjust_ledger_id, latency_ms, created_at.
-LLM 호출 전 예상 크레딧 DEBIT, 호출 후 실제 사용량으로 ADJUST.
+### ai_usages — LLM 호출 한 번의 과금 기록 (PLANDIT-20)
+| 컬럼 | 타입 | 비고 |
+|---|---|---|
+| id | cuid PK | 원장 멱등키 `"AI_USAGE:{id}:DEBIT / ADJUST / REFUND"` |
+| workspace_id, user_id | FK | 크레딧을 쓰는 워크스페이스, 요청한 사람 |
+| feature | enum SCHEDULE_ASSISTANT / MEMORY_SEARCH / TRIP_PLANNER | |
+| status | enum RESERVED / CALLING / SUCCEEDED / FAILED | RESERVED(선차감) → CALLING(호출 직전 기록) → SUCCEEDED·FAILED. RESERVED → FAILED도 있음(멈춘 건 정리) |
+| provider | text | anthropic / mock |
+| model | text null | 답을 만든 모델(서버 측 대체 시 대체 모델) |
+| max_output_tokens | int | 선차감 계산에 쓴 출력 상한. 실행 요청이 이보다 크면 거절 |
+| estimated_credits | int | 선차감액(DEBIT). 청구 상한 |
+| credits | int | 청구액 = min(실사용, 선차감). 실패는 0 |
+| input_tokens, output_tokens, cache_read_input_tokens, cache_write_input_tokens | int | 모든 시도의 합. 실패한 호출도 기록 |
+| attempts | jsonb null | 시도별 `{ model, inputTokens, outputTokens, cacheRead…, cacheWrite… }` |
+| failure_code | text null | LLM_TIMEOUT / LLM_RATE_LIMITED / LLM_OVERLOADED / LLM_UNAVAILABLE / LLM_BAD_REQUEST / LLM_AUTH / LLM_ERROR / LLM_REFUSED / LLM_TRUNCATED / INVALID_OUTPUT / STALE / INTERNAL |
+| latency_ms | int null | |
+| debit_ledger_id, adjust_ledger_id, refund_ledger_id | FK credit_ledger unique null | |
+| created_at, started_at, finished_at | | started_at = CALLING 기록 시각 |
+
+사용 건마다 `DEBIT + ADJUST + REFUND = −credits`.
 
 ### assistant_sessions / assistant_messages
 workspace_id, user_id, title / session_id, role, content, tool_calls(jsonb), tool_results(jsonb), ai_usage_id. Tool Calling 기록.
+
+### trip_plans — AI 여행 일정 초안 (PLANDIT-26)
+| 컬럼 | 타입 | 비고 |
+|---|---|---|
+| id | cuid PK | |
+| workspace_id | FK | 크레딧을 쓰는 워크스페이스 |
+| calendar_id | FK calendars | 일정을 넣을 캘린더(이 워크스페이스 소속) |
+| created_by | FK users | 초안은 만든 사람만 조회·수정·적용 |
+| request_key | text | `Idempotency-Key` 헤더. unique(created_by, request_key) — 두 번 눌러도 1건 |
+| input | jsonb | 양식 입력(목적지·기간·참석자 userId·스타일). LLM에는 인원 수만 보냄 |
+| draft | jsonb null | 검증을 통과한 모델 출력, 사용자가 `PATCH`로 고친 결과 |
+| status | enum GENERATING / READY / FAILED / APPLIED | GENERATING → READY·FAILED, READY → APPLIED, 되돌리기 APPLIED → READY. FAILED는 AI 사용 건이 실패로 닫힐 때 같은 트랜잭션에서 |
+| failure_code | text null | AI 사용 건의 실패 코드 그대로(LLM_TIMEOUT / INVALID_OUTPUT / STALE …) |
+| ai_usage_id | FK ai_usages unique | 원장 멱등키 `"AI_USAGE:{ai_usage_id}:DEBIT / ADJUST / REFUND"`. 초안과 선차감은 한 트랜잭션에서 생긴다 |
+| added_calendar_member_ids | text[] | 적용 때 캘린더에 VIEWER로 자동 추가한 사용자. 되돌리기 안내용(되돌려도 멤버는 남음) |
+| created_at, updated_at, applied_at | | |
+
+### events (변경)
+| 추가 컬럼 | 타입 | 비고 |
+|---|---|---|
+| trip_plan_id | FK trip_plans null | 여행 초안으로 만든 일정. "되돌리기"는 이 값으로 지운다 |
 
 ### documents / document_chunks — 회의록 파일 RAG (PLANDIT-22)
 documents: workspace_id, calendar_id null, event_id null, uploaded_by, filename, mime_type, size_bytes, storage_path, status(UPLOADED/PROCESSING/READY/FAILED), error, created_at.
