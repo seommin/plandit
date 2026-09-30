@@ -2,6 +2,7 @@ import { Controller, Param, Post, Query, UseGuards } from "@nestjs/common";
 import { ApiCreatedResponse, ApiOperation, ApiQuery, ApiTags } from "@nestjs/swagger";
 import { z } from "zod";
 
+import { AiUsageService } from "../ai/ai-usage.service";
 import { ErrorCode } from "../common/api-error";
 import { OperatorGuard } from "../common/operator.guard";
 import { ApiErrors } from "../common/swagger";
@@ -25,6 +26,7 @@ export class OpsController {
     private readonly payments: PaymentReconcileService,
     private readonly reminders: ReminderDispatchService,
     private readonly ledger: LedgerService,
+    private readonly aiUsages: AiUsageService,
   ) {}
 
   @Post("jobs/payment-reconcile")
@@ -51,6 +53,19 @@ export class OpsController {
   @ApiErrors(ErrorCode.VALIDATION_FAILED)
   reconcileReminders(@Query(new ZodPipe(ageQuery)) query: z.infer<typeof ageQuery>) {
     return this.reminders.reconcileSent(new Date(), query.minAgeMs);
+  }
+
+  @Post("jobs/ai-usage-reconcile")
+  @ApiOperation({
+    summary: "멈춘 AI 사용 건 정리 지금 실행",
+    description:
+      "`minAgeMs`보다 오래 RESERVED(생성 시각 기준)이거나 CALLING(호출 시작 기준)인 AI 사용 건을 최대 100건 FAILED(STALE)로 닫고 선차감 전액을 환불한다. 사용 건 단위 멱등키라 두 번 돌려도 환불은 한 번이고, 그 뒤에 모델 응답이 돌아와도 청구하지 않는다.",
+  })
+  @ApiQuery({ name: "minAgeMs", required: false, description: "기본 AI_USAGE_STALE_MS(30분)" })
+  @ApiCreatedResponse({ example: { checked: 1, refunded: 1, errors: 0 } })
+  @ApiErrors(ErrorCode.VALIDATION_FAILED)
+  reconcileAiUsages(@Query(new ZodPipe(ageQuery)) query: z.infer<typeof ageQuery>) {
+    return this.aiUsages.reconcileStale(new Date(), query.minAgeMs);
   }
 
   @Post("credit-accounts/:accountId/recalculate")

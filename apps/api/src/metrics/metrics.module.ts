@@ -46,6 +46,11 @@ export class MetricsService implements OnModuleInit, OnModuleDestroy {
       g.reset();
       for (const status of ["QUEUED", "SENT"]) g.set({ status }, rows.find((r) => r.status === status)?._count ?? 0);
     });
+    gauge("plandit_ai_usages_unsettled", "AI usages holding a reservation (RESERVED/CALLING)", ["status"], async (g) => {
+      const rows = await prisma.aiUsage.groupBy({ by: ["status"], where: { status: { in: ["RESERVED", "CALLING"] } }, _count: true });
+      g.reset();
+      for (const status of ["RESERVED", "CALLING"]) g.set({ status }, rows.find((r) => r.status === status)?._count ?? 0);
+    });
     gauge("plandit_queue_jobs", "BullMQ jobs by queue and state", ["queue", "state"], async (g) => {
       g.reset();
       for (const queue of this.queues) {

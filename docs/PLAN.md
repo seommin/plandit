@@ -237,13 +237,34 @@
 
 ## 2주차 — AI 일정 비서 (개요)
 
-- PLANDIT-20 `LlmClient` + Claude 어댑터, 토큰→크레딧 환산표, 예상 선차감(DEBIT) → 실사용 정산(ADJUST), `ai_usages`. 임베딩은 Anthropic API에 없으므로 별도 제공자(예: Voyage AI)를 `EmbeddingClient` 인터페이스 뒤에 둔다
+- PLANDIT-20 `LlmClient` + Claude 어댑터, 토큰→크레딧 환산표, 예상 선차감(DEBIT) → 실사용 정산(ADJUST), 실패 환불, `ai_usages`. 아래 상세
 - PLANDIT-21 **AI 에이전트(Tool Calling 루프)**: "다음 주에 팀 전원이 되는 시간에 회의 잡아줘" → 모델이 도구를 여러 단계 호출(`list_events` → `find_free_slots` → `create_event`). 최대 단계 수·크레딧 한도·타임아웃, 쓰기 도구는 **사용자 승인 후 실행**(승인 대기 상태 저장), 단계별 도구 호출·결과 기록
-- PLANDIT-22 **RAG**: 일정(제목·설명·장소) + **회의록 파일(PDF·TXT) 업로드** → 텍스트 추출·청킹·임베딩(pgvector)은 큐 작업으로 비동기 처리(진행 상태 표시, 크기·형식 검증) → "지난달 A사 미팅에서 뭐 정했지?"에 근거 인용과 함께 답변. 권한 범위 밖 문서·일정은 검색 대상에서 제외
+- PLANDIT-22 **RAG**: 임베딩은 Anthropic API에 없으므로 별도 제공자(예: Voyage AI)를 `EmbeddingClient` 인터페이스 뒤에 둔다(PLANDIT-20에서 옮김). 일정(제목·설명·장소) + **회의록 파일(PDF·TXT) 업로드** → 텍스트 추출·청킹·임베딩(pgvector)은 큐 작업으로 비동기 처리(진행 상태 표시, 크기·형식 검증) → "지난달 A사 미팅에서 뭐 정했지?"에 근거 인용과 함께 답변. 권한 범위 밖 문서·일정은 검색 대상에서 제외
 - PLANDIT-23 같은 도구를 **MCP 서버**로 노출(사용자 토큰 기반)
-- PLANDIT-24 AI 권한·한도: 워크스페이스별 월 AI 크레딧 상한, LLM 실패 시 환불
+- PLANDIT-24 AI 권한·한도: 워크스페이스별 월 AI 크레딧 상한(LLM 실패 환불은 PLANDIT-20에서)
 - PLANDIT-25 README에 AI 데모 GIF
 - PLANDIT-26 **AI 여행 일정 만들기**(양식 → 초안 → 확인 → 한 번에 저장, 함께 갈 멤버는 참석자로, 캘린더 멤버가 아니면 자동 추가). 아래 상세
+
+### PLANDIT-20 · LLM 연결 + AI 크레딧 과금
+AI 기능이 함께 쓰는 바닥. 기능(PLANDIT-21·26)은 `AiUsageService`만 부르고, 모델 호출·과금·환불은 여기서 끝낸다.
+- [x] `LlmClient` 인터페이스(`apps/api/src/ai/llm-client.ts`): `complete({ system, messages, maxOutputTokens, effort?, jsonSchema? })` → `{ model, text, stopReason(end / max_tokens / refusal / other), attempts[] }`. `attempts`는 시도별 토큰(모델·입력·출력·캐시 읽기·캐시 쓰기)으로 과금의 근거. 오류는 `LlmError(code)`: `LLM_TIMEOUT / LLM_RATE_LIMITED / LLM_OVERLOADED / LLM_UNAVAILABLE / LLM_BAD_REQUEST / LLM_AUTH / LLM_ERROR`. `servingModels`: 요청을 처리할 수 있는 모든 모델(설정 모델 + 서버 측 대체 모델)
+- [x] 구현체는 `LLM_PROVIDER`로 고른다(`mock` 기본 — API 키 없이 로컬·테스트가 돈다 / `anthropic`)
+  - Claude 어댑터: 공식 SDK(`@anthropic-ai/sdk`), 모델 `LLM_MODEL`(기본 `claude-opus-5-5`). 구조화 출력은 `output_config.format`(json_schema) — 이 모델은 강제 `tool_choice`가 400이라 도구 강제 호출로 JSON을 받지 않는다. 사고(thinking)는 끌 수 없어 `output_config.effort`로 조절(모델 기본값 `medium`을 명시). 안전 분류기 거절에 대비해 서버 측 대체(`fallbacks: "default"`, beta `server-side-fallback-2026-07-01`. `LLM_REFUSAL_FALLBACK=off`로 끔). 과금 근거는 `usage.iterations`(대체 시도 포함, 시도마다 그 모델 단가), 없으면 최상위 `usage`. SDK 재시도 `LLM_MAX_RETRIES`(2), 요청 타임아웃 `LLM_TIMEOUT_MS`(5분). 비스트리밍이라 출력 상한은 16,000토큰(더 필요한 기능은 스트리밍으로 바꾼 뒤에)
+  - 모의 구현: 네트워크 없음. JSON 스키마를 주면 스키마에 맞는 표본을, 아니면 고정 문장을 돌려준다. e2e는 다음 응답·오류·대기를 미리 넣어 둔다
+- [x] 환산표(`packages/shared/ai.ts`): 모델별 100만 토큰당 크레딧(입력·출력·캐시 읽기·캐시 쓰기). 1크레딧 = 10원, 표시 가격(USD) × 1,400원 ÷ 10, 마진 없음. 호출 한 번의 크레딧 = 시도별 합을 **올림**(토큰을 썼으면 최소 1). 표에 없는 모델을 설정하면 기동 실패
+- [x] `AiUsage`(workspaceId, userId, feature `SCHEDULE_ASSISTANT / MEMORY_SEARCH / TRIP_PLANNER`, status `RESERVED → CALLING → SUCCEEDED / FAILED`, provider, model, maxOutputTokens, estimatedCredits, credits, 토큰 4종, attempts jsonb, failureCode, latencyMs, debit·adjust·refund ledgerId, createdAt·startedAt·finishedAt)
+- [x] `AiUsageService`(기능은 이것만 부른다)
+  - `reserve(input, tx?)`: 선차감액 = 입력 토큰 추정(UTF-8 바이트 ÷ 2, 넉넉하게) + `maxOutputTokens`를 `servingModels` 중 가장 비싼 단가로. `AiUsage` RESERVED + DEBIT(`"AI_USAGE:{id}:DEBIT"`)을 한 트랜잭션(호출자 트랜잭션에 합류 가능). 잔액 부족이면 409 `INSUFFICIENT_CREDITS`, 행 없음
+  - `execute(id, request, { parse, onSuccess?, onFailure? })`: `RESERVED → CALLING`을 조건부 UPDATE로 **먼저 기록**(동시에 두 번 불려도 LLM은 한 번) → LLM 호출(트랜잭션 밖) → 거절·잘림·`parse` 실패는 실패 처리 → 성공이면 행 `FOR UPDATE` → `min(실사용, 선차감)`을 청구하고 차액은 ADJUST(`"AI_USAGE:{id}:ADJUST"`, +) → SUCCEEDED + `onSuccess(tx)`를 한 트랜잭션. 선차감을 넘는 실사용은 청구하지 않는다(사용자가 본 금액이 상한)
+  - `fail(id, code, { tx?, onFailure? })`: 끝나지 않은 건이면 REFUND(`"AI_USAGE:{id}:REFUND"`, 선차감 전액) + FAILED + `onFailure(tx)`. 이미 끝났으면 아무것도 하지 않는다. 실패한 호출의 토큰도 기록한다(청구는 0)
+  - `run(input, hooks)`: `reserve` + `execute`(동기 호출용, PLANDIT-21)
+- [x] 멈춘 사용 건 정리: `AI_USAGE_STALE_MS`(30분 — `LLM_TIMEOUT_MS` 5분 × (재시도 2 + 1)보다 길게)를 넘긴 RESERVED(생성 시각 기준)·CALLING(호출 시작 기준)은 워커 주기 작업(`AI_USAGE_RECONCILE_EVERY_MS`)이 FAILED(`STALE`) + 환불. 그 뒤에 돌아온 호출은 행이 CALLING이 아니므로 정산하지 않는다. 운영자 즉시 실행 `POST /admin/jobs/ai-usage-reconcile?minAgeMs=`
+- [x] `GET /workspaces/:workspaceId/ai-usages`(ADMIN+, cursor·최신순, status·feature 필터)
+- [x] 지표: `plandit_ai_calls_total{provider, outcome}`, `plandit_ai_tokens_total{model, kind}`, `plandit_ai_call_duration_seconds`, `plandit_ai_usages_unsettled{status}`. 런북에 "G. AI 사용 건이 정산되지 않는다"
+- [x] `pnpm --filter @plandit/api llm:smoke`: 설정된 `LlmClient`로 짧은 구조화 출력 요청 한 번 → 모델·토큰·환산 크레딧 출력(크레딧은 움직이지 않음. `anthropic`이면 실제 API 호출 1회). 실제 키 확인용
+- **완료 조건**: ✅
+  - 단위: 환산(모델별 단가, 올림, 최소 1, 시도별 합산), 선차감(가장 비싼 모델 단가, 캐시 쓰기 단가 포함), Claude 어댑터(로컬 가짜 HTTP 서버): 요청 본문(모델·max_tokens·effort·json_schema·fallbacks·beta 헤더), 텍스트·stop_reason 변환, `usage.iterations` 합산, 오류 분류(400·401·429·500·529·타임아웃), 모의 구현의 스키마 표본
+  - e2e(실제 Postgres, 모의 `LlmClient`): 성공 → DEBIT 1 + ADJUST 1, 잔액 = 처음 − 청구 / 실사용이 선차감을 넘음 → 선차감만 청구, ADJUST 없음 / LLM 오류·거절·잘림·`parse` 실패 → REFUND 전액, 잔액 원래대로, 토큰 기록 / 잔액 부족 409, 행 0, LLM 호출 0회 / 같은 건 `execute` 두 번·동시 두 번 → LLM 1회, 원장 그대로 / `onSuccess`가 던지면 정산이 롤백되고 환불 / 멈춘 건 정리 → FAILED + REFUND 1행(두 번 돌려도 1행), 늦게 돌아온 호출은 정산 안 함 / 호출자 트랜잭션에 합류한 `reserve`는 호출자가 롤백하면 DEBIT도 없음 / 불변식: 사용 건마다 `DEBIT + ADJUST + REFUND = −credits`, 원장 합계 = 잔액 / 목록 MEMBER 403·다른 워크스페이스 404·cursor
 
 ### PLANDIT-26 · AI 여행 일정 만들기
 양식으로 목적지·기간·함께 갈 멤버를 받으면 AI가 날짜별 여행 일정 초안을 만들고, 사용자가 확인·수정한 뒤 캘린더에 한 번에 넣는다.

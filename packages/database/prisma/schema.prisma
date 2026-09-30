@@ -110,6 +110,7 @@ model User {
   phone          String?
   remindersCreated EventReminder[]
   reminderDeliveries ReminderDelivery[]
+  aiUsages       AiUsage[]
 }
 
 model Account {
@@ -187,6 +188,7 @@ model Workspace {
   reminderDeliveries ReminderDelivery[]
   auditLogs     AuditLog[]
   apiKeys       ApiKey[]
+  aiUsages      AiUsage[]
 }
 
 model WorkspaceMember {
@@ -249,6 +251,9 @@ model CreditLedger {
   payment   Payment?
   deliveryDebit  ReminderDelivery? @relation("DeliveryDebit")
   deliveryRefund ReminderDelivery? @relation("DeliveryRefund")
+  aiUsageDebit   AiUsage?          @relation("AiUsageDebit")
+  aiUsageAdjust  AiUsage?          @relation("AiUsageAdjust")
+  aiUsageRefund  AiUsage?          @relation("AiUsageRefund")
 
   @@index([accountId, id(sort: Desc)])
   @@index([refType, refId])
@@ -655,4 +660,60 @@ model ApiKey {
 
   @@index([workspaceId, createdAt])
   @@index([userId])
+}
+
+enum AiFeature {
+  SCHEDULE_ASSISTANT
+  MEMORY_SEARCH
+  TRIP_PLANNER
+}
+
+/// RESERVED (credits debited) → CALLING (written before the LLM call) → SUCCEEDED | FAILED. Stale RESERVED/CALLING rows are failed and refunded by the worker.
+enum AiUsageStatus {
+  RESERVED
+  CALLING
+  SUCCEEDED
+  FAILED
+}
+
+/// One metered LLM call. Per row: DEBIT + ADJUST + REFUND = −credits.
+model AiUsage {
+  id                    String        @id @default(cuid())
+  workspaceId           String
+  userId                String
+  feature               AiFeature
+  status                AiUsageStatus @default(RESERVED)
+  /// anthropic | mock
+  provider              String
+  /// Model that produced the reply (a server-side fallback model when one served it)
+  model                 String?
+  /// Output cap the reservation was priced with; execute() refuses a larger request
+  maxOutputTokens       Int
+  /// Reserved credits (the DEBIT) — also the most this call can be charged
+  estimatedCredits      Int
+  /// Charged credits: min(actual, estimatedCredits); 0 when FAILED
+  credits               Int           @default(0)
+  inputTokens           Int           @default(0)
+  outputTokens          Int           @default(0)
+  cacheReadInputTokens  Int           @default(0)
+  cacheWriteInputTokens Int           @default(0)
+  /// Per-attempt usage [{ model, inputTokens, outputTokens, cacheReadInputTokens, cacheWriteInputTokens }]
+  attempts              Json?
+  failureCode           String?
+  latencyMs             Int?
+  debitLedgerId         BigInt?       @unique
+  adjustLedgerId        BigInt?       @unique
+  refundLedgerId        BigInt?       @unique
+  createdAt             DateTime      @default(now())
+  startedAt             DateTime?
+  finishedAt            DateTime?
+
+  workspace    Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+  user         User          @relation(fields: [userId], references: [id], onDelete: Restrict)
+  debitLedger  CreditLedger? @relation("AiUsageDebit", fields: [debitLedgerId], references: [id], onDelete: Restrict)
+  adjustLedger CreditLedger? @relation("AiUsageAdjust", fields: [adjustLedgerId], references: [id], onDelete: Restrict)
+  refundLedger CreditLedger? @relation("AiUsageRefund", fields: [refundLedgerId], references: [id], onDelete: Restrict)
+
+  @@index([workspaceId, createdAt])
+  @@index([status, createdAt])
 }
