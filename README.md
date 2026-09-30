@@ -71,6 +71,10 @@ pnpm dev
 
 `pnpm seed:demo`는 데모 계정 2개(`demo@plandit.dev`, `teammate@plandit.dev`), 팀 워크스페이스 "Plandit 데모팀"(크레딧 300), 이번 주 일정을 만듭니다. 여러 번 실행해도 한 번만 만듭니다.
 
+### 인터넷에 공개하기
+
+무료 서버 한 대(Oracle Cloud)에 도커로 전부 띄우고 무료 주소(DuckDNS)와 HTTPS(Caddy)를 붙이는 방법은 [docs/deploy.md](docs/deploy.md)에 있습니다. main에 합치면 GitHub Actions가 검사 후 서버에 자동 배포합니다(설정한 경우).
+
 ## 10분 시나리오
 
 ### 1. 충전 — 웹훅이 두 번 와도 한 번만 (3분)

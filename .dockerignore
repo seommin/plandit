@@ -1,0 +1,12 @@
+# Keep the build context small and free of local state and secrets.
+**/node_modules
+**/.next
+**/dist
+**/coverage
+**/*.tsbuildinfo
+.git
+.env
+.env.*
+!.env.example
+*.log
+dump.rdb

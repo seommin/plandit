@@ -107,3 +107,22 @@
 - **원인**: 캘린더 화면(클라이언트 컴포넌트)도 서버에서 한 번 그려지는데, "오늘"·보이는 달·일정이 놓일 시각을 `new Date()`와 지역 시각 함수로 계산한다. 서버 프로세스의 시간대(UTC)와 브라우저의 시간대가 다르면 두 결과가 다르다. 서버가 넘기는 첫 데이터의 기간도 서버 시간대의 달이었고, 브라우저는 기간을 확인하지 않고 첫 요청을 건너뛰었다
 - **해결**: 시간대에 따라 달라지는 캘린더는 브라우저에서만 그리고, 서버와 수화(hydration) 중의 첫 화면은 같은 뼈대를 그린다(`components/use-hydrated.ts`). 서버는 앞뒤 하루 여유를 두고 가져온 기간을 `range`로 함께 넘기고, 브라우저는 자기 기간을 다 덮을 때만 첫 요청을 건너뛴다(`rangeCovers`)
 - **재발 방지**: 서버와 다른 시간대의 브라우저로 확인한다(Playwright `timezoneId: "Asia/Seoul"`, 서버는 UTC). `TZ=Asia/Seoul`로 서버 시간대를 맞추는 방법은 한국 밖 사용자에게 같은 문제가 남아서 택하지 않았다
+
+## 16. 빌드한 api(`dist`)를 `node`로 띄우면 `@plandit/*`·`@prisma/adapter-pg`를 못 찾는다
+
+- **증상**: 배포용으로 `nest build` 결과를 `node dist/apps/api/src/main.js`로 실행하면 공용 패키지(`@plandit/shared/…`, `@plandit/database/…`)를 불러오다 실패하고, 그걸 넘기면 `Error: Cannot find module '@prisma/adapter-pg'`(require 경로: `dist/packages/database/src/prisma.js`). 개발 실행(`pnpm dev`)은 문제없음
+- **원인**: 공용 패키지는 빌드 단계 없이 TypeScript 원본을 그대로 내보낸다. 개발 실행은 TS를 직접 읽어서 괜찮지만, 빌드한 api는 `node_modules/@plandit/*`의 `.ts` 원본을 가리키게 된다. `nest build`가 공용 패키지의 컴파일본을 `dist/packages/*`에 같이 만들지만 Node는 그 위치를 모른다. 게다가 그 컴파일본은 `apps/api/dist` 밑에 있어서, pnpm이 `packages/database/node_modules`에만 둔 `@prisma/adapter-pg`를 찾지 못한다
+- **해결**: `apps/api/register-dist.cjs`를 `node -r`로 먼저 불러, `@plandit/*`를 `dist/packages/*` 컴파일본으로 연결하고(tsconfig-paths) 공용 패키지의 `node_modules`를 모듈 검색 경로(`NODE_PATH`)에 더한다. `pnpm start`·`start:worker`와 운영 compose가 모두 이 방식으로 띄운다
+- **재발 방지**: 배포 구성을 바꾸면 도커 이미지를 실제로 빌드해 띄워 본다(`docs/deploy.md`의 구성을 `DOMAIN=localhost`로 로컬에서 확인)
+
+## 17. `node:24-bookworm-slim` 이미지에서는 Prisma 마이그레이션 엔진이 돌지 않는다
+
+- **증상**: 이미지를 작게 하려고 slim을 쓰면 Prisma 마이그레이션 엔진이 쓰는 OpenSSL 라이브러리(`libssl.so.3`)가 없다(slim 이미지에서 `libssl` 파일 0개 확인). 설치하려면 `apt-get install openssl`이 필요한데, 이 작업 환경의 네트워크는 운영체제 패키지 저장소를 막아 두어 apt 단계가 403으로 실패했다
+- **해결**: 기본 이미지를 `node:24-bookworm`(slim 아님)으로 바꿨다. `libssl.so.3`과 인증서가 이미 들어 있어 apt 단계가 없다. 이미지는 커지지만 서버 한 대에 이미지 하나라 감수한다
+- **덤**: 회사망처럼 TLS를 가로채는 프록시 뒤에서 빌드하면 `pnpm install`이 인증서 오류를 낸다. `Dockerfile`은 선택 비밀값 `extra_ca`가 있으면 `NODE_EXTRA_CA_CERTS`로 쓴다(`docker build --secret id=extra_ca,src=<CA 묶음 파일>`). 일반 서버에서는 넘기지 않는다
+
+## 18. GitHub Actions에서 `actions/setup-node@v5`가 `Unable to locate executable file: pnpm`으로 멈춘다
+
+- **증상**: 처음 올린 CI가 설치 단계 전에 실패. 로그에 `package-manager-cache: true`와 위 오류
+- **원인**: setup-node v5는 `package.json`의 `packageManager`를 보고 그 도구의 캐시를 자동으로 켠다. 우리는 pnpm을 corepack으로 그다음 단계에서 켜서, 그 시점엔 pnpm이 없다
+- **해결**: `package-manager-cache: false`로 끄고, pnpm 저장소는 `actions/cache`로 따로 캐시한다(`pnpm store path`)

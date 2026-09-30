@@ -198,11 +198,15 @@
 - **완료 조건**: 처음 보는 사람이 README만 읽고 10분 안에 충전·리마인더 시나리오를 재현 ✅ 새로 받은 폴더에서 README 절차 그대로 실행 — 설치·마이그레이션·데모 데이터(위 postinstall 수정 후) → 10,003원 충전: 웹훅 2회 발송·이벤트 1행·원장 1행, 잔액 +1,000 → 팀 일정 문자 리마인더: 가상 수신함 도착
 
 ### PLANDIT-11 · 무료 배포 [S]
-- [ ] Oracle Cloud Always Free ARM VM 한 대에 `docker-compose.prod.yml`(web, api, worker, mocks, postgres, redis)
-- [ ] DuckDNS 무료 서브도메인 + Caddy 자동 HTTPS. `/`(web), `/pg/*`·`/inbox/*`(mocks 화면). api·웹훅·mock 관리 API는 외부 비공개(내부 네트워크)
-- [ ] 데모 계정 README 공개, 매일 04시 DB 리셋
-- [ ] GitHub Actions: main push → SSH `git pull && docker compose up -d --build`
-- **완료 조건**: 휴대폰 LTE에서 HTTPS로 로그인 → 충전 시나리오 재현. 재부팅 후 자동 복구
+- [x] 이미지 하나(`Dockerfile`, `node:24-bookworm` — Prisma 마이그레이션 엔진이 쓰는 OpenSSL이 있어 apt 단계 없음)를 모든 프로세스가 명령만 바꿔 씀. 컴파일된 api는 `register-dist.cjs`로 `@plandit/*`를 dist 사본에 연결
+- [x] `docker-compose.prod.yml`: migrate(마이그레이션 후 종료) → api·worker·mocks·web, postgres(pgvector)·redis(AOF). 전부 `restart: unless-stopped`, 밖으로 열린 포트는 Caddy(80·443)뿐
+- [x] Caddy 자동 HTTPS(`deploy/Caddyfile`). 공개 경로는 `/`(web), `/pg/pay/*`(결제 화면), `/inbox`(가상 수신함)만. api·웹훅·모의 서버 관리 API(`/pg/v1`, `/pg/admin`)는 내부 네트워크에서만
+- [x] 스크립트: `deploy/init-env.sh`(무작위 비밀값으로 `.env.production`, 덮어쓰기 거부), `deploy.sh`, `seed-demo.sh`, `reset-demo.sh`(매일 04시 KST cron 예시), `github-secrets.sh`(배포 명령만 실행 가능한 SSH 키 + GitHub 비밀값 출력)
+- [x] GitHub Actions(`.github/workflows/ci.yml`): 모든 push에 lint·typecheck·test·e2e(Postgres·Redis 서비스 컨테이너). main push는 검사 통과 후 SSH로 `deploy/deploy.sh` — `DEPLOY_*` 비밀값이 있을 때만
+- [x] 한국어 설치 안내 `docs/deploy.md`(Oracle 가입 → ARM 서버 → 방화벽 2곳 → DuckDNS → 도커 → 띄우기 → 휴대폰 확인 → 자동 배포·초기화). 공개 데모는 `LLM_PROVIDER=mock` 유지(모의 결제로 크레딧이 공짜라 진짜 키를 넣으면 남이 쓸 수 있음)
+- [x] 로컬 도커로 운영 구성 확인(`DOMAIN=localhost`): 빌드·기동, HTTPS 로그인 → 10,000원 충전 → "1,000 크레딧" → AI 여행 일정 생성·적용, 비공개 경로 404·401, http → https, 도커 재시작 후 자동 복구·데이터 유지, `reset-demo.sh`
+- [ ] **사용자 작업**: Oracle 서버 생성·DuckDNS 등록 후 `docs/deploy.md` 순서대로 띄우기, README에 공개 주소 적기, (선택) GitHub 비밀값·cron 등록
+- **완료 조건**: 휴대폰 LTE에서 HTTPS로 로그인 → 충전 시나리오 재현. 재부팅 후 자동 복구 — 로컬 도커로는 확인, 실제 ARM 서버에서는 아직
 
 ### PLANDIT-12 · 정합성 검증 도구 [S]
 - [ ] `pnpm check:ledger`: 계정별 원장 합계 = 캐시, `balance_after` 연속성 검사. 불일치 시 종료 코드 1
