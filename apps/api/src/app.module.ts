@@ -1,6 +1,7 @@
 import { Module } from "@nestjs/common";
 import { APP_FILTER, APP_GUARD } from "@nestjs/core";
 
+import { AiModule } from "./ai/ai.module";
 import { ApiKeyModule } from "./apikey/api-key.module";
 import { AuditModule } from "./audit/audit.module";
 import { AuthController } from "./auth/auth.controller";
@@ -18,11 +19,12 @@ import { ProfileController, ProfileService } from "./profile/profile.controller"
 import { PushController } from "./push/push.controller";
 import { ReminderModule } from "./reminder/reminder.module";
 import { SharesController } from "./shares/shares.controller";
+import { TripModule } from "./trip/trip.module";
 import { RolesGuard } from "./workspace/roles";
 import { WorkspaceModule } from "./workspace/workspace.module";
 
 @Module({
-  imports: [loggerModule, AuditModule, WorkspaceModule, CreditModule, PaymentModule, ReminderModule, ApiKeyModule, MetricsModule],
+  imports: [loggerModule, AuditModule, WorkspaceModule, CreditModule, PaymentModule, ReminderModule, ApiKeyModule, AiModule, TripModule, MetricsModule],
   controllers: [
     AuthController,
     CalendarController,

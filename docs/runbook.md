@@ -27,6 +27,9 @@ export OP='-H "x-api-secret: $API_INTERNAL_SECRET" -H "x-user-id: <운영자 use
 | `plandit_queue_jobs{queue,state}` | BullMQ 작업 수 | `waiting` 계속 증가, `failed` 증가 |
 | `plandit_jobs_total{queue,name,outcome}` (워커) | 작업 시도 결과 | `failed` 비율 급증(429 재시도도 여기에 잡힘) |
 | `plandit_http_requests_total`, `..._duration_seconds` | 라우트 패턴별 요청·지연 | 5xx 비율, p95 지연 |
+| `plandit_ai_usages_unsettled{status}` | 선차감을 쥐고 있는 AI 사용 건(RESERVED·CALLING) | CALLING이 `AI_USAGE_STALE_MS`(30분) 넘게 줄지 않음 |
+| `plandit_ai_calls_total{provider,outcome}` | LLM 호출 결과(SUCCEEDED 또는 실패 코드) | `LLM_AUTH` 1건이라도, `LLM_OVERLOADED`·`LLM_RATE_LIMITED`·`LLM_TIMEOUT` 비율 급증 |
+| `plandit_ai_tokens_total{model,kind}`, `plandit_ai_call_duration_seconds` | 모델별 토큰, 호출 지연(SDK 재시도 포함) | 대체 모델(`claude-opus-5`·`claude-opus-4-8`) 토큰 급증 = 거절이 늘었다는 뜻 |
 
 ## A. 미확정 결제가 쌓인다
 
@@ -109,3 +112,28 @@ curl -X POST "$API/admin/credit-accounts/<accountId>/recalculate" $OP
 ## F. 잔액 부족이 급증한다
 
 `plandit_ledger_appends_total{outcome="insufficient"}` 증가. 장애는 아니지만, 유료 리마인더가 SKIPPED(`INSUFFICIENT_CREDITS`)로 바뀌고 푸시로 대체 발송되는 중입니다(`fallback` 컬럼). 워크스페이스 관리자에게 충전 안내.
+
+## G. AI 사용 건이 정산되지 않는다
+
+**증상**: `plandit_ai_usages_unsettled{status="CALLING"}`이 줄지 않거나, 사용자가 "AI가 실패했는데 크레딧이 빠졌다"고 문의. 선차감(DEBIT)은 호출 전에 나가므로, 정산·환불 전까지는 잔액이 최대 금액만큼 줄어 있는 것이 정상입니다.
+
+**원인 후보**
+1. 워커가 호출 도중 죽었거나 재시작됨: 행은 CALLING으로 남는다
+2. 모델 응답이 모든 타임아웃·재시도보다 오래 걸림(`plandit_ai_call_duration_seconds` 상단 버킷)
+3. 정리 작업이 안 돎: `plandit_queue_jobs{queue="ai-usage-reconcile"}`에 `waiting`이 쌓임
+
+**확인**
+- 사용 내역: `GET /workspaces/:id/ai-usages?status=CALLING` → `startedAt`, `estimatedCredits`
+- 실패 코드 분포: `GET /workspaces/:id/ai-usages?status=FAILED` → `failureCode`. `LLM_AUTH`면 키 문제(`ANTHROPIC_API_KEY`. 키가 아예 비어 있으면 `LLM_ERROR`로 잡히고 기동 로그에 경고가 남는다), `LLM_REFUSED`면 대체 모델까지 거절한 것
+
+**복구**
+```bash
+# 멈춘 건을 지금 정리(기본 기준은 AI_USAGE_STALE_MS, 급하면 minAgeMs로 낮춘다. 0은 진행 중인 호출까지 닫으니 주의)
+curl -X POST "$API/admin/jobs/ai-usage-reconcile?minAgeMs=600000" $OP -H "x-trace-id: incident-001"
+# → { checked, refunded, errors }
+```
+사용 건 단위 멱등키(`AI_USAGE:{id}:REFUND`)라 여러 번 실행해도 환불은 한 번입니다. 정리한 뒤에 모델 응답이 돌아와도 행이 CALLING이 아니므로 청구하지 않습니다(로그 `Late LLM reply`).
+
+**정상화 확인**: `plandit_ai_usages_unsettled`가 진행 중인 호출만 남고, 해당 사용 건이 `FAILED`·`failureCode=STALE`·`refundLedgerId` 있음. 원장에서 그 건의 `DEBIT + REFUND = 0`.
+
+**여행 초안이 "만드는 중"에서 넘어가지 않을 때**도 같은 명령이에요. 초안(`TripPlan`)은 자기 AI 사용 건을 따라가서, 사용 건이 정리되면 같은 트랜잭션에서 `FAILED`(`STALE`)로 바뀌고 화면에는 "다시 만들기"가 나와요. 초안이 GENERATING인데 사용 건이 아직 RESERVED라면 생성 작업이 큐에 없는 것이니 `plandit_queue_jobs{queue="trip-plans"}`와 워커 로그 `Trip plan job failed`를 먼저 봐요.
