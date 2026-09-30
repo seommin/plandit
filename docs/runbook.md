@@ -15,6 +15,14 @@ export API=http://localhost:4000
 export OP='-H "x-api-secret: $API_INTERNAL_SECRET" -H "x-user-id: <운영자 userId>"'
 ```
 
+운영 서버([deploy.md](deploy.md))에서는 api가 밖으로 열려 있지 않습니다. 서버에 접속해 api 컨테이너 안에서 부릅니다(비밀값은 컨테이너 환경변수에 이미 있음). 운영자 API를 쓰려면 먼저 `.env.production`의 `PLATFORM_ADMIN_EMAILS`에 내 이메일을 넣고 `deploy/deploy.sh`로 다시 띄웁니다.
+
+```bash
+cd ~/plandit && alias pc='docker compose --env-file .env.production -f docker-compose.prod.yml'
+pc exec api sh -c 'curl -s localhost:4000/metrics -H "Authorization: Bearer $METRICS_TOKEN"' | grep plandit_payments_unsettled
+pc exec api sh -c 'curl -sX POST "localhost:4000/admin/jobs/payment-reconcile?minAgeMs=0" -H "x-api-secret: $API_INTERNAL_SECRET" -H "x-user-id: <운영자 userId>" -H "x-trace-id: incident-001"'
+```
+
 ## 지표 요약
 
 | 지표 | 의미 | 알림 기준(예) |
