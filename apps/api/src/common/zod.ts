@@ -27,4 +27,5 @@ export function toOpenApi(schema: z.ZodType) {
   return z.toJSONSchema(schema, { target: "openapi-3.0", io: "input" }) as SchemaObject;
 }
 
-export const ApiZodBody = (schema: z.ZodType) => ApiBody({ schema: toOpenApi(schema) });
+/** Request body in the docs from the zod schema; `example` is what the docs page pre-fills. */
+export const ApiZodBody = (schema: z.ZodType, example?: unknown) => ApiBody({ schema: example === undefined ? toOpenApi(schema) : { ...toOpenApi(schema), example } });
