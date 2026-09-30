@@ -11,6 +11,7 @@ import { MonthGrid } from "@/components/month-grid";
 import { TimeGrid } from "@/components/time-grid";
 import { useToast } from "@/components/toast";
 import { TripPlanner } from "@/components/trip-planner";
+import { useHydrated } from "@/components/use-hydrated";
 import { Button, cn, IconButton, Notice, Picker, Segmented, Sheet, Tabs } from "@/components/ui";
 import { useCalendarScope, useCalendarState, useHiddenCalendars } from "@/components/use-calendar-state";
 import { api, errorMessage } from "@/lib/client-api";
@@ -24,12 +25,39 @@ const VIEWS: Array<{ value: View; label: string }> = [
   { value: "month", label: "월" },
 ];
 
+type Props = { initial: CalendarState; openCreate: boolean };
+
+/**
+ * "Today", the visible month and where each event falls on the grid all depend on the viewer's time zone, which the
+ * server doesn't know (it may run in UTC while the viewer is in Seoul). So the server and the hydrating browser both
+ * draw the same skeleton, and the calendar itself is drawn only in the browser.
+ */
+export function CalendarScreen(props: Props) {
+  return useHydrated() ? <CalendarView {...props} /> : <CalendarSkeleton />;
+}
+
+function CalendarSkeleton() {
+  return (
+    <div aria-busy="true" className="lg:flex lg:h-dvh">
+      <div className="hidden w-72 shrink-0 border-r border-line xl:block" />
+      <div className="min-w-0 flex-1 px-2 pt-[env(safe-area-inset-top)] lg:px-6 lg:py-3">
+        <div className="flex h-14 items-center gap-2 px-2">
+          <div className="h-7 w-16 animate-pulse rounded-lg bg-surface-2" />
+          <div className="ml-auto h-9 w-14 animate-pulse rounded-xl bg-surface-2" />
+        </div>
+        <div className="mt-2 h-16 animate-pulse rounded-2xl bg-surface-2 lg:h-[60dvh]" />
+        <span className="sr-only">캘린더를 불러오는 중</span>
+      </div>
+    </div>
+  );
+}
+
 /**
  * Phone: week strip (swipe for other weeks, pull down for the month) over one day's timeline.
  * Desktop: 일/주/월, week by default, with a mini month and the calendar list on wide screens.
  * Tap (or drag across) empty time to add, tap an event to edit, drag to move, drag the bottom edge to change its length.
  */
-export function CalendarScreen({ initial, openCreate }: { initial: CalendarState; openCreate: boolean }) {
+function CalendarView({ initial, openCreate }: Props) {
   const router = useRouter();
   const toast = useToast();
   const [selected, setSelected] = useState(() => startOfDay(new Date()));
