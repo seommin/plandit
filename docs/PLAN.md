@@ -181,11 +181,18 @@
 - 디자인 검토 대기: 4차 결과 확인 후 피드백 반영
 
 ### PLANDIT-10 · Swagger·README·ADR [M]
-- [ ] 새 API 전부 Swagger 예시·오류 스키마·태그
-- [ ] README: 한 줄 소개("웹훅이 두 번 와도, 안 와도, 잔액은 한 번만 바뀝니다"), 아키텍처 다이어그램(mermaid), 실행 3줄, 시나리오 표, 설계 결정 링크, 테스트 실행법
-- [ ] README: 공고 용어 대응표(조직 = 워크스페이스, 스페이스 = 캘린더, 권한 = 워크스페이스 역할 + 캘린더 역할), AI 개발 도구(Claude Code + CLAUDE.md 규칙)로 일한 방식 한 단락
-- [ ] `docs/adr/0001-ledger-append-only.md`, `0002-reserve-before-external-call.md`, `0003-webhook-idempotency.md`, `0004-reminder-job-versioning.md`
-- **완료 조건**: 처음 보는 사람이 README만 읽고 10분 안에 충전·리마인더 시나리오를 재현
+- [x] 새 API 전부 Swagger 예시·오류 스키마·태그
+  - 공용 오류 형식 `ApiError`(`{ code, message, details?, traceId }`)를 문서에 등록하고, `@ApiErrors(코드…)`로 상태 코드별 예시. web 서버 전용 경로의 401은 한곳에서 자동으로
+  - 분류는 한국어 16개(순서·설명 포함). 요약·설명·요청 예시·응답 예시(데모 데이터에서 받은 실제 응답)
+  - 경로별 인증 표시: 웹훅은 서명(`x-mock-signature`, 보안 요구 없음), `/v1`은 API 키, 나머지는 web 서버 헤더. **문서에서 빠져 있던 웹훅 2개**를 본문 형식·결과값과 함께 추가
+  - e2e로 지킴: 모든 경로에 요약과 정해진 분류, 웹훅·`/v1` 인증 표시(`foundation.e2e-spec.ts`)
+- [x] README: 한 줄 소개, 구조 그림·충전 흐름 순서도(mermaid), 실행 3줄, 10분 시나리오, 시나리오 표(e2e 파일 연결), 설계 결정 링크, 테스트 실행법
+- [x] README: 공고 용어 대응표, AI 개발 도구로 일한 방식 한 단락
+- [x] `docs/adr/0001-ledger-append-only.md`, `0002-reserve-before-external-call.md`, `0003-webhook-idempotency.md`, `0004-reminder-job-versioning.md`
+- [x] 버그 수정(문서 작업 중 발견): 공개 링크 조회 API가 링크 주인이 가린 설명·장소와 내부 id·캘린더 정보까지 그대로 돌려줌(가리기는 공개 페이지 화면에서만) → 공개 페이지에 필요한 값만, 가린 항목은 서버에서 `null`. e2e `shares.e2e-spec.ts`
+- [x] 버그 수정: 새로 받은 폴더에서 Prisma 클라이언트가 생성되지 않아 `seed:demo` 실패 → 루트 `postinstall`에서 생성(troubleshooting 12)
+- 후속(확인 필요): 캘린더 API는 역할이 모자란 행위(VIEWER의 수정 등)에 403 대신 404를 준다 — "권한 부족 행위는 403" 규칙과 다름. `GET /calendar/state`는 `from`·`to`가 없으면 2026년 6월로 고정된 기본값을 쓴다(화면은 항상 넘기므로 영향 없음)
+- **완료 조건**: 처음 보는 사람이 README만 읽고 10분 안에 충전·리마인더 시나리오를 재현 ✅ 새로 받은 폴더에서 README 절차 그대로 실행 — 설치·마이그레이션·데모 데이터(위 postinstall 수정 후) → 10,003원 충전: 웹훅 2회 발송·이벤트 1행·원장 1행, 잔액 +1,000 → 팀 일정 문자 리마인더: 가상 수신함 도착
 
 ### PLANDIT-11 · 무료 배포 [S]
 - [ ] Oracle Cloud Always Free ARM VM 한 대에 `docker-compose.prod.yml`(web, api, worker, mocks, postgres, redis)

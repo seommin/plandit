@@ -79,3 +79,10 @@
   git update-ref refs/heads/main <커밋 id> && git checkout main                 # 트리가 같아 파일 변화 없음
   ```
   서버 CSS가 새것인데 화면만 옛것이면 브라우저 캐시이므로 `Ctrl+Shift+R`
+
+## 12. 새로 받은 폴더에서 `pnpm seed:demo`가 `PrismaClient`를 못 찾는다
+
+- **증상**: 저장소를 새로 받아 `pnpm install` → `pnpm prisma:migrate` → `pnpm seed:demo`를 하면 `Module '"@prisma/client"' has no exported member 'PrismaClient'`로 실패. 원래 쓰던 폴더에서는 문제없음
+- **원인**: Prisma 7부터 `prisma migrate dev`가 클라이언트 생성(`prisma generate`)을 자동으로 하지 않고, 설치 때도 만들지 않음. 원래 폴더에는 예전에 만든 클라이언트가 남아 있어서 드러나지 않았음
+- **해결**: 루트 `package.json`에 `"postinstall": "pnpm --filter @plandit/database prisma:generate"`. 설치할 때마다 클라이언트를 만든다(설정 파일에 기본 DB 주소가 있어 `.env`가 없어도 된다)
+- **재발 방지**: README 실행 절차는 새로 받은 폴더에서 처음부터 따라 해서 확인한다(PLANDIT-10 완료 조건 확인 때 발견)

@@ -9,7 +9,7 @@ import {
   type PaymentWebhookEvent,
 } from "./payment-gateway";
 
-const webhookSchema = z.object({
+export const webhookSchema = z.object({
   eventId: z.string().min(1),
   txId: z.string().min(1),
   merchantTradeId: z.string().min(1),

@@ -7,13 +7,15 @@ import {
 } from "@nestjs/common";
 import { createHash, randomBytes } from "crypto";
 import { hash } from "bcryptjs";
-import { ApiTags } from "@nestjs/swagger";
+import { ApiCreatedResponse, ApiOperation, ApiTags } from "@nestjs/swagger";
 import type { z } from "zod";
 
 import { prisma } from "@plandit/database/prisma";
 import { DEFAULT_PERSONAL_CALENDAR_NAME } from "@plandit/shared/calendar-defaults";
 import { forgotPasswordSchema, registerSchema, resetPasswordSchema } from "@plandit/shared/auth";
 
+import { ErrorCode } from "../common/api-error";
+import { ApiErrors } from "../common/swagger";
 import { ApiZodBody, ZodPipe } from "../common/zod";
 import { ensurePersonalWorkspace } from "../workspace/personal-workspace";
 
@@ -44,11 +46,20 @@ async function sendPasswordResetEmail(email: string, resetUrl: string) {
   return response.ok;
 }
 
-@ApiTags("auth")
+const EXAMPLE_RESET_TOKEN = "example-reset-token-from-the-email-link-0000";
+
+@ApiTags("인증")
 @Controller("auth")
 export class AuthController {
   @Post("register")
-  @ApiZodBody(registerSchema)
+  @ApiOperation({
+    summary: "이메일 가입",
+    description:
+      "이메일은 소문자로 바꿔 저장하고 비밀번호는 bcrypt 해시만 남긴다. 사용자·개인 워크스페이스(크레딧 계정 포함)·기본 개인 캘린더를 한 트랜잭션에서 만든다. 이미 가입한 이메일이면 409.",
+  })
+  @ApiZodBody(registerSchema, { name: "김데모", email: "demo@plandit.dev", password: "demo-password-1234" })
+  @ApiCreatedResponse({ example: { user: { id: "cmum8us8f0000ekyjnxhqh0h4", name: "김데모", email: "demo@plandit.dev" } } })
+  @ApiErrors(ErrorCode.VALIDATION_FAILED, ErrorCode.CONFLICT)
   async register(@Body(new ZodPipe(registerSchema)) payload: z.infer<typeof registerSchema>) {
     const email = payload.email.toLowerCase();
     const existingUser = await prisma.user.findUnique({ where: { email } });
@@ -80,6 +91,14 @@ export class AuthController {
   }
 
   @Post("forgot-password")
+  @ApiOperation({
+    summary: "비밀번호 재설정 메일 요청",
+    description:
+      "가입 여부를 드러내지 않도록 없는 이메일(또는 소셜 로그인만 쓰는 계정)에도 `{ ok: true }`를 준다. 30분 동안 쓸 수 있는 링크를 만들고 이전 링크는 무효로 한다. production이 아니고 메일을 못 보냈으면(RESEND_API_KEY 미설정 등) 응답에 `developmentResetUrl`이 붙는다.",
+  })
+  @ApiZodBody(forgotPasswordSchema, { email: "demo@plandit.dev" })
+  @ApiCreatedResponse({ example: { ok: true, developmentResetUrl: `http://localhost:3000/reset-password?token=${EXAMPLE_RESET_TOKEN}` } })
+  @ApiErrors(ErrorCode.BAD_REQUEST)
   async forgotPassword(@Body() payload: unknown) {
     const parsed = forgotPasswordSchema.safeParse(payload);
     if (!parsed.success) throw new BadRequestException("Invalid email address.");
@@ -114,6 +133,13 @@ export class AuthController {
   }
 
   @Post("reset-password")
+  @ApiOperation({
+    summary: "비밀번호 재설정",
+    description: "메일 링크의 토큰으로 비밀번호를 바꾼다. 토큰은 한 번 쓰면 지워진다. 형식이 틀리거나 없는·만료된 토큰이면 400 BAD_REQUEST.",
+  })
+  @ApiZodBody(resetPasswordSchema, { token: EXAMPLE_RESET_TOKEN, password: "new-password-5678" })
+  @ApiCreatedResponse({ example: { ok: true } })
+  @ApiErrors(ErrorCode.BAD_REQUEST)
   async resetPassword(@Body() payload: unknown) {
     const parsed = resetPasswordSchema.safeParse(payload);
     if (!parsed.success) throw new BadRequestException("Invalid password reset payload.");
