@@ -24,6 +24,7 @@ export class MockLlmAdapter implements LlmClient {
   /** complete() calls so far — lets tests prove "the model was never called" */
   calls = 0;
   private script: MockReply[] = [];
+  private responders: Array<{ match: (request: LlmRequest) => boolean; reply: (request: LlmRequest) => MockReply }> = [];
 
   /** Test hook: the next calls answer with these, in order, then the default reply. */
   enqueue(...replies: MockReply[]) {
@@ -35,9 +36,17 @@ export class MockLlmAdapter implements LlmClient {
     this.calls = 0;
   }
 
+  /**
+   * Default answer for one kind of request, so a feature looks real locally without an API key (e.g. an itinerary on
+   * the requested dates instead of a bare schema sample). Scripted replies still come first.
+   */
+  respondTo(match: (request: LlmRequest) => boolean, reply: (request: LlmRequest) => MockReply) {
+    this.responders.push({ match, reply });
+  }
+
   async complete(request: LlmRequest): Promise<LlmResult> {
     this.calls++;
-    const reply = this.script.shift() ?? {};
+    const reply = this.script.shift() ?? this.responders.find((r) => r.match(request))?.reply(request) ?? {};
     await reply.wait;
     if (reply.error) throw new LlmError(reply.error, `Mock model: ${reply.error}`);
 
@@ -75,7 +84,7 @@ type JsonSchema = {
   format?: string;
 };
 
-/** Smallest document satisfying a JSON Schema: required keys only, minItems items, minimum numbers. No `pattern` support. */
+/** Small document satisfying a JSON Schema: required keys only, max(1, minItems) items, minimum numbers. No `pattern` support. */
 export function sampleFor(schema: JsonSchema): unknown {
   if ("const" in schema) return schema.const;
   if (schema.enum?.length) return schema.enum[0];
@@ -87,7 +96,8 @@ export function sampleFor(schema: JsonSchema): unknown {
     case "object":
       return Object.fromEntries((schema.required ?? []).map((key) => [key, sampleFor(schema.properties?.[key] ?? {})]));
     case "array":
-      return Array.from({ length: schema.minItems ?? 0 }, () => sampleFor(schema.items ?? {}));
+      // A schema sent to a model has no minItems left (see toLlmJsonSchema), so give it one element anyway.
+      return Array.from({ length: Math.max(1, schema.minItems ?? 1) }, () => sampleFor(schema.items ?? {}));
     case "string":
       if (schema.format === "date") return "2026-01-01";
       if (schema.format === "date-time") return "2026-01-01T00:00:00.000Z";

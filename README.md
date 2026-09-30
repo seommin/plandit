@@ -165,7 +165,7 @@ pnpm lint && pnpm typecheck && pnpm test && pnpm test:e2e
 | 권한 | **워크스페이스 역할**(OWNER > ADMIN > MEMBER: 결제·크레딧·멤버 관리) + **캘린더 역할**(OWNER·ADMIN·EDITOR·VIEWER: 일정 데이터). 둘을 섞지 않습니다 |
 | 크레딧·결제 | 원장([0001](docs/adr/0001-ledger-append-only.md)), 모의 PG 충전·웹훅·재조회([0002](docs/adr/0002-reserve-before-external-call.md), [0003](docs/adr/0003-webhook-idempotency.md)) |
 | Redis/Queue | BullMQ 리마인더 발송·재조회 작업([0004](docs/adr/0004-reminder-job-versioning.md)) |
-| LLM · RAG · Tool Calling · MCP | `LlmClient` + Claude 어댑터와 토큰 기준 크레딧 과금(선차감 → 정산, 실패 환불, [0005](docs/adr/0005-ai-credit-reserve-settle.md)). 2주차 계획: 일정 비서 에이전트(도구 호출 루프, 쓰기 도구는 사용자 승인 후 실행), 회의록 업로드 RAG(pgvector), 같은 도구의 MCP 서버, AI 크레딧 한도 → [PLAN.md](docs/PLAN.md#2주차--ai-일정-비서-개요) |
+| LLM · RAG · Tool Calling · MCP | `LlmClient` + Claude 어댑터와 토큰 기준 크레딧 과금(선차감 → 정산, 실패 환불, [0005](docs/adr/0005-ai-credit-reserve-settle.md)). AI 여행 일정: 목적지·기간·함께 갈 멤버로 초안을 만들고 확인 후 캘린더에 한 번에 넣기(구조화 출력, 참석자 캘린더 권한 자동 추가). 2주차 계획: 일정 비서 에이전트(도구 호출 루프, 쓰기 도구는 사용자 승인 후 실행), 회의록 업로드 RAG(pgvector), 같은 도구의 MCP 서버, AI 크레딧 한도 → [PLAN.md](docs/PLAN.md#2주차--ai-일정-비서-개요) |
 
 ## AI 개발 도구로 일한 방식
 

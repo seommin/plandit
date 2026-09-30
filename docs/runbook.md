@@ -135,3 +135,5 @@ curl -X POST "$API/admin/jobs/ai-usage-reconcile?minAgeMs=600000" $OP -H "x-trac
 사용 건 단위 멱등키(`AI_USAGE:{id}:REFUND`)라 여러 번 실행해도 환불은 한 번입니다. 정리한 뒤에 모델 응답이 돌아와도 행이 CALLING이 아니므로 청구하지 않습니다(로그 `Late LLM reply`).
 
 **정상화 확인**: `plandit_ai_usages_unsettled`가 진행 중인 호출만 남고, 해당 사용 건이 `FAILED`·`failureCode=STALE`·`refundLedgerId` 있음. 원장에서 그 건의 `DEBIT + REFUND = 0`.
+
+**여행 초안이 "만드는 중"에서 넘어가지 않을 때**도 같은 명령이에요. 초안(`TripPlan`)은 자기 AI 사용 건을 따라가서, 사용 건이 정리되면 같은 트랜잭션에서 `FAILED`(`STALE`)로 바뀌고 화면에는 "다시 만들기"가 나와요. 초안이 GENERATING인데 사용 건이 아직 RESERVED라면 생성 작업이 큐에 없는 것이니 `plandit_queue_jobs{queue="trip-plans"}`와 워커 로그 `Trip plan job failed`를 먼저 봐요.

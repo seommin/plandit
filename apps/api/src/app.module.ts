@@ -19,11 +19,12 @@ import { ProfileController, ProfileService } from "./profile/profile.controller"
 import { PushController } from "./push/push.controller";
 import { ReminderModule } from "./reminder/reminder.module";
 import { SharesController } from "./shares/shares.controller";
+import { TripModule } from "./trip/trip.module";
 import { RolesGuard } from "./workspace/roles";
 import { WorkspaceModule } from "./workspace/workspace.module";
 
 @Module({
-  imports: [loggerModule, AuditModule, WorkspaceModule, CreditModule, PaymentModule, ReminderModule, ApiKeyModule, AiModule, MetricsModule],
+  imports: [loggerModule, AuditModule, WorkspaceModule, CreditModule, PaymentModule, ReminderModule, ApiKeyModule, AiModule, TripModule, MetricsModule],
   controllers: [
     AuthController,
     CalendarController,

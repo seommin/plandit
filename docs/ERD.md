@@ -228,9 +228,9 @@ workspace_id, user_id, title / session_id, role, content, tool_calls(jsonb), too
 | request_key | text | `Idempotency-Key` 헤더. unique(created_by, request_key) — 두 번 눌러도 1건 |
 | input | jsonb | 양식 입력(목적지·기간·참석자 userId·스타일). LLM에는 인원 수만 보냄 |
 | draft | jsonb null | 검증을 통과한 모델 출력, 사용자가 `PATCH`로 고친 결과 |
-| status | enum GENERATING / READY / FAILED / APPLIED | GENERATING → READY·FAILED, READY → APPLIED |
-| failure_code | text null | LLM_ERROR / LLM_TIMEOUT / INVALID_OUTPUT / STALE |
-| ai_usage_id | FK ai_usages | 원장 멱등키 `"AI_USAGE:{ai_usage_id}:DEBIT / ADJUST / REFUND"` |
+| status | enum GENERATING / READY / FAILED / APPLIED | GENERATING → READY·FAILED, READY → APPLIED, 되돌리기 APPLIED → READY. FAILED는 AI 사용 건이 실패로 닫힐 때 같은 트랜잭션에서 |
+| failure_code | text null | AI 사용 건의 실패 코드 그대로(LLM_TIMEOUT / INVALID_OUTPUT / STALE …) |
+| ai_usage_id | FK ai_usages unique | 원장 멱등키 `"AI_USAGE:{ai_usage_id}:DEBIT / ADJUST / REFUND"`. 초안과 선차감은 한 트랜잭션에서 생긴다 |
 | added_calendar_member_ids | text[] | 적용 때 캘린더에 VIEWER로 자동 추가한 사용자. 되돌리기 안내용(되돌려도 멤버는 남음) |
 | created_at, updated_at, applied_at | | |
 

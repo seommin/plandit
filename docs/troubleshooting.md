@@ -87,3 +87,16 @@
 - **해결**: 루트 `package.json`에 `"postinstall": "pnpm --filter @plandit/database prisma:generate"`. 설치할 때마다 클라이언트를 만든다(설정 파일에 기본 DB 주소가 있어 `.env`가 없어도 된다)
 - **재발 방지**: README 실행 절차는 새로 받은 폴더에서 처음부터 따라 해서 확인한다(PLANDIT-10 완료 조건 확인 때 발견)
 - **같은 원인, 다른 모습**(PLANDIT-20): 스키마에 모델을 추가하고 `pnpm prisma:migrate`로 마이그레이션까지 적용했는데, api 타입 검사가 `Property 'aiUsage' does not exist`로 실패. 설치가 끝난 뒤의 스키마 변경은 postinstall이 다시 돌지 않으므로 `pnpm --filter @plandit/database prisma:generate`를 직접 실행한다
+
+## 13. AI 구조화 출력에 zod 스키마를 그대로 넘기면 조건이 거절된다
+
+- **증상**: 여행 일정 형식(`tripDraftSchema`)을 `z.toJSONSchema`로 바꿔 모델에 주면 `minLength`·`maxLength`·`minimum`·`maximum`·`pattern`·`minItems`가 그대로 들어간다. Claude 구조화 출력(`output_config.format`)의 문서에는 글자 수·숫자 범위·배열 개수 조건이 "지원하지 않음"으로 적혀 있어서, 실제 키로 부르면 요청이 거절(400 → `LLM_BAD_REQUEST`)되고 모든 초안이 환불로 끝날 수 있었다. 모의 모델은 형식을 검사하지 않아서 테스트로는 드러나지 않았고, 구현 중 문서를 확인하다 발견했다
+- **원인**: SDK의 `messages.parse()` 도우미는 이런 조건을 알아서 걷어 내지만, 우리는 공급자를 바꿀 수 있게 `messages.create()`에 JSON 스키마를 직접 넘긴다(PLANDIT-20)
+- **해결**: `toLlmJsonSchema`가 지원되는 키워드(type·properties·required·items·enum·const·anyOf·description, 지원 format)만 남기고 모든 객체에 `additionalProperties: false`를 붙인다. 걷어 낸 조건은 응답을 받은 뒤 원래 zod 스키마로 검사한다(`parseDraft`). 선택 항목은 `optional` 대신 `nullable`로 둬서 모든 키를 `required`에 넣는다
+- **재발 방지**: `llm-client.spec.ts`가 변환 결과를 통째로 비교한다. 모의 모델은 네트워크를 타지 않아 이 문제를 못 잡으므로, 새 형식을 추가하면 `pnpm --filter @plandit/api llm:smoke`처럼 실제 키로 한 번 확인한다
+
+## 14. 웹에서 보낸 `Idempotency-Key`가 api에 닿지 않는다
+
+- **증상**: 여행 초안 "만들기"를 두 번 누르면 초안이 두 개 생길 수 있는 구조였다. api는 `Idempotency-Key` 헤더로 중복을 막는데, 브라우저 요청을 api로 넘기는 web 프록시(`lib/api-client.ts`의 `proxyInternalApi`)가 content-type·IP·기기 헤더만 옮겨 담고 나머지는 버리고 있었다
+- **해결**: 프록시가 `idempotency-key`도 넘긴다. 화면은 양식 내용이 같으면 같은 키를 쓰고(두 번 눌러도, 연결이 끊겨 다시 보내도 초안·차감 1건), "다시 만들기"에서만 새 키를 만든다
+- **재발 방지**: 헤더로 멱등성을 받는 API를 새로 만들면 프록시를 거친 요청으로 한 번 확인한다(e2e는 api를 직접 부르므로 이 경로를 지나지 않는다)

@@ -8,4 +8,5 @@ export const QUEUES = {
   paymentReconcile: "payment-reconcile",
   reminders: "reminders",
   aiUsageReconcile: "ai-usage-reconcile",
+  tripPlans: "trip-plans",
 } as const;

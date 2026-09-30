@@ -21,18 +21,26 @@ const itinerary = z.object({
 const request = { system: "sys", messages: [{ role: "user" as const, content: "hi" }], maxOutputTokens: 500 };
 
 describe("MockLlmAdapter", () => {
-  it("answers a JSON Schema request with a document the same zod schema accepts", async () => {
-    const schema = toLlmJsonSchema(itinerary);
-    expect(schema).not.toHaveProperty("$schema");
-
-    const sample = sampleFor(schema);
+  it("samples a document the zod schema accepts from its full JSON Schema", () => {
+    const sample = sampleFor(z.toJSONSchema(itinerary) as Record<string, unknown>);
     expect(itinerary.safeParse(sample).success).toBe(true);
     expect(sample).toMatchObject({ count: 3, confirmed: false, days: [{ date: "2026-01-01", items: [{ category: "MOVE" }, { category: "MOVE" }] }] });
+  });
 
-    const result = await new MockLlmAdapter().complete({ ...request, jsonSchema: schema });
-    expect(itinerary.parse(JSON.parse(result.text))).toEqual(sample);
+  it("answers a JSON Schema request with a document of that shape", async () => {
+    const result = await new MockLlmAdapter().complete({ ...request, jsonSchema: toLlmJsonSchema(itinerary) });
+    expect(JSON.parse(result.text)).toMatchObject({ timezone: "모의", days: [{ date: "2026-01-01", items: [{ category: "MOVE" }] }] });
     expect(result).toMatchObject({ model: MOCK_MODEL, stopReason: "end" });
     expect(result.attempts[0].inputTokens).toBeGreaterThan(0);
+  });
+
+  it("uses a registered responder for matching requests, after any scripted reply", async () => {
+    const llm = new MockLlmAdapter();
+    llm.respondTo((r) => r.system === "trip", () => ({ text: "여행 초안" }));
+    llm.enqueue({ text: "먼저" });
+    expect((await llm.complete({ ...request, system: "trip" })).text).toBe("먼저");
+    expect((await llm.complete({ ...request, system: "trip" })).text).toBe("여행 초안");
+    expect((await llm.complete(request)).text).toBe("모의 응답이에요.");
   });
 
   it("plays scripted replies in order, then falls back to the default, counting calls", async () => {
