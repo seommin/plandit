@@ -50,9 +50,9 @@ const SHARE_EXAMPLE = {
 export class SharesController {
   @Post("events/:eventId/shares")
   @ApiOperation({
-    summary: "공개 링크 만들기 (만든 사람 또는 캘린더 OWNER·ADMIN·EDITOR)",
+    summary: "공개 링크 만들기 (만든 사람 또는 캘린더 OWNER·ADMIN·EDITOR, 비공개 일정은 만든 사람만)",
     description:
-      "부를 때마다 새 링크가 생기고, 일정 공개 범위가 PUBLIC_LINK로 바뀐다. `url`은 로그인 없이 열리는 공개 페이지 주소다. `expiresAt`을 빼면 만료되지 않는다. 일정이 없거나 볼 수 없으면 404, 볼 수는 있지만 쓰기 역할이 아니면 403.",
+      "부를 때마다 새 링크가 생기고, 일정 공개 범위가 PUBLIC_LINK로 바뀐다. `url`은 로그인 없이 열리는 공개 페이지 주소다. `expiresAt`을 빼면 만료되지 않는다. 일정이 없거나 볼 수 없으면(남의 비공개 일정은 쓰기 역할이어도) 404, 볼 수는 있지만 쓰기 역할이 아니면 403.",
   })
   @ApiZodBody(createShareSchema, {
     channel: "LINK",

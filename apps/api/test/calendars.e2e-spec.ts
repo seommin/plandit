@@ -1,5 +1,7 @@
 import type { INestApplication } from "@nestjs/common";
 
+import { prisma } from "@plandit/database/prisma";
+
 import { as, closeTestApp, createTestApp, registerUser, resetDatabase } from "./helpers";
 
 describe("캘린더 권한: 멤버지만 역할 부족은 403, 비멤버는 404 (e2e)", () => {
@@ -66,6 +68,27 @@ describe("캘린더 권한: 멤버지만 역할 부족은 403, 비멤버는 404 
     await as(app, viewer.id).patch(`/events/${hidden.id}`).send({ title: "바꿈" }).expect(404);
     await as(app, outsider.id).patch(`/events/${shared.id}`).send({ title: "바꿈" }).expect(404);
     await as(app, owner.id).patch(`/events/${shared.id}`).send({ title: "바꿈" }).expect(200);
+  });
+
+  it("someone else's PRIVATE event is 404 even for a writable role: update, delete, share, reminders", async () => {
+    const hidden = (await as(app, owner.id).post("/events").send(eventBody("PRIVATE")).expect(201)).body.event;
+    const reminders = { reminders: [{ minutesBefore: 10, channel: "PUSH", audience: "CREATOR" }] };
+
+    const notFound = await as(app, editor.id).patch(`/events/${hidden.id}`).send({ title: "바꿈" }).expect(404);
+    expect(notFound.body.code).toBe("NOT_FOUND");
+    await as(app, editor.id).delete(`/events/${hidden.id}`).expect(404);
+    await as(app, editor.id).post(`/events/${hidden.id}/shares`).send({ channel: "LINK" }).expect(404);
+    await as(app, editor.id).get(`/events/${hidden.id}/reminders`).expect(404);
+    await as(app, editor.id).put(`/events/${hidden.id}/reminders`).send(reminders).expect(404);
+
+    // Nothing leaked or changed: still private, untouched, no public link, no reminders.
+    const after = await prisma.event.findUniqueOrThrow({ where: { id: hidden.id }, include: { shares: true, reminders: true } });
+    expect(after).toMatchObject({ title: "주간 팀 회의", visibility: "PRIVATE", shares: [], reminders: [] });
+
+    // The OWNER role does not unlock it either; the creator still can.
+    const editorsOwn = (await as(app, editor.id).post("/events").send(eventBody("PRIVATE")).expect(201)).body.event;
+    await as(app, owner.id).patch(`/events/${editorsOwn.id}`).send({ title: "바꿈" }).expect(404);
+    await as(app, owner.id).patch(`/events/${hidden.id}`).send({ title: "바꿈" }).expect(200);
   });
 
   it("GET /calendar/state without a range shows this month", async () => {

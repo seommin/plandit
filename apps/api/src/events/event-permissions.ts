@@ -116,7 +116,10 @@ export async function getDefaultPersonalCalendar(userId: string) {
   });
 }
 
-/** null when the user cannot see the event (404); 403 when they can see it but their calendar role cannot change it. */
+/**
+ * null when the user cannot see the event (404) — including someone else's PRIVATE event, even for OWNER·ADMIN·EDITOR.
+ * 403 when they can see it but their calendar role cannot change it.
+ */
 export async function getWritableEvent(eventId: string, userId: string) {
   const event = await prisma.event.findUnique({
     where: {
@@ -139,7 +142,8 @@ export async function getWritableEvent(eventId: string, userId: string) {
   });
   const role = event?.calendar.members[0]?.role;
 
-  if (!event) {
+  // Same visibility as the event list: someone else's PRIVATE event is invisible to every member, whatever the role.
+  if (!event || (event.visibility === "PRIVATE" && event.createdById !== userId)) {
     return null;
   }
 
@@ -147,8 +151,7 @@ export async function getWritableEvent(eventId: string, userId: string) {
     return event;
   }
 
-  // Same visibility as the event list: members see every event of the calendar except other people's PRIVATE ones.
-  if (role && event.visibility !== "PRIVATE") {
+  if (role) {
     throw new ForbiddenException("Your calendar role does not allow this.");
   }
 
