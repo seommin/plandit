@@ -26,7 +26,7 @@
 - 색은 `globals.css` 토큰 유틸리티만(`bg-surface`, `text-fg-2`, `bg-primary` …). 16진수 색 하드코딩 금지(캘린더 사용자 색 제외).
 - 공용 부품은 `components/ui.tsx`(Button, Sheet, Field …). 폼·상세는 `Sheet`(모바일 바텀시트 / PC 다이얼로그).
 - 문구는 한국어 해요체. API 오류 코드는 `lib/client-api.ts`에서 한국어로 바꾼다.
-- 외부에서 api로 직접 들어오는 경로는 두 가지뿐이다. 웹훅(`/webhooks/*`)은 `@Public()` + **서명**으로, 공개 API(`/v1/*`)는 `@Public()` + **API 키**(`ApiKeyGuard`, 스코프·요청 수 제한)로 인증한다.
+- 외부에서 api로 직접 들어오는 경로는 두 가지뿐이다. 웹훅(`/webhooks/*`)은 `@Public()` + **서명**으로, 공개 API(`/v1/*`, MCP 서버 `/v1/mcp` 포함)는 `@Public()` + **API 키**(`ApiKeyGuard`, 스코프·요청 수 제한)로 인증한다.
 
 ## 구조 규칙
 

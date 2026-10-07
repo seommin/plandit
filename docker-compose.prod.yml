@@ -138,6 +138,7 @@ services:
     depends_on:
       - web
       - mocks
+      - api
 
 volumes:
   postgres_data:

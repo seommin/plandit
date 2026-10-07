@@ -252,7 +252,7 @@
 - PLANDIT-20 `LlmClient` + Claude 어댑터, 토큰→크레딧 환산표, 예상 선차감(DEBIT) → 실사용 정산(ADJUST), 실패 환불, `ai_usages`. 아래 상세
 - PLANDIT-21 **AI 에이전트(Tool Calling 루프)**: "내일 오후에 1시간 팀 회의 잡아줘" → 모델이 도구를 여러 단계 호출(`list_calendars` → `find_free_slots` → `create_event`). 최대 단계 수·크레딧 한도, 쓰기 도구는 **사용자 승인 후 실행**(승인 대기 상태 저장), 단계별 도구 호출·결과 기록. 빈 시간은 요청자가 볼 수 있는 일정 기준. 아래 상세 ✅
 - PLANDIT-22 **RAG**: 임베딩은 Anthropic API에 없으므로 별도 제공자(예: Voyage AI)를 `EmbeddingClient` 인터페이스 뒤에 둔다(PLANDIT-20에서 옮김). 일정(제목·설명·장소) + **회의록 파일(PDF·TXT) 업로드** → 텍스트 추출·청킹·임베딩(pgvector)은 큐 작업으로 비동기 처리(진행 상태 표시, 크기·형식 검증) → "지난달 A사 미팅에서 뭐 정했지?"에 근거 인용과 함께 답변. 권한 범위 밖 문서·일정은 검색 대상에서 제외
-- PLANDIT-23 같은 도구를 **MCP 서버**로 노출(사용자 토큰 기반)
+- PLANDIT-23 같은 도구를 **MCP 서버**로 노출(사용자 토큰 기반). `/v1/mcp`, 아래 상세 ✅
 - PLANDIT-24 AI 권한·한도: 워크스페이스별 월 AI 크레딧 상한(LLM 실패 환불은 PLANDIT-20에서)
 - PLANDIT-25 README에 AI 데모 GIF
 - PLANDIT-26 **AI 여행 일정 만들기**(양식 → 초안 → 확인 → 한 번에 저장, 함께 갈 멤버는 참석자로, 캘린더 멤버가 아니면 자동 추가). 아래 상세
@@ -339,6 +339,21 @@ AI 기능이 함께 쓰는 바닥. 기능(PLANDIT-21·26)은 `AiUsageService`만
   - 단위(`assistant.spec.ts`, `anthropic.adapter.spec.ts`): 빈 시간(겹침 합치기·맞닿은 일정·창 밖·짧은 틈 제외·주말·지금 이후·파리 서머타임), 도구 입력 검증(시각 오프셋 필수, 24시간, 중복 참석자, 기간 상한), 도구 목록 고정·닫힌 스키마·기본값은 선택, 시스템 프롬프트에 날짜 없음, 어댑터의 strict 도구·캐시·tool_result 변환·응답 블록 그대로 다시 보내기·tool_use 파싱, 모의 대화 순서
   - e2e(`assistant.e2e-spec.ts`, 모의 `LlmClient` + 실제 Postgres·Redis): 읽기 도구 2개를 한 단계에 → 빈 시간 → 승인 대기(일정 0건) → 승인 → 일정 1건·참석자 → 마지막 답, 모델이 받은 대화(두 결과가 한 메시지, 앞선 응답이 그대로, 고정된 앞부분) / 워커 두 개가 동시에 돌아도 호출 4번 / 남의 개인 일정은 목록·빈 시간에 없음 / 거절 → 일정 0건, 반복 클릭 200, 반대 결정 409 / 승인 세 번 동시 → 일정 1건 / 기다리는 사이 VIEWER가 됨 → 실행 안 함, 이유를 모델에 / 잘못된 입력·모르는 도구·캘린더 밖 참석자 → 오류 결과 / 단계 한도 → 다음 메시지로 이어감 / 잔액 부족: 보내기 409(행 0) · 다음 단계에서 멈춤 / LLM 오류 → 그 호출만 전액 환불 / 진행 중 409, 승인 대기 중 새 메시지 → 제안 거절 / 메시지를 보낸 뒤 워크스페이스를 떠남 → 모델 호출 없이 그 선차감 바로 환불 / 남의 대화·비멤버 404, 목록 cursor / **실제 BullMQ 워커가 스스로** 모의 대본을 끝까지 / 불변식: 사용 건마다 `DEBIT + ADJUST + REFUND = −credits`, 원장 합계 = 잔액, 남은 예약 0
   - 화면(375·1440px, 실제 워커 + 모의 모델): 제안 문구로 시작 → 단계 표시 → 승인 카드 → 만들기 → 캘린더에 바로 표시 → 마지막 답, 가로 스크롤 없음. 확인 중 고친 것: 효과가 `scrollIntoView()`의 Promise를 반환해 화면이 깨지던 문제(troubleshooting 20), 승인 버튼 두 개가 넘치던 문제(같은 배치인 여행 일정 확인 줄의 버그는 별도 수정)
+
+### PLANDIT-23 · MCP 서버
+PLANDIT-21의 도구를 MCP(Model Context Protocol)로 내보내, Claude Code·Cursor 같은 MCP 클라이언트가 Plandit 캘린더를 읽고 일정을 만들게 한다. 인증은 PLANDIT-13의 API 키(사용자 토큰). 선행: PLANDIT-13, 21.
+- **결정**(2026-10-07)
+  1. 연결: **원격 HTTP + API 키**(`Authorization: Bearer pk_…`). Claude Code·Cursor·MCP Inspector에서 바로 붙는다. Claude Desktop·claude.ai 원격 커넥터는 OAuth를 요구하므로 `mcp-remote` 같은 중계로 붙인다(검토한 다른 안: OAuth 2.1 인증 서버 — 범위가 크게 늘어남 / 로컬 stdio 패키지)
+  2. `create_event`는 `events:write` 키면 **바로 실행**. 도구를 부르기 전 사용자 확인은 MCP 클라이언트(호스트)가 하는 것이 MCP의 방식이고, 키의 `events:write`가 사용자가 미리 준 권한이다(검토한 다른 안: 앱 비서처럼 Plandit 화면에서 승인 / 읽기 전용)
+  3. 공개 배포에서 `/v1`(공개 API와 MCP)을 인터넷에 연다
+  - 경로는 `/mcp`가 아니라 **`/v1/mcp`**: "외부 진입은 웹훅과 `/v1` 두 가지뿐" 규칙을 지키고, API 키 인증·Swagger 표시·web 프록시 제외·Caddy 경로가 `/v1` 하나로 끝난다
+- [x] `POST /v1/mcp`: Streamable HTTP, **세션 없음**(요청마다 서버·전송 객체를 새로 만들고 응답은 JSON — 여러 api 인스턴스에서도 상태 공유 불필요). `@Public()` + `ApiKeyGuard`(키별 요청 수 제한 그대로). `GET`은 405(서버 → 클라이언트 스트림 없음, 클라이언트가 스트림 없이 계속). 공식 SDK `@modelcontextprotocol/sdk` 1.32의 저수준 `Server` — 도구 스키마는 이미 만든 JSON Schema(`toLlmJsonSchema(…, "input")`)를 그대로 넘겨 SDK의 zod 처리와 엮이지 않게
+- [x] 도구는 `assistant-tools.ts` 5개 그대로(`McpService`). 키 스코프로 거름: 읽기 4개는 `events:read`, `create_event`는 `events:write`. `tools/list`에는 부를 수 있는 도구만, 힌트 `readOnlyHint`. 스코프 없는 도구·모르는 도구·잘못된 입력·권한 없음은 도구 오류(`isError`)로
+- [x] 키는 워크스페이스 하나에 묶이므로 일정 조회·빈 시간도 **그 워크스페이스 캘린더만**(`ToolContext.workspaceOnly`, `/v1/events`와 같은 규칙). 앱 안 비서는 그대로 내 모든 일정
+- [x] 과금 없음: MCP는 Plandit의 LLM을 부르지 않는다(생각은 클라이언트의 모델이 한다). 요청 수 제한만. 키 폐기·만료·발급자 탈퇴는 다음 요청부터 401(PLANDIT-13 그대로)
+- [x] 배포: Caddy가 `/v1`, `/v1/*`를 api로(`caddy adapt`로 확인). 그 밖의 api 경로(`/metrics`, `/health`, web 서버 전용 경로)는 계속 내부망
+- [x] 연결 안내: README "MCP로 연결하기"
+- **완료 조건**: ✅ e2e(`mcp.e2e-spec.ts`, 공식 SDK의 MCP 클라이언트가 Streamable HTTP로 실제 연결): 스코프별 도구 목록(읽기+쓰기 5개 / 읽기 4개 / `credits:read`만 0개)·힌트·필수 입력 / 개인 워크스페이스 일정은 목록에 없고 빈 시간도 막지 않음, 결과의 텍스트 = `structuredContent` / `events:write` 없으면 거절·일정 0건, 있으면 바로 생성·참석자·멤버의 일정 목록에 보임 / 잘못된 입력·모르는 도구·VIEWER로 바뀐 사용자 → 도구 오류, 일정 0건 / 키 없음·폐기·발급자 탈퇴 401, `GET` 405. Swagger에 API 키 인증으로 표시(`foundation.e2e-spec.ts`)
 
 ## 3주차 — 규모·운영 (개요)
 
