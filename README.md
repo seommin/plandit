@@ -8,6 +8,7 @@
 - 돈: 추가만 되는 원장, 멱등키, 행 잠금, 외부 호출 전 선기록, 재조회로 확정 → [설계 결정](#설계-결정)
 - 큐: BullMQ 지연 작업, 일정이 옮겨져도 한 번만 발송, 초당 제한(429) 재시도, 실패 시 자동 환불
 - 권한: 워크스페이스 역할(결제·멤버) + 캘린더 역할(데이터), 감사 로그, 공개 API 키(스코프·요청 수 제한)
+- AI: 토큰 기준 크레딧 과금(선차감 → 정산), 도구 호출 에이전트(일정 변경은 승인 뒤에만), 같은 도구를 내보내는 MCP 서버
 - 운영: 요청마다 추적 id(로그 → 작업 → 감사 기록까지), Prometheus 지표, 매일 원장 정합성 검사(`pnpm check:ledger`), [장애 대응 런북](docs/runbook.md), [겪은 문제 기록](docs/troubleshooting.md)
 
 ## 구조
@@ -30,7 +31,7 @@ flowchart LR
 ```
 
 - 브라우저는 web만 부릅니다. web이 세션을 확인하고 내부 헤더로 api를 부릅니다(`app/api/[...path]` 프록시 하나).
-- 외부에서 api로 직접 들어오는 길은 **웹훅(서명)** 과 **공개 API `/v1`(API 키)** 두 가지뿐입니다.
+- 외부에서 api로 직접 들어오는 길은 **웹훅(서명)** 과 **공개 API `/v1`(API 키, MCP 서버 `/v1/mcp` 포함)** 두 가지뿐입니다.
 - 워커는 api와 같은 코드베이스의 다른 진입점(`worker.ts`)입니다. 서비스 코드를 그대로 공유합니다.
 
 충전 한 건은 이렇게 흐릅니다.
@@ -115,6 +116,10 @@ pnpm dev
 - **일정 옮기기**: 문자 알림이 걸린 일정을 끌어서 다른 시각으로 옮기면 옛 시각에는 아무것도 나가지 않고 새 시각에 한 번 나갑니다.
 - **AI 일정 비서**: 캘린더 머리의 비서 아이콘을 누르고 "내일 오후에 1시간 회의 잡아줘"를 보냅니다. 키 없이 도는 모의 모델(`LLM_PROVIDER=mock`)이 실제 도구로 캘린더를 확인하고 빈 시간을 찾아 회의를 제안합니다. "만들기"를 눌러야 일정이 생기고, 호출마다 쓴 크레딧만 빠집니다.
 - **공개 API**: 설정 → 워크스페이스 → API 키 발급 후 `curl -H "Authorization: Bearer pk_…" http://localhost:4000/v1/events`로 부릅니다. 요청 수 제한을 넘으면 429와 `Retry-After`가 옵니다.
+- **MCP로 연결하기**: `events:read`(일정을 만들게 하려면 `events:write`도) 스코프로 키를 발급하고 Claude Code에 서버를 추가합니다. 비서와 같은 도구 5개(캘린더·멤버·일정 조회, 빈 시간 찾기, 일정 만들기)가 그 키의 워크스페이스 범위로 보이고, 크레딧은 쓰지 않습니다. 배포 서버라면 주소만 `https://<도메인>/v1/mcp`로 바꿉니다.
+  ```bash
+  claude mcp add --transport http plandit http://localhost:4000/v1/mcp --header "Authorization: Bearer pk_…"
+  ```
 
 ## 시나리오와 테스트
 
@@ -139,6 +144,7 @@ pnpm dev
 | 캘린더 권한 | VIEWER의 캘린더·일정 수정, EDITOR의 멤버 관리, 비멤버·남의 비공개 일정 | 403 / 404(존재 숨김) | `calendars.e2e-spec.ts` |
 | 감사 로그 | 성공한 변경, 거절·재시도 | 변경당 정확히 1행, 거절·재시도 0행 | `audit.e2e-spec.ts` |
 | API 키 | 폐기·만료·스코프 없음·한도 초과 | 401 / 403 / 429 | `api-keys.e2e-spec.ts` |
+| MCP 서버 | 스코프가 다른 키로 MCP 클라이언트 연결 | 부를 수 있는 도구만 보임, 키의 워크스페이스 일정만, `events:write` 없으면 일정 만들기 거절 | `mcp.e2e-spec.ts` |
 | AI 비서 승인 | 비서가 제안한 일정에 "만들기"를 세 번 동시에 | 승인 전 0건, 승인 후 정확히 1건 | `assistant.e2e-spec.ts` |
 | AI 비서 권한 | 승인 기다리는 사이 캘린더 역할이 VIEWER로 | 실행 안 함, 이유를 AI에 전달 | `assistant.e2e-spec.ts` |
 | AI 비서 과금 | 단계 중 LLM 오류·잔액 부족·단계 한도 | 실패한 호출만 전액 환불, 사용 건마다 `DEBIT + ADJUST + REFUND = −credits` | `assistant.e2e-spec.ts` |
@@ -176,7 +182,7 @@ pnpm lint && pnpm typecheck && pnpm test && pnpm test:e2e
 | 권한 | **워크스페이스 역할**(OWNER > ADMIN > MEMBER: 결제·크레딧·멤버 관리) + **캘린더 역할**(OWNER·ADMIN·EDITOR·VIEWER: 일정 데이터). 둘을 섞지 않습니다 |
 | 크레딧·결제 | 원장([0001](docs/adr/0001-ledger-append-only.md)), 모의 PG 충전·웹훅·재조회([0002](docs/adr/0002-reserve-before-external-call.md), [0003](docs/adr/0003-webhook-idempotency.md)) |
 | Redis/Queue | BullMQ 리마인더 발송·재조회 작업([0004](docs/adr/0004-reminder-job-versioning.md)) |
-| LLM · RAG · Tool Calling · MCP | `LlmClient` + Claude 어댑터와 토큰 기준 크레딧 과금(선차감 → 정산, 실패 환불, [0005](docs/adr/0005-ai-credit-reserve-settle.md)). AI 여행 일정: 목적지·기간·함께 갈 멤버로 초안을 만들고 확인 후 캘린더에 한 번에 넣기(구조화 출력, 참석자 캘린더 권한 자동 추가). AI 일정 비서: 도구 호출 루프(캘린더·일정 조회, 빈 시간 찾기, 일정 만들기)를 한 단계씩 DB에 남기며 워커가 진행하고, 일정 변경은 사용자 승인 뒤에만 실행([0006](docs/adr/0006-assistant-persisted-tool-loop.md)). 2주차 계획: 회의록 업로드 RAG(pgvector), 같은 도구의 MCP 서버, AI 크레딧 한도 → [PLAN.md](docs/PLAN.md#2주차--ai-일정-비서-개요) |
+| LLM · RAG · Tool Calling · MCP | `LlmClient` + Claude 어댑터와 토큰 기준 크레딧 과금(선차감 → 정산, 실패 환불, [0005](docs/adr/0005-ai-credit-reserve-settle.md)). AI 여행 일정: 목적지·기간·함께 갈 멤버로 초안을 만들고 확인 후 캘린더에 한 번에 넣기(구조화 출력, 참석자 캘린더 권한 자동 추가). AI 일정 비서: 도구 호출 루프(캘린더·일정 조회, 빈 시간 찾기, 일정 만들기)를 한 단계씩 DB에 남기며 워커가 진행하고, 일정 변경은 사용자 승인 뒤에만 실행([0006](docs/adr/0006-assistant-persisted-tool-loop.md)). 같은 도구를 MCP 서버(`/v1/mcp`, API 키·스코프)로도 내보냄. 2주차 계획: 회의록 업로드 RAG(pgvector), AI 크레딧 한도 → [PLAN.md](docs/PLAN.md#2주차--ai-일정-비서-개요) |
 
 ## AI 개발 도구로 일한 방식
 
