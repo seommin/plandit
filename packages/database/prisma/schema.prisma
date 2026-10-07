@@ -112,6 +112,7 @@ model User {
   reminderDeliveries ReminderDelivery[]
   aiUsages       AiUsage[]
   tripPlans      TripPlan[]
+  assistantThreads AssistantThread[]
 }
 
 model Account {
@@ -192,6 +193,7 @@ model Workspace {
   apiKeys       ApiKey[]
   aiUsages      AiUsage[]
   tripPlans     TripPlan[]
+  assistantThreads AssistantThread[]
 }
 
 model WorkspaceMember {
@@ -721,6 +723,7 @@ model AiUsage {
   adjustLedger CreditLedger? @relation("AiUsageAdjust", fields: [adjustLedgerId], references: [id], onDelete: Restrict)
   refundLedger CreditLedger? @relation("AiUsageRefund", fields: [refundLedgerId], references: [id], onDelete: Restrict)
   tripPlan     TripPlan?
+  assistantMessage AssistantMessage?
 
   @@index([workspaceId, createdAt])
   @@index([status, createdAt])
@@ -763,4 +766,95 @@ model TripPlan {
 
   @@unique([createdById, requestKey])
   @@index([workspaceId, createdById, createdAt])
+}
+
+/// IDLE (answered, ready for the next message) → RUNNING (the worker is on it) → WAITING_APPROVAL (a change needs the person's yes or no) → RUNNING → … → IDLE
+enum AssistantThreadStatus {
+  IDLE
+  RUNNING
+  WAITING_APPROVAL
+}
+
+/// AI schedule assistant conversation (PLANDIT-21). Only the person who started it sees it; its model calls bill the workspace.
+model AssistantThread {
+  id             String                @id @default(cuid())
+  workspaceId    String
+  userId         String
+  /// The first message, shortened, for the list
+  title          String?
+  status         AssistantThreadStatus @default(IDLE)
+  /// The reserved model call the worker runs next: set together with its DEBIT, cleared when it settles or fails
+  pendingUsageId String?               @unique
+  /// Why the last turn ended early (STEP_LIMIT, INSUFFICIENT_CREDITS, an LLM failure code). The next message clears it.
+  stopCode       String?
+  createdAt      DateTime              @default(now())
+  updatedAt      DateTime              @updatedAt
+
+  workspace Workspace           @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+  user      User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages  AssistantMessage[]
+  toolCalls AssistantToolCall[]
+
+  @@index([workspaceId, userId, createdAt])
+}
+
+enum AssistantMessageKind {
+  USER
+  ASSISTANT
+  TOOL_RESULTS
+}
+
+/// One turn of the conversation exactly as sent to the model. Append-only: Claude's thinking blocks are bound to everything before them.
+model AssistantMessage {
+  id        String               @id @default(cuid())
+  threadId  String
+  seq       Int
+  kind      AssistantMessageKind
+  /// What the person wrote (USER) or the reply's visible text (ASSISTANT), for the screen
+  text      String?
+  /// The LlmMessage as sent to the model (an ASSISTANT message keeps the provider's reply blocks verbatim)
+  content   Json
+  /// The model call that produced an ASSISTANT message
+  aiUsageId String?              @unique
+  createdAt DateTime             @default(now())
+
+  thread    AssistantThread     @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  aiUsage   AiUsage?            @relation(fields: [aiUsageId], references: [id], onDelete: Restrict)
+  toolCalls AssistantToolCall[]
+
+  @@unique([threadId, seq])
+}
+
+/// Reads: PENDING → DONE | ERROR. Changes: PENDING → WAITING_APPROVAL (or ERROR when invalid) → DONE | ERROR (approved) | REJECTED.
+enum AssistantToolCallStatus {
+  PENDING
+  WAITING_APPROVAL
+  DONE
+  ERROR
+  REJECTED
+}
+
+/// A tool the model asked for. Its output (or the rejection) goes back to the model as the tool result.
+model AssistantToolCall {
+  id         String                  @id @default(cuid())
+  threadId   String
+  /// The ASSISTANT message that asked for it
+  messageId  String
+  /// The model's id for the call, answered by the tool result
+  toolUseId  String
+  name       String
+  input      Json
+  status     AssistantToolCallStatus @default(PENDING)
+  /// A change in names (calendar, people, local times) for the approval card
+  preview    Json?
+  /// What the model is told: the result, or { error }
+  output     Json?
+  createdAt  DateTime                @default(now())
+  finishedAt DateTime?
+
+  thread  AssistantThread  @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  message AssistantMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+
+  @@unique([threadId, toolUseId])
+  @@index([messageId])
 }

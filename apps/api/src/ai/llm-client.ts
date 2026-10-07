@@ -2,7 +2,19 @@ import { z } from "zod";
 
 import type { AttemptUsage } from "@plandit/shared/ai";
 
-export type LlmMessage = { role: "user" | "assistant"; content: string };
+/** A tool the model may call. `inputSchema` comes from toLlmJsonSchema; the input is validated again before running. */
+export type LlmTool = { name: string; description: string; inputSchema: Record<string, unknown> };
+export type LlmToolCall = { id: string; name: string; input: unknown };
+export type LlmToolResult = { toolCallId: string; content: string; isError?: boolean };
+
+export type LlmMessage =
+  /** `toolResults` answer the previous reply's tool calls and go before `content` (which may then be empty) */
+  | { role: "user"; content: string; toolResults?: LlmToolResult[] }
+  /**
+   * `replay` is a reply exactly as LlmResult.replay gave it, sent back unchanged: Claude Opus 5.5 binds its thinking
+   * blocks to the conversation, so an edited earlier turn is a 400. Without it, `content` is sent as plain text.
+   */
+  | { role: "assistant"; content: string; replay?: unknown[] };
 
 /**
  * Non-streaming requests stay under this output cap (thinking included), which keeps a single HTTP response inside
@@ -18,13 +30,20 @@ export type LlmRequest = {
   effort?: "low" | "medium" | "high";
   /** JSON Schema the reply must follow (structured output). `text` is then one JSON document. */
   jsonSchema?: Record<string, unknown>;
+  /** The model decides whether to call them (forced tool choice is a 400 on Claude Opus 5.5). Keep the list fixed for a conversation. */
+  tools?: LlmTool[];
+  /** Cache the prompt prefix: worth it when the same conversation is sent again (a tool loop) */
+  cache?: boolean;
 };
 
 export type LlmResult = {
   /** Model that produced the reply (a server-side fallback model when one served it) */
   model: string;
   text: string;
-  stopReason: "end" | "max_tokens" | "refusal" | "other";
+  stopReason: "end" | "tool_use" | "max_tokens" | "refusal" | "other";
+  toolCalls: LlmToolCall[];
+  /** The reply in the provider's own form. Store it and send it back as `replay` to continue the conversation. */
+  replay: unknown[];
   /** What we are billed for: one entry per model attempt, declined attempts and fallbacks included. */
   attempts: AttemptUsage[];
 };
@@ -65,8 +84,13 @@ export const LLM_CLIENT = Symbol("LLM_CLIENT");
 
 /** All the text a request sends, for the input-token estimate. */
 export function requestText(request: LlmRequest) {
-  const schema = request.jsonSchema ? JSON.stringify(request.jsonSchema) : "";
-  return [request.system, ...request.messages.map((m) => m.content), schema].join("\n");
+  const json = (value: unknown) => (value === undefined ? "" : JSON.stringify(value));
+  return [
+    request.system,
+    ...request.messages.map((m) => `${m.content}${json("toolResults" in m ? m.toolResults : undefined)}${json("replay" in m ? m.replay : undefined)}`),
+    json(request.jsonSchema),
+    json(request.tools),
+  ].join("\n");
 }
 
 /** Keywords structured output accepts; everything else (minLength, maximum, pattern, minItems …) is dropped. */
@@ -93,7 +117,8 @@ function keepSupported(node: unknown): unknown {
 /**
  * `jsonSchema` from the zod schema that will also validate the reply in `parse`. Structured output rejects numeric,
  * length and array-size constraints, so they are stripped here and enforced by that zod schema afterwards.
+ * A tool's input uses `io: "input"`: fields with a default stay optional for the model.
  */
-export function toLlmJsonSchema(schema: z.ZodType): Record<string, unknown> {
-  return keepSupported(z.toJSONSchema(schema)) as Record<string, unknown>;
+export function toLlmJsonSchema(schema: z.ZodType, io: "input" | "output" = "output"): Record<string, unknown> {
+  return keepSupported(z.toJSONSchema(schema, { io })) as Record<string, unknown>;
 }

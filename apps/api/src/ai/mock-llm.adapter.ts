@@ -6,6 +6,8 @@ export const MOCK_MODEL = "mock-llm";
 
 export type MockReply = {
   text?: string;
+  /** Tool calls in the reply (stopReason then defaults to tool_use) */
+  toolCalls?: Array<{ name: string; input: unknown }>;
   stopReason?: LlmResult["stopReason"];
   /** Defaults are derived from the request and reply lengths */
   attempts?: AttemptUsage[];
@@ -23,6 +25,7 @@ export class MockLlmAdapter implements LlmClient {
   readonly servingModels = [MOCK_MODEL];
   /** complete() calls so far — lets tests prove "the model was never called" */
   calls = 0;
+  private toolCallSeq = 0;
   private script: MockReply[] = [];
   private responders: Array<{ match: (request: LlmRequest) => boolean; reply: (request: LlmRequest) => MockReply }> = [];
 
@@ -50,11 +53,14 @@ export class MockLlmAdapter implements LlmClient {
     await reply.wait;
     if (reply.error) throw new LlmError(reply.error, `Mock model: ${reply.error}`);
 
-    const text = reply.text ?? (request.jsonSchema ? JSON.stringify(sampleFor(request.jsonSchema)) : "모의 응답이에요.");
+    const text = reply.text ?? (reply.toolCalls?.length ? "" : request.jsonSchema ? JSON.stringify(sampleFor(request.jsonSchema)) : "모의 응답이에요.");
+    const toolCalls = (reply.toolCalls ?? []).map((call) => ({ id: `mock_tool_${++this.toolCallSeq}`, ...call }));
     return {
       model: MOCK_MODEL,
       text,
-      stopReason: reply.stopReason ?? "end",
+      stopReason: reply.stopReason ?? (toolCalls.length ? "tool_use" : "end"),
+      toolCalls,
+      replay: [...(text ? [{ type: "text", text }] : []), ...toolCalls.map((call) => ({ type: "tool_use", ...call }))],
       attempts: reply.attempts ?? [
         {
           model: MOCK_MODEL,

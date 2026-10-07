@@ -1,10 +1,11 @@
 "use client";
 
-import { ChevronDown, ChevronLeft, ChevronRight } from "lucide-react";
+import { Bot, ChevronDown, ChevronLeft, ChevronRight } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { useApp } from "@/components/app-context";
+import { AssistantSheet } from "@/components/assistant-sheet";
 import { defaultStart, EventEditor, type EditorState } from "@/components/event-editor";
 import { DateNavigator, MiniMonth, useDayDots } from "@/components/mini-month";
 import { MonthGrid } from "@/components/month-grid";
@@ -66,6 +67,7 @@ function CalendarView({ initial, openCreate }: Props) {
   const [filterOpen, setFilterOpen] = useState(false);
   const [editor, setEditor] = useState<EditorState>({ mode: "closed" });
   const [tripOpen, setTripOpen] = useState(false);
+  const [assistantOpen, setAssistantOpen] = useState(false);
   const gridRef = useRef<HTMLDivElement>(null);
   const scrollerRef = useRef<HTMLDivElement>(null);
   const headerRef = useRef<HTMLElement>(null);
@@ -111,6 +113,8 @@ function CalendarView({ initial, openCreate }: Props) {
     const eligible = scopedCalendars.concat(calendars.filter((c) => !scopedCalendars.includes(c)));
     return eligible.filter((c) => canWrite(c) && c.type !== "SUBSCRIBED" && workspaces.some((w) => w.id === c.workspaceId));
   }, [calendars, scopedCalendars, workspaces]);
+  // The assistant bills the workspace in view; from "전체", the personal one.
+  const assistantWorkspaceId = workspaces.some((w) => w.id === activeScope) ? activeScope : (workspaces.find((w) => w.type === "PERSONAL") ?? workspaces[0])?.id;
   const canEdit = (event: CalendarEvent) => writable.has(event.calendarId);
   const create = (start: Date, end?: Date) => setEditor({ mode: "create", start, end });
   const open = (event: CalendarEvent) => setEditor({ mode: "edit", event });
@@ -219,6 +223,11 @@ function CalendarView({ initial, openCreate }: Props) {
                 <span className="truncate">{scopeLabel(activeScope)}</span>
                 <ChevronDown className="shrink-0 text-fg-3" size={16} />
               </button>
+              {assistantWorkspaceId ? (
+                <IconButton label="AI 일정 비서" onClick={() => setAssistantOpen(true)}>
+                  <Bot size={20} />
+                </IconButton>
+              ) : null}
               <Button onClick={() => setSelected(startOfDay(new Date()))} size="sm" variant="secondary">
                 오늘
               </Button>
@@ -288,6 +297,15 @@ function CalendarView({ initial, openCreate }: Props) {
         state={editor}
       />
       <TripPlanner calendars={tripCalendars} defaultDate={selected} onApplied={() => void reload()} onClose={() => setTripOpen(false)} open={tripOpen} />
+      {assistantWorkspaceId ? (
+        <AssistantSheet
+          defaultWorkspaceId={assistantWorkspaceId}
+          onChanged={() => void reload()}
+          onClose={() => setAssistantOpen(false)}
+          open={assistantOpen}
+          workspaces={workspaces}
+        />
+      ) : null}
 
       <Sheet onClose={() => setFilterOpen(false)} open={filterOpen} title="캘린더 보기">
         {calendarList}

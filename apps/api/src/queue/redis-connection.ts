@@ -10,4 +10,5 @@ export const QUEUES = {
   aiUsageReconcile: "ai-usage-reconcile",
   tripPlans: "trip-plans",
   ledgerCheck: "ledger-check",
+  assistant: "assistant",
 } as const;

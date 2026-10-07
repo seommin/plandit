@@ -21,6 +21,17 @@ function offsetAt(instant: number, timeZone: string) {
   return Date.UTC(p.year, p.month - 1, p.day, p.hour, p.minute, p.second) - Math.floor(instant / 1000) * 1000;
 }
 
+const pad = (n: number) => String(n).padStart(2, "0");
+
+/** `instant` as local RFC 3339 time with its offset ("2026-10-08T10:00:00+09:00"). */
+export function toLocalIso(instant: Date, timeZone: string) {
+  const p = partsIn(instant.getTime(), timeZone);
+  const offsetMinutes = Math.round(offsetAt(instant.getTime(), timeZone) / 60_000);
+  const sign = offsetMinutes < 0 ? "-" : "+";
+  const abs = Math.abs(offsetMinutes);
+  return `${p.year}-${pad(p.month)}-${pad(p.day)}T${pad(p.hour)}:${pad(p.minute)}:${pad(p.second)}${sign}${pad(Math.floor(abs / 60))}:${pad(abs % 60)}`;
+}
+
 /**
  * The instant a wall clock in `timeZone` shows these fields (month is 1-12). Two passes so a DST change between the
  * guess and the answer still lands on the right offset. A time DST skips moves forward by the gap (Paris 02:30 → 03:30).

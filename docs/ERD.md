@@ -22,6 +22,10 @@ erDiagram
     workspaces ||--o{ ai_usages : ""
     workspaces ||--o{ trip_plans : "AI 여행 초안"
     trip_plans ||--o{ events : "적용 시 생성"
+    workspaces ||--o{ assistant_threads : "AI 비서 대화"
+    assistant_threads ||--o{ assistant_messages : "append-only"
+    assistant_messages ||--o{ assistant_tool_calls : "도구 호출"
+    assistant_messages |o--o| ai_usages : "답 하나 = 호출 하나"
 ```
 
 ## ★ 변경되는 기존 테이블
@@ -215,8 +219,39 @@ UPDATE·DELETE는 트리거로 차단(원장과 같은 방식). 변경과 같은
 
 사용 건마다 `DEBIT + ADJUST + REFUND = −credits`.
 
-### assistant_sessions / assistant_messages
-workspace_id, user_id, title / session_id, role, content, tool_calls(jsonb), tool_results(jsonb), ai_usage_id. Tool Calling 기록.
+### assistant_threads — AI 일정 비서 대화 (PLANDIT-21)
+| 컬럼 | 타입 | 비고 |
+|---|---|---|
+| id | cuid PK | |
+| workspace_id | FK | 크레딧을 쓰는 워크스페이스. 도구가 보는 캘린더도 이 워크스페이스 것 |
+| user_id | FK users | 대화는 만든 사람만 본다 |
+| title | text null | 첫 메시지 앞 40자 |
+| status | enum IDLE / RUNNING / WAITING_APPROVAL | IDLE → RUNNING(메시지) → WAITING_APPROVAL(일정 변경 승인 대기) → RUNNING → … → IDLE |
+| pending_usage_id | text unique null | 워커가 다음에 실행할, 선차감까지 끝난 AI 호출. 정산·실패 트랜잭션에서 비운다 |
+| stop_code | text null | 차례가 일찍 끝난 이유: STEP_LIMIT / INSUFFICIENT_CREDITS / NOT_A_MEMBER / LLM 실패 코드 / STALE / INTERNAL. 다음 메시지가 지운다 |
+| created_at, updated_at | | |
+
+### assistant_messages — 모델에 보낸 그대로의 대화 (append-only)
+| 컬럼 | 타입 | 비고 |
+|---|---|---|
+| id | cuid PK | |
+| thread_id, seq | FK, int | unique(thread_id, seq). 같은 순번 두 번 쓰기를 막아 워커 재시도에도 한 번만 |
+| kind | enum USER / ASSISTANT / TOOL_RESULTS | |
+| text | text null | 화면용: 사용자가 쓴 말(USER), 답의 보이는 글(ASSISTANT) |
+| content | jsonb | 모델에 보낸 `LlmMessage`. ASSISTANT는 받은 블록(thinking 포함)을 그대로 — Opus 5.5는 앞부분이 바뀐 대화의 thinking 블록을 거부하므로 고치지 않는다 |
+| ai_usage_id | FK ai_usages unique null | ASSISTANT를 만든 호출 |
+
+### assistant_tool_calls — 모델이 부른 도구
+| 컬럼 | 타입 | 비고 |
+|---|---|---|
+| id | cuid PK | 승인·거절 API의 대상 |
+| thread_id, message_id | FK | message = 도구를 부른 ASSISTANT 메시지 |
+| tool_use_id | text | 모델의 호출 id(결과가 이 id로 답함). unique(thread_id, tool_use_id) |
+| name, input | text, jsonb | |
+| status | enum PENDING / WAITING_APPROVAL / DONE / ERROR / REJECTED | 읽기: PENDING → DONE·ERROR. 변경: PENDING → WAITING_APPROVAL(잘못된 입력이면 ERROR) → 승인 DONE·ERROR / 거절 REJECTED |
+| preview | jsonb null | 승인 카드 내용(캘린더 이름·제목·현지 시각·참석자 이름) |
+| output | jsonb null | 모델에 돌려준 결과 또는 `{ error }` |
+| created_at, finished_at | | |
 
 ### trip_plans — AI 여행 일정 초안 (PLANDIT-26)
 | 컬럼 | 타입 | 비고 |
