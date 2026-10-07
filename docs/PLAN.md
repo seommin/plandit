@@ -209,8 +209,11 @@
 - **완료 조건**: 휴대폰 LTE에서 HTTPS로 로그인 → 충전 시나리오 재현. 재부팅 후 자동 복구 — 로컬 도커로는 확인, 실제 ARM 서버에서는 아직
 
 ### PLANDIT-12 · 정합성 검증 도구 [S]
-- [ ] `pnpm check:ledger`: 계정별 원장 합계 = 캐시, `balance_after` 연속성 검사. 불일치 시 종료 코드 1
-- [ ] 워커에서 하루 1회 실행, 불일치 시 경고 로그
+- [x] `pnpm check:ledger`(`LedgerCheckService`): 계정별 원장 합계 = 잔액 캐시(`CACHE_MISMATCH`), 각 행의 `balanceAfter` = 그 행까지의 누계(`BALANCE_AFTER_BREAK`, 직전 행이 아니라 누계와 비교해 틀린 행 하나만 보고), 누계 음수(`NEGATIVE_BALANCE`). 읽기만 함. 종료 코드 0 정상 · 1 불일치 · 2 검사 실패. 운영 서버는 `deploy/check-ledger.sh`
+  - 검사마다 SQL 한 문장이라 차감이 동시에 들어와도 잘못된 경고가 없음(문장 하나는 한 시점만 봄). 잔액을 읽는 쿼리와 합계를 내는 쿼리를 나누면 경합이 생기므로 나누지 않는다
+- [x] 워커에서 매일 05:00(KST, 데모 초기화 04:00 뒤) 실행(BullMQ 작업 스케줄러 — 워커가 여러 대여도 하루 1번, `LEDGER_CHECK_CRON`·`LEDGER_CHECK_TZ`). 불일치 시 경고 로그 + 지표 `plandit_ledger_check_issues{kind}`
+- 한계: 원장은 고칠 수 없어서 `balanceAfter`가 틀린 행은 조사 후에도 계속 보고된다. 문제가 되면 "확인한 행" 제외 목록을 추가(runbook E)
+- **완료 조건**: ✅ e2e(`ledger-check.e2e-spec.ts`) — 정상 원장 통과·종료 코드 0 / 차감 40건과 검사 8번을 동시에 돌려도 잘못된 경고 0 / 캐시 어긋남 → 그 계정 보고·종료 코드 1, `recalculate` 후 통과 / 직접 INSERT한 틀린 행 → 그 행 하나만 보고 / 음수 누계 보고, 워커 작업의 지표 값. 개발 DB에서 `pnpm check:ledger` → 계정 10개·원장 7행 이상 없음, 워커가 다음 실행을 05:00 KST로 등록한 것 확인
 
 ### PLANDIT-13 · API 키 인증 + 요청 수 제한 [M]
 채용공고의 "인증/권한"을 API 쪽에서 직접 보여주는 이슈. 2주차 MCP 서버와 외부 연동의 전제.

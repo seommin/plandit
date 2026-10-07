@@ -14,6 +14,7 @@
     "start:worker": "node -r ./register-dist.cjs dist/apps/api/src/worker.js",
     "seed:demo:dist": "node -r ./register-dist.cjs dist/apps/api/src/scripts/seed-demo.js",
     "seed:demo": "node ../../scripts/with-root-env.mjs ts-node -r tsconfig-paths/register src/scripts/seed-demo.ts",
+    "check:ledger": "node ../../scripts/with-root-env.mjs ts-node -r tsconfig-paths/register src/scripts/check-ledger.ts",
     "llm:smoke": "node ../../scripts/with-root-env.mjs ts-node -r tsconfig-paths/register src/scripts/llm-smoke.ts"
   },
   "dependencies": {

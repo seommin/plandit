@@ -34,6 +34,7 @@ pc exec api sh -c 'curl -sX POST "localhost:4000/admin/jobs/payment-reconcile?mi
 | `plandit_reminder_deliveries_pending{status}` | 발송 대기(QUEUED)·결과 대기(SENT) | QUEUED가 5분 넘게 줄지 않음 |
 | `plandit_queue_jobs{queue,state}` | BullMQ 작업 수 | `waiting` 계속 증가, `failed` 증가 |
 | `plandit_jobs_total{queue,name,outcome}` (워커) | 작업 시도 결과 | `failed` 비율 급증(429 재시도도 여기에 잡힘) |
+| `plandit_ledger_check_issues{kind}` (워커) | 매일 05:00 원장 검사에서 찾은 문제 수 | 0보다 크면 바로(E) |
 | `plandit_http_requests_total`, `..._duration_seconds` | 라우트 패턴별 요청·지연 | 5xx 비율, p95 지연 |
 | `plandit_ai_usages_unsettled{status}` | 선차감을 쥐고 있는 AI 사용 건(RESERVED·CALLING) | CALLING이 `AI_USAGE_STALE_MS`(30분) 넘게 줄지 않음 |
 | `plandit_ai_calls_total{provider,outcome}` | LLM 호출 결과(SUCCEEDED 또는 실패 코드) | `LLM_AUTH` 1건이라도, `LLM_OVERLOADED`·`LLM_RATE_LIMITED`·`LLM_TIMEOUT` 비율 급증 |
@@ -102,7 +103,19 @@ curl -X POST "$API/admin/jobs/reminder-reconcile?minAgeMs=0" $OP -H "x-trace-id:
 
 ## E. 잔액과 원장이 맞지 않는다
 
-정상 경로로는 생길 수 없습니다(잔액은 `LedgerService.append()`만 바꾸고, 원장은 DB 트리거로 수정·삭제가 막혀 있음). 발생했다면 **누가 `CreditAccount`를 직접 UPDATE했는지**부터 찾습니다.
+정상 경로로는 생길 수 없습니다(잔액은 `LedgerService.append()`만 바꾸고, 원장은 DB 트리거로 수정·삭제가 막혀 있음). 발생했다면 **누가 DB를 직접 고쳤는지**부터 찾습니다.
+
+**알아채는 곳**: 워커가 매일 05:00(KST)에 검사해 `plandit_ledger_check_issues{kind}`가 0보다 커지고, 워커 로그에 `Ledger check found mismatches`가 남습니다. 직접 돌리려면:
+```bash
+pnpm check:ledger            # 로컬
+deploy/check-ledger.sh       # 운영 서버. 종료 코드 0 정상 · 1 불일치 · 2 검사 실패
+```
+
+| 종류 | 뜻 | 대응 |
+|---|---|---|
+| `CACHE_MISMATCH` | 잔액 캐시 ≠ 원장 합계 | 누가 `CreditAccount.balance`를 UPDATE했는지 찾고, 아래 **복구**로 캐시를 다시 계산 |
+| `BALANCE_AFTER_BREAK` | 어떤 행의 `balanceAfter`가 그 행까지의 누계와 다름 | 원장에 직접 INSERT한 행입니다(`append()`는 이런 행을 만들 수 없음). 행을 고치거나 지우지 않습니다 — 금액이 틀렸다면 `ADJUST`로 바로잡고 감사 기록을 남깁니다. 원장은 고칠 수 없어서 이 행은 이후에도 계속 보고됩니다 |
+| `NEGATIVE_BALANCE` | 누계가 0보다 작음 | 위와 같음. 그 계정의 차감을 멈추고(크레딧 부족 상태) 원인을 찾습니다 |
 
 **확인**
 ```sql

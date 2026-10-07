@@ -27,7 +27,8 @@
     "dev:mocks": "pnpm --filter @plandit/mocks dev",
     "dev:worker": "pnpm --filter @plandit/api dev:worker",
     "start:worker": "pnpm --filter @plandit/api start:worker",
-    "seed:demo": "pnpm --filter @plandit/api seed:demo"
+    "seed:demo": "pnpm --filter @plandit/api seed:demo",
+    "check:ledger": "pnpm --filter @plandit/api check:ledger"
   },
   "devDependencies": {
     "typescript": "6.0.3"
