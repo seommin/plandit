@@ -1,6 +1,6 @@
-import { UnauthorizedException } from "@nestjs/common";
+import { ForbiddenException, UnauthorizedException } from "@nestjs/common";
 
-import { prisma } from "@plandit/database/prisma";
+import { type CalendarRole, prisma } from "@plandit/database/prisma";
 import {
   DEFAULT_PERSONAL_CALENDAR_NAME,
   LEGACY_DEFAULT_PERSONAL_CALENDAR_NAMES,
@@ -8,8 +8,8 @@ import {
 
 import { ensurePersonalWorkspace } from "../workspace/personal-workspace";
 
-const writableRoles = ["OWNER", "ADMIN", "EDITOR"] as const;
-const manageableRoles = ["OWNER", "ADMIN"] as const;
+const writableRoles: CalendarRole[] = ["OWNER", "ADMIN", "EDITOR"];
+const manageableRoles: CalendarRole[] = ["OWNER", "ADMIN"];
 
 export async function assertExistingUser(userId: string) {
   const user = await prisma.user.findUnique({
@@ -42,36 +42,30 @@ export async function getCalendarMembership(calendarId: string, userId: string) 
   });
 }
 
-export async function getManageableCalendar(calendarId: string, userId: string) {
-  return prisma.calendar.findFirst({
-    where: {
-      id: calendarId,
-      members: {
-        some: {
-          userId,
-          role: {
-            in: [...manageableRoles],
-          },
-        },
-      },
-    },
-  });
+/**
+ * null when the user is not on the calendar (or it is outside `workspaceId`): callers answer 404 so its existence stays hidden.
+ * A member whose role is too low already sees the calendar, so that is a 403.
+ */
+async function getCalendarWithRole(calendarId: string, userId: string, roles: CalendarRole[], workspaceId?: string) {
+  const membership = await getCalendarMembership(calendarId, userId);
+
+  if (!membership || (workspaceId && membership.calendar.workspaceId !== workspaceId)) {
+    return null;
+  }
+
+  if (!roles.includes(membership.role)) {
+    throw new ForbiddenException("Your calendar role does not allow this.");
+  }
+
+  return membership.calendar;
 }
 
-export async function getWritableCalendar(calendarId: string, userId: string) {
-  return prisma.calendar.findFirst({
-    where: {
-      id: calendarId,
-      members: {
-        some: {
-          userId,
-          role: {
-            in: [...writableRoles],
-          },
-        },
-      },
-    },
-  });
+export async function getManageableCalendar(calendarId: string, userId: string) {
+  return getCalendarWithRole(calendarId, userId, manageableRoles);
+}
+
+export async function getWritableCalendar(calendarId: string, userId: string, workspaceId?: string) {
+  return getCalendarWithRole(calendarId, userId, writableRoles, workspaceId);
 }
 
 export async function getDefaultPersonalCalendar(userId: string) {
@@ -122,28 +116,44 @@ export async function getDefaultPersonalCalendar(userId: string) {
   });
 }
 
+/**
+ * null when the user cannot see the event (404) — including someone else's PRIVATE event, even for OWNER·ADMIN·EDITOR.
+ * 403 when they can see it but their calendar role cannot change it.
+ */
 export async function getWritableEvent(eventId: string, userId: string) {
-  return prisma.event.findFirst({
+  const event = await prisma.event.findUnique({
     where: {
       id: eventId,
-      OR: [
-        { createdById: userId },
-        {
-          calendar: {
-            members: {
-              some: {
-                userId,
-                role: {
-                  in: [...writableRoles],
-                },
-              },
+    },
+    include: {
+      calendar: {
+        include: {
+          members: {
+            where: {
+              userId,
+            },
+            select: {
+              role: true,
             },
           },
         },
-      ],
-    },
-    include: {
-      calendar: true,
+      },
     },
   });
+  const role = event?.calendar.members[0]?.role;
+
+  // Same visibility as the event list: someone else's PRIVATE event is invisible to every member, whatever the role.
+  if (!event || (event.visibility === "PRIVATE" && event.createdById !== userId)) {
+    return null;
+  }
+
+  if (event.createdById === userId || (role && writableRoles.includes(role))) {
+    return event;
+  }
+
+  if (role) {
+    throw new ForbiddenException("Your calendar role does not allow this.");
+  }
+
+  return null;
 }

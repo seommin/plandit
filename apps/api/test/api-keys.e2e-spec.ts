@@ -86,6 +86,10 @@ describe("PLANDIT-13 API keys + rate limit (e2e)", () => {
     const created = await v1(writer.token).post("/events").send(event(teamCalendarId)).expect(201);
     expect(created.body.event.calendarId).toBe(teamCalendarId);
     await v1(writer.token).post("/events").send(event(otherCalendarId)).expect(404); // member's own personal calendar, other workspace
+    // Outside the key's workspace stays 404 even when the role is too low (no 403 that would reveal the calendar).
+    const ownerCalendarId = (await prisma.calendar.findFirstOrThrow({ where: { workspace: { personalOwnerId: owner.id } } })).id;
+    await prisma.calendarMember.create({ data: { calendarId: ownerCalendarId, userId: member.id, role: "VIEWER" } });
+    await v1(writer.token).post("/events").send(event(ownerCalendarId)).expect(404);
 
     const listed = await v1(writer.token).get("/events?limit=10").expect(200);
     expect(listed.body.items.map((e: { id: string }) => e.id)).toContain(created.body.event.id);

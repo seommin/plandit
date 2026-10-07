@@ -140,7 +140,7 @@ export class PublicApiController {
   @RequireScope("events:write")
   @ApiOperation({
     summary: "일정 만들기 (스코프 events:write)",
-    description: `\`calendarId\`가 꼭 있어야 한다(없으면 400). 키가 속한 워크스페이스의 캘린더이고 키 주인이 쓰기 역할(OWNER·ADMIN·EDITOR)이어야 한다(아니면 404). \`visibility\`를 빼면 개인 캘린더는 PRIVATE, 그 밖은 CALENDAR. 스코프가 없으면 403. ${V1_RULES}`,
+    description: `\`calendarId\`가 꼭 있어야 한다(없으면 400). 키가 속한 워크스페이스의 캘린더이고 키 주인이 그 캘린더 멤버여야 하며(아니면 404), 쓰기 역할(OWNER·ADMIN·EDITOR)이어야 한다(아니면 403). \`visibility\`를 빼면 개인 캘린더는 PRIVATE, 그 밖은 CALENDAR. 스코프가 없으면 403. ${V1_RULES}`,
   })
   @ApiZodBody(eventCreateSchema, {
     calendarId: "cmum8usbq0002ekyjz3o1k5wd",
