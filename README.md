@@ -148,6 +148,7 @@ pnpm dev
 | AI 비서 승인 | 비서가 제안한 일정에 "만들기"를 세 번 동시에 | 승인 전 0건, 승인 후 정확히 1건 | `assistant.e2e-spec.ts` |
 | AI 비서 권한 | 승인 기다리는 사이 캘린더 역할이 VIEWER로 | 실행 안 함, 이유를 AI에 전달 | `assistant.e2e-spec.ts` |
 | AI 비서 과금 | 단계 중 LLM 오류·잔액 부족·단계 한도 | 실패한 호출만 전액 환불, 사용 건마다 `DEBIT + ADJUST + REFUND = −credits` | `assistant.e2e-spec.ts` |
+| AI 월 한도 | 한도가 선차감 2건분일 때 AI 예약 5개 동시 | 정확히 2건 통과, 나머지 409 `AI_MONTHLY_LIMIT`·원장 변화 없음 | `ai-limit.e2e-spec.ts` |
 
 ## 테스트 실행
 
@@ -182,7 +183,7 @@ pnpm lint && pnpm typecheck && pnpm test && pnpm test:e2e
 | 권한 | **워크스페이스 역할**(OWNER > ADMIN > MEMBER: 결제·크레딧·멤버 관리) + **캘린더 역할**(OWNER·ADMIN·EDITOR·VIEWER: 일정 데이터). 둘을 섞지 않습니다 |
 | 크레딧·결제 | 원장([0001](docs/adr/0001-ledger-append-only.md)), 모의 PG 충전·웹훅·재조회([0002](docs/adr/0002-reserve-before-external-call.md), [0003](docs/adr/0003-webhook-idempotency.md)) |
 | Redis/Queue | BullMQ 리마인더 발송·재조회 작업([0004](docs/adr/0004-reminder-job-versioning.md)) |
-| LLM · RAG · Tool Calling · MCP | `LlmClient` + Claude 어댑터와 토큰 기준 크레딧 과금(선차감 → 정산, 실패 환불, [0005](docs/adr/0005-ai-credit-reserve-settle.md)). AI 여행 일정: 목적지·기간·함께 갈 멤버로 초안을 만들고 확인 후 캘린더에 한 번에 넣기(구조화 출력, 참석자 캘린더 권한 자동 추가). AI 일정 비서: 도구 호출 루프(캘린더·일정 조회, 빈 시간 찾기, 일정 만들기)를 한 단계씩 DB에 남기며 워커가 진행하고, 일정 변경은 사용자 승인 뒤에만 실행([0006](docs/adr/0006-assistant-persisted-tool-loop.md)). 같은 도구를 MCP 서버(`/v1/mcp`, API 키·스코프)로도 내보냄. 2주차 계획: 회의록 업로드 RAG(pgvector), AI 크레딧 한도 → [PLAN.md](docs/PLAN.md#2주차--ai-일정-비서-개요) |
+| LLM · RAG · Tool Calling · MCP | `LlmClient` + Claude 어댑터와 토큰 기준 크레딧 과금(선차감 → 정산, 실패 환불, [0005](docs/adr/0005-ai-credit-reserve-settle.md)). AI 여행 일정: 목적지·기간·함께 갈 멤버로 초안을 만들고 확인 후 캘린더에 한 번에 넣기(구조화 출력, 참석자 캘린더 권한 자동 추가). AI 일정 비서: 도구 호출 루프(캘린더·일정 조회, 빈 시간 찾기, 일정 만들기)를 한 단계씩 DB에 남기며 워커가 진행하고, 일정 변경은 사용자 승인 뒤에만 실행([0006](docs/adr/0006-assistant-persisted-tool-loop.md)). 같은 도구를 MCP 서버(`/v1/mcp`, API 키·스코프)로도 내보냄. 워크스페이스별 AI 월 한도(동시 요청으로도 넘지 않음). 2주차 계획: 회의록 업로드 RAG(pgvector) → [PLAN.md](docs/PLAN.md#2주차--ai-일정-비서-개요) |
 
 ## AI 개발 도구로 일한 방식
 
