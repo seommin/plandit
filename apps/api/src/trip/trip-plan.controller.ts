@@ -80,7 +80,7 @@ export class TripPlanController {
   @ApiHeader({ name: "idempotency-key", required: true, description: "8~128자. 버튼 한 번 누를 때마다 새로 만든다" })
   @ApiZodBody(tripInputSchema, { calendarId: "cmum8usba000fekyjhc5ezy6d", destination: "부산", startDate: "2026-10-09", endDate: "2026-10-11", attendeeUserIds: [], pace: "NORMAL", interests: ["FOOD"], request: "" })
   @ApiAcceptedResponse({ example: { ...PLAN_EXAMPLE, status: "GENERATING", draft: null, credits: 0 } })
-  @ApiErrors(ErrorCode.VALIDATION_FAILED, ErrorCode.FORBIDDEN, ErrorCode.ATTENDEE_NOT_ELIGIBLE, ErrorCode.INSUFFICIENT_CREDITS, ErrorCode.IDEMPOTENCY_CONFLICT)
+  @ApiErrors(ErrorCode.VALIDATION_FAILED, ErrorCode.FORBIDDEN, ErrorCode.ATTENDEE_NOT_ELIGIBLE, ErrorCode.INSUFFICIENT_CREDITS, ErrorCode.AI_MONTHLY_LIMIT, ErrorCode.IDEMPOTENCY_CONFLICT)
   create(
     @CurrentMember() member: WorkspaceMember,
     @Headers("idempotency-key") requestKey: string | undefined,

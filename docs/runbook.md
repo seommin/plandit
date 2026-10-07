@@ -134,6 +134,8 @@ curl -X POST "$API/admin/credit-accounts/<accountId>/recalculate" $OP
 
 `plandit_ledger_appends_total{outcome="insufficient"}` 증가. 장애는 아니지만, 유료 리마인더가 SKIPPED(`INSUFFICIENT_CREDITS`)로 바뀌고 푸시로 대체 발송되는 중입니다(`fallback` 컬럼). 워크스페이스 관리자에게 충전 안내.
 
+**"AI가 안 돼요"(`AI_MONTHLY_LIMIT`)**: 잔액이 아니라 워크스페이스의 AI 월 한도에 닿은 것입니다. `GET /workspaces/:id/ai-limit` → `used`·`monthlyCreditLimit`·`resetsAt`. 사용량에는 진행 중인 호출의 선차감액도 들어가므로, G처럼 멈춘 호출이 있으면 정리한 뒤 다시 봅니다. 한도는 워크스페이스 관리자(ADMIN+)가 크레딧 화면에서 올리거나 없앱니다(감사 로그 `workspace.ai_limit_changed`).
+
 ## G. AI 사용 건이 정산되지 않는다
 
 **증상**: `plandit_ai_usages_unsettled{status="CALLING"}`이 줄지 않거나, 사용자가 "AI가 실패했는데 크레딧이 빠졌다"고 문의. 선차감(DEBIT)은 호출 전에 나가므로, 정산·환불 전까지는 잔액이 최대 금액만큼 줄어 있는 것이 정상입니다.

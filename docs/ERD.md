@@ -51,6 +51,7 @@ erDiagram
 | name | text | |
 | type | enum PERSONAL / TEAM | 가입 시 PERSONAL 1개 자동 생성 |
 | personal_owner_id | FK users unique null | PERSONAL일 때만. 사용자당 개인 워크스페이스 1개를 DB가 보장 |
+| ai_monthly_credit_limit | int null | AI 월 한도(PLANDIT-24). null = 없음. 한 달은 Asia/Seoul 1일 0시부터. 사용량 = 그 달에 만든 ai_usages의 청구액 + 진행 중 예약의 선차감액 |
 | created_at, updated_at | | |
 
 ### workspace_members

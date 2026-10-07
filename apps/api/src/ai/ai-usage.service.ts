@@ -1,6 +1,6 @@
 import { Inject, Injectable, Logger } from "@nestjs/common";
 
-import { type AiFeature, type AiUsage, type AiUsageStatus, Prisma, prisma } from "@plandit/database/prisma";
+import { type AiFeature, type AiUsage, type AiUsageStatus, Prisma, prisma, type WorkspaceMember } from "@plandit/database/prisma";
 import {
   AI_MODEL_RATES,
   type AttemptUsage,
@@ -11,8 +11,10 @@ import {
   type TokenRates,
 } from "@plandit/shared/ai";
 
+import { AuditService } from "../audit/audit.service";
 import { ApiError, ErrorCode } from "../common/api-error";
 import { type PageQuery, pageArgs, toPage } from "../common/pagination";
+import { monthIn } from "../common/zoned-time";
 import { LedgerService } from "../credit/ledger.service";
 import { aiCallDuration, aiCalls, aiTokens } from "../metrics/metrics";
 import { LLM_CLIENT, LlmError, type LlmClient, type LlmRequest, type LlmResult, MAX_OUTPUT_TOKENS, requestText } from "./llm-client";
@@ -46,6 +48,9 @@ export type FailOptions = {
 };
 
 const minutes = (n: number) => n * 60_000;
+
+/** The monthly AI limit counts calendar months on this clock (like the daily ledger check). */
+const LIMIT_TIMEZONE = "Asia/Seoul";
 
 function totals(attempts: AttemptUsage[]) {
   return attempts.reduce(
@@ -84,6 +89,7 @@ export class AiUsageService {
   constructor(
     @Inject(LLM_CLIENT) private readonly llm: LlmClient,
     private readonly ledger: LedgerService,
+    private readonly audit: AuditService,
   ) {
     this.ceiling = ceilingRates(llm.servingModels);
   }
@@ -110,12 +116,17 @@ export class AiUsageService {
 
   /**
    * Debits the estimate and records the usage as RESERVED, in one transaction (the caller's, when `tx` is given, so a
-   * feature row and its reservation commit together). Not enough credits → INSUFFICIENT_CREDITS and no row.
+   * feature row and its reservation commit together). Not enough credits → INSUFFICIENT_CREDITS, over the workspace's
+   * monthly AI limit → AI_MONTHLY_LIMIT; either way no row.
    */
   reserve(input: ReserveInput, tx?: Tx): Promise<AiUsage> {
     const estimatedCredits = this.estimate(input.request);
     const run = async (t: Tx) => {
-      const accountId = await this.accountIdOf(t, input.workspaceId);
+      // Locked first: reservations for one workspace queue here, so two at once cannot both slip under the limit.
+      const [account] = await t.$queryRaw<Array<{ id: string }>>`SELECT "id" FROM "CreditAccount" WHERE "workspaceId" = ${input.workspaceId} FOR UPDATE`;
+      if (!account) throw new ApiError(ErrorCode.NOT_FOUND, "Credit account not found.");
+      await this.assertWithinLimit(t, input.workspaceId, estimatedCredits);
+      const accountId = account.id;
       const usage = await t.aiUsage.create({
         data: {
           workspaceId: input.workspaceId,
@@ -140,6 +151,57 @@ export class AiUsageService {
       return t.aiUsage.update({ where: { id: usage.id }, data: { debitLedgerId: entry.id } });
     };
     return tx ? run(tx) : prisma.$transaction(run, TX);
+  }
+
+  /**
+   * This month's AI use: what settled calls charged, plus what calls still in flight reserved (their estimate, so
+   * concurrent reservations count before they settle). Failed calls charge 0.
+   */
+  private async usedSince(db: Tx | typeof prisma, workspaceId: string, since: Date) {
+    const [row] = await db.$queryRaw<Array<{ used: bigint | null }>>`
+      SELECT SUM(CASE WHEN "status" IN ('RESERVED', 'CALLING') THEN "estimatedCredits" ELSE "credits" END) AS "used"
+      FROM "AiUsage" WHERE "workspaceId" = ${workspaceId} AND "createdAt" >= ${since}`;
+    return Number(row?.used ?? 0);
+  }
+
+  private async assertWithinLimit(t: Tx, workspaceId: string, requested: number) {
+    const { aiMonthlyCreditLimit: limit } = await t.workspace.findUniqueOrThrow({ where: { id: workspaceId }, select: { aiMonthlyCreditLimit: true } });
+    if (limit === null) return;
+    const month = monthIn(new Date(), LIMIT_TIMEZONE);
+    const used = await this.usedSince(t, workspaceId, month.start);
+    if (used + requested > limit) {
+      throw new ApiError(ErrorCode.AI_MONTHLY_LIMIT, "This call would go over the workspace's monthly AI credit limit.", { limit, used, requested, resetsAt: month.end });
+    }
+  }
+
+  /** The workspace's monthly AI limit and where this month stands. */
+  async limitOf(workspaceId: string) {
+    const { aiMonthlyCreditLimit: limit } = await prisma.workspace.findUniqueOrThrow({ where: { id: workspaceId }, select: { aiMonthlyCreditLimit: true } });
+    const month = monthIn(new Date(), LIMIT_TIMEZONE);
+    const used = await this.usedSince(prisma, workspaceId, month.start);
+    return { monthlyCreditLimit: limit, used, remaining: limit === null ? null : Math.max(0, limit - used), periodStart: month.start, resetsAt: month.end };
+  }
+
+  /** Sets or removes (null) the limit. A real change is audited in its own transaction; the same value again is not. */
+  async setLimit(actor: WorkspaceMember, limit: number | null) {
+    await prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT "id" FROM "Workspace" WHERE "id" = ${actor.workspaceId} FOR UPDATE`;
+      const before = await tx.workspace.findUniqueOrThrow({ where: { id: actor.workspaceId }, select: { aiMonthlyCreditLimit: true } });
+      if (before.aiMonthlyCreditLimit === limit) return;
+      await tx.workspace.update({ where: { id: actor.workspaceId }, data: { aiMonthlyCreditLimit: limit } });
+      await this.audit.record(
+        {
+          action: "workspace.ai_limit_changed",
+          workspaceId: actor.workspaceId,
+          actorId: actor.userId,
+          targetType: "workspace",
+          targetId: actor.workspaceId,
+          payload: { from: before.aiMonthlyCreditLimit, to: limit },
+        },
+        tx,
+      );
+    }, TX);
+    return this.limitOf(actor.workspaceId);
   }
 
   /** reserve() + execute(), for callers that wait for the answer. */

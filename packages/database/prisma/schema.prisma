@@ -180,6 +180,8 @@ model Workspace {
   type            WorkspaceType @default(TEAM)
   /// Set only for PERSONAL workspaces. The unique index makes "one personal workspace per user" a DB guarantee.
   personalOwnerId String?       @unique
+  /// Most credits AI calls may use per month (Asia/Seoul calendar month); null = no limit. Checked when a call is reserved (PLANDIT-24)
+  aiMonthlyCreditLimit Int?
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
 

@@ -28,6 +28,7 @@ const ACTIONS: Record<string, string> = {
   "workspace.member_added": "멤버를 추가했어요",
   "workspace.member_role_changed": "멤버 역할을 바꿨어요",
   "workspace.member_removed": "멤버를 내보냈어요",
+  "workspace.ai_limit_changed": "AI 월 한도를 바꿨어요",
   "credit.adjusted": "크레딧을 조정했어요",
   "payment.approved": "충전이 완료됐어요",
   "payment.failed": "결제가 실패했어요",

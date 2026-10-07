@@ -181,9 +181,10 @@ export class AssistantService implements OnModuleInit {
       try {
         await this.reserveStep(thread, messages.length);
       } catch (error) {
-        if (!(error instanceof ApiError) || error.code !== ErrorCode.INSUFFICIENT_CREDITS) throw error;
-        await this.stop(thread.id, "INSUFFICIENT_CREDITS");
-        return "INSUFFICIENT_CREDITS";
+        const stopping = error instanceof ApiError && (error.code === ErrorCode.INSUFFICIENT_CREDITS || error.code === ErrorCode.AI_MONTHLY_LIMIT);
+        if (!stopping) throw error;
+        await this.stop(thread.id, error.code);
+        return error.code;
       }
     }
   }

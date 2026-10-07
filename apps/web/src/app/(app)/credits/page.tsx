@@ -7,7 +7,7 @@ import { useApp } from "@/components/app-context";
 import { Button, Card, cn, EmptyState, Field, Notice, Sheet, Tabs, TextInput } from "@/components/ui";
 import { WorkspaceSwitcher } from "@/components/workspace-switcher";
 import { api, errorMessage } from "@/lib/client-api";
-import { formatDateTime } from "@/lib/dates";
+import { formatDateTime, formatMonthDay } from "@/lib/dates";
 import { isWorkspaceAdmin, type Page } from "@/lib/types";
 
 const CREDIT_PRICE = 10; // KRW per credit (packages/shared/credits)
@@ -15,6 +15,7 @@ const PRESETS = [10_000, 30_000, 50_000, 100_000];
 const won = (n: number) => `${n.toLocaleString("ko-KR")}원`;
 
 type Balance = { accountId: string; balance: number };
+type AiLimit = { monthlyCreditLimit: number | null; used: number; remaining: number | null; resetsAt: string };
 type LedgerEntry = { id: string; type: "CHARGE" | "DEBIT" | "REFUND" | "ADJUST"; amount: number; balanceAfter: number; refType: string; memo: string | null; createdAt: string };
 type Payment = { id: string; tradeId: string; status: "RESERVE" | "APPROVED" | "FAILED" | "CANCELED" | "UNKNOWN"; amount: number; credits: number; failureCode: string | null; createdAt: string };
 type Delivery = {
@@ -80,6 +81,7 @@ export default function CreditsPage() {
           <span className="text-base font-semibold text-fg-2">크레딧</span>
         </p>
         <p className="mt-1 text-sm text-fg-3">문자 알림 {balance ? balance.balance.toLocaleString("ko-KR") : "–"}건 · 1크레딧 = {CREDIT_PRICE}원</p>
+        {workspace ? <AiLimitRow admin={admin} key={workspace.id} workspaceId={workspace.id} /> : null}
         {admin ? (
           <Button block className="mt-4" onClick={() => setChargeOpen(true)}>
             <Plus size={18} />
@@ -116,6 +118,107 @@ export default function CreditsPage() {
 
       {workspace ? <ChargeSheet onClose={() => setChargeOpen(false)} open={chargeOpen} workspaceId={workspace.id} /> : null}
     </div>
+  );
+}
+
+/** "이번 달 AI 사용 1,240 / 5,000" with a bar; ADMIN+ can set or remove the monthly limit here. */
+function AiLimitRow({ workspaceId, admin }: { workspaceId: string; admin: boolean }) {
+  const [limit, setLimit] = useState<AiLimit | null>(null);
+  const [open, setOpen] = useState(false);
+
+  useEffect(() => {
+    api<AiLimit>(`/workspaces/${workspaceId}/ai-limit`)
+      .then(setLimit)
+      .catch(() => setLimit(null)); // the balance card still works without it
+  }, [workspaceId]);
+
+  if (!limit) return null;
+  const cap = limit.monthlyCreditLimit;
+  const ratio = cap ? Math.min(1, limit.used / cap) : 0;
+  return (
+    <div className="mt-4 border-t border-line pt-3">
+      <div className="flex min-h-11 items-center justify-between gap-2">
+        <p className="text-sm text-fg-2">
+          이번 달 AI 사용 <span className="font-semibold tabular-nums text-fg">{limit.used.toLocaleString("ko-KR")}</span>
+          {cap ? ` / ${cap.toLocaleString("ko-KR")} 크레딧` : " 크레딧 · 한도 없음"}
+        </p>
+        {admin ? (
+          <button className="h-11 shrink-0 rounded-xl px-2 text-sm font-semibold text-fg-2 hover:bg-surface-2" onClick={() => setOpen(true)} type="button">
+            한도 설정
+          </button>
+        ) : null}
+      </div>
+      {cap ? (
+        <>
+          <div aria-hidden="true" className="h-1.5 overflow-hidden rounded-full bg-surface-3">
+            <div className={cn("h-full rounded-full", ratio >= 1 ? "bg-danger" : "bg-fg")} style={{ width: `${ratio * 100}%` }} />
+          </div>
+          <p className="mt-1.5 text-xs text-fg-3">
+            {ratio >= 1 ? "한도를 다 써서 AI 기능을 쓸 수 없어요. " : ""}
+            {formatMonthDay(new Date(limit.resetsAt))}에 다시 채워져요
+          </p>
+        </>
+      ) : null}
+      <AiLimitSheet current={cap} onClose={() => setOpen(false)} onSaved={setLimit} open={open} workspaceId={workspaceId} />
+    </div>
+  );
+}
+
+function AiLimitSheet({ open, onClose, onSaved, current, workspaceId }: { open: boolean; onClose: () => void; onSaved: (limit: AiLimit) => void; current: number | null; workspaceId: string }) {
+  const [value, setValue] = useState(current ? String(current) : "");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const amount = Number(value);
+  const valid = Number.isInteger(amount) && amount >= 1 && amount <= 10_000_000;
+
+  useEffect(() => {
+    if (open) {
+      setValue(current ? String(current) : "");
+      setError(null);
+    }
+  }, [open, current]);
+
+  async function save(monthlyCreditLimit: number | null) {
+    setSaving(true);
+    setError(null);
+    try {
+      onSaved(await api<AiLimit>(`/workspaces/${workspaceId}/ai-limit`, { method: "PATCH", body: { monthlyCreditLimit } }));
+      onClose();
+    } catch (e) {
+      setError(errorMessage(e));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <Sheet onClose={onClose} open={open} title="AI 월 한도">
+      <form
+        className="space-y-4"
+        onSubmit={(e: FormEvent) => {
+          e.preventDefault();
+          if (valid) void save(amount);
+        }}
+      >
+        <p className="text-sm leading-relaxed text-fg-2">
+          이 워크스페이스가 한 달(매월 1일부터)에 AI 기능으로 쓸 수 있는 크레딧이에요. 한도에 닿으면 새 AI 요청을 받지 않고, 진행 중인 요청은 끝까지 처리해요.
+        </p>
+        <Field hint={valid ? `약 ${won(amount * CREDIT_PRICE)}` : "1 ~ 10,000,000"} label="한 달 한도(크레딧)">
+          <TextInput inputMode="numeric" min={1} onChange={(e) => setValue(e.target.value.replace(/[^\d]/g, ""))} placeholder="예: 5000" value={value} />
+        </Field>
+        {error ? <Notice>{error}</Notice> : null}
+        <div className="flex gap-2">
+          {current ? (
+            <Button className="min-w-0 flex-1" disabled={saving} onClick={() => void save(null)} variant="secondary">
+              한도 없애기
+            </Button>
+          ) : null}
+          <Button className="min-w-0 flex-1" disabled={!valid} loading={saving} type="submit">
+            저장
+          </Button>
+        </div>
+      </form>
+    </Sheet>
   );
 }
 

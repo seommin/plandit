@@ -1,13 +1,14 @@
-import { Controller, Get, Query } from "@nestjs/common";
+import { Body, Controller, Get, Patch, Query } from "@nestjs/common";
 import { ApiOkResponse, ApiOperation, ApiQuery, ApiTags } from "@nestjs/swagger";
 import { z } from "zod";
 
 import type { WorkspaceMember } from "@plandit/database/prisma";
+import { aiLimitUpdateSchema } from "@plandit/shared/ai";
 
 import { ErrorCode } from "../common/api-error";
 import { ApiPageQuery, pageQuerySchema } from "../common/pagination";
 import { ApiErrors } from "../common/swagger";
-import { ZodPipe } from "../common/zod";
+import { ApiZodBody, ZodPipe } from "../common/zod";
 import { CurrentMember, Roles } from "../workspace/roles";
 import { AiUsageService } from "./ai-usage.service";
 
@@ -20,10 +21,45 @@ const usageQuerySchema = pageQuerySchema.extend({
   feature: z.enum(FEATURES).optional(),
 });
 
+const LIMIT_EXAMPLE = {
+  monthlyCreditLimit: 5000,
+  used: 1240,
+  remaining: 3760,
+  periodStart: "2026-09-30T15:00:00.000Z",
+  resetsAt: "2026-10-31T15:00:00.000Z",
+};
+
 @ApiTags("AI")
 @Controller()
 export class AiController {
   constructor(private readonly usages: AiUsageService) {}
+
+  @Get("workspaces/:workspaceId/ai-limit")
+  @Roles("MEMBER")
+  @ApiOperation({
+    summary: "AI 월 한도 (MEMBER+)",
+    description:
+      "이 워크스페이스가 한 달(한국 시간 1일 0시 기준)에 AI로 쓸 수 있는 크레딧과 이번 달 사용량. 사용량 = 끝난 호출의 청구액 + 진행 중인 호출의 선차감액. `monthlyCreditLimit`가 null이면 상한 없음(`remaining`도 null). 다음 초기화는 `resetsAt`.",
+  })
+  @ApiOkResponse({ example: LIMIT_EXAMPLE })
+  @ApiErrors(ErrorCode.NOT_FOUND)
+  limit(@CurrentMember() member: WorkspaceMember) {
+    return this.usages.limitOf(member.workspaceId);
+  }
+
+  @Patch("workspaces/:workspaceId/ai-limit")
+  @Roles("ADMIN")
+  @ApiOperation({
+    summary: "AI 월 한도 바꾸기 (ADMIN+)",
+    description:
+      "`monthlyCreditLimit`(1~10,000,000)를 정하거나 null로 없앤다. 이번 달 사용량보다 낮춰도 되고, 그러면 다음 달까지 새 AI 호출은 409 `AI_MONTHLY_LIMIT`. 이미 진행 중인 호출은 그대로 끝난다. 바뀌면 감사 로그 `workspace.ai_limit_changed`(같은 값으로 다시 보내면 기록 안 함).",
+  })
+  @ApiZodBody(aiLimitUpdateSchema, { monthlyCreditLimit: 5000 })
+  @ApiOkResponse({ example: LIMIT_EXAMPLE })
+  @ApiErrors(ErrorCode.NOT_FOUND, ErrorCode.FORBIDDEN, ErrorCode.VALIDATION_FAILED)
+  setLimit(@CurrentMember() member: WorkspaceMember, @Body(new ZodPipe(aiLimitUpdateSchema)) body: { monthlyCreditLimit: number | null }) {
+    return this.usages.setLimit(member, body.monthlyCreditLimit);
+  }
 
   /** What AI calls cost the workspace (ADMIN+). */
   @Get("workspaces/:workspaceId/ai-usages")
