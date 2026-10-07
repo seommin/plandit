@@ -42,6 +42,12 @@ export function wallClockToInstant(year: number, month: number, day: number, hou
   return new Date(wallClock - offsetAt(first, timeZone));
 }
 
+/** The instants the calendar month of `instant` starts and the next one starts, on `timeZone`'s wall clock. */
+export function monthIn(instant: Date, timeZone: string) {
+  const p = partsIn(instant.getTime(), timeZone);
+  return { start: wallClockToInstant(p.year, p.month, 1, 0, 0, timeZone), end: wallClockToInstant(p.year, p.month + 1, 1, 0, 0, timeZone) };
+}
+
 /** True for a time zone name the runtime knows (IANA names like "Europe/Paris", plus "UTC"). */
 export function isTimeZone(name: string) {
   try {

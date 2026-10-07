@@ -69,7 +69,7 @@ export class AssistantController {
   @ApiOperation({
     summary: "대화 (만든 사람만)",
     description:
-      "상태 IDLE(답함) · RUNNING(AI가 진행 중 — 이 API로 확인) · WAITING_APPROVAL(일정 변경이 승인을 기다림). `items`는 순서대로 사용자 메시지, AI 답, 도구 단계(`count`는 읽은 개수, `preview`는 승인 카드 내용). `stopCode`는 마지막 차례가 일찍 끝난 이유(STEP_LIMIT, INSUFFICIENT_CREDITS, LLM 오류 코드).",
+      "상태 IDLE(답함) · RUNNING(AI가 진행 중 — 이 API로 확인) · WAITING_APPROVAL(일정 변경이 승인을 기다림). `items`는 순서대로 사용자 메시지, AI 답, 도구 단계(`count`는 읽은 개수, `preview`는 승인 카드 내용). `stopCode`는 마지막 차례가 일찍 끝난 이유(STEP_LIMIT, INSUFFICIENT_CREDITS, AI_MONTHLY_LIMIT, LLM 오류 코드).",
   })
   @ApiOkResponse({ example: THREAD_EXAMPLE })
   get(@CurrentMember() member: WorkspaceMember, @Param("threadId") threadId: string) {
@@ -82,11 +82,11 @@ export class AssistantController {
   @ApiOperation({
     summary: "메시지 보내기",
     description:
-      "메시지를 저장하고 첫 AI 호출 크레딧을 선차감한 뒤(한 트랜잭션, 잔액 부족이면 409이고 아무것도 저장하지 않음) 워커가 이어서 진행한다. AI가 도구를 부를 때마다 호출 한 번씩 따로 선차감·정산하고, 메시지 하나에 최대 `ASSISTANT_MAX_STEPS`(8)번. AI가 진행 중이면 409. 승인을 기다리는 변경이 있으면 거절로 처리한다.",
+      "메시지를 저장하고 첫 AI 호출 크레딧을 선차감한 뒤(한 트랜잭션, 잔액 부족·AI 월 한도 초과면 409이고 아무것도 저장하지 않음) 워커가 이어서 진행한다. AI가 도구를 부를 때마다 호출 한 번씩 따로 선차감·정산하고, 메시지 하나에 최대 `ASSISTANT_MAX_STEPS`(8)번. AI가 진행 중이면 409. 승인을 기다리는 변경이 있으면 거절로 처리한다.",
   })
   @ApiZodBody(assistantMessageSchema, { text: "다음 주 화요일 오후에 1시간 팀 회의 잡아줘" })
   @ApiAcceptedResponse({ example: { ...THREAD_EXAMPLE, status: "RUNNING" } })
-  @ApiErrors(ErrorCode.VALIDATION_FAILED, ErrorCode.CONFLICT, ErrorCode.INSUFFICIENT_CREDITS)
+  @ApiErrors(ErrorCode.VALIDATION_FAILED, ErrorCode.CONFLICT, ErrorCode.INSUFFICIENT_CREDITS, ErrorCode.AI_MONTHLY_LIMIT)
   send(
     @CurrentMember() member: WorkspaceMember,
     @Param("threadId") threadId: string,

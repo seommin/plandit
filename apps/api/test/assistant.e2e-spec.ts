@@ -296,6 +296,23 @@ describe("PLANDIT-21 AI schedule assistant (e2e)", () => {
     await refill(10_000);
   });
 
+  it("stops a turn whose next step would go over the workspace's monthly AI limit (PLANDIT-24)", async () => {
+    const limit = `/workspaces/${workspaceId}/ai-limit`;
+    llm.enqueue({ toolCalls: [{ name: "list_calendars", input: {} }] });
+    const threadId = await newThread();
+    await send(owner, threadId).expect(202);
+    // Room for exactly what is already used and reserved: the next, longer step cannot fit
+    const { used } = (await as(app, owner.id).get(limit).expect(200)).body;
+    await as(app, owner.id).patch(limit).send({ monthlyCreditLimit: used }).expect(200);
+    try {
+      expect(await assistant.run(threadId)).toBe("AI_MONTHLY_LIMIT");
+      expect(await view(threadId)).toMatchObject({ status: "IDLE", stopCode: "AI_MONTHLY_LIMIT" });
+      expect(llm.calls).toBe(1);
+    } finally {
+      await as(app, owner.id).patch(limit).send({ monthlyCreditLimit: null }).expect(200);
+    }
+  });
+
   it("refunds only the call that failed and ends the turn; the next message goes on from there", async () => {
     llm.enqueue({ toolCalls: [{ name: "list_calendars", input: {} }] }, { error: "LLM_OVERLOADED" });
     const threadId = await newThread();

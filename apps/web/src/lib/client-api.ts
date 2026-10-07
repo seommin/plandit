@@ -15,6 +15,7 @@ const MESSAGES: Record<string, string> = {
   IDEMPOTENCY_CONFLICT: "같은 요청이 이미 다른 내용으로 처리됐어요. 새로 고친 뒤 다시 시도해주세요.",
   ATTENDEE_NOT_ELIGIBLE: "함께 갈 수 없는 사람이 있어요. 워크스페이스 멤버인지 확인해주세요.",
   CALENDAR_MEMBERS_CHANGED: "캘린더에 새로 추가될 사람이 바뀌었어요. 다시 확인해주세요.",
+  AI_MONTHLY_LIMIT: "이번 달 AI 사용 한도를 넘어요. 워크스페이스 관리자가 크레딧 화면에서 한도를 바꿀 수 있어요.",
 };
 
 export class ApiRequestError extends Error {

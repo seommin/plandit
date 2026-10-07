@@ -1,3 +1,5 @@
+import { z } from "zod";
+
 /**
  * Credits per 1M tokens, by model. 1 credit = 10 KRW (credits.ts): list price in USD × 1,400 KRW ÷ 10, no margin.
  * Cache writes use the 5-minute TTL price (1.25× input). The api refuses to start with a model missing here.
@@ -78,3 +80,8 @@ export function estimateInputTokens(text: string) {
   }
   return Math.ceil(bytes / 2);
 }
+
+/** A workspace's monthly AI credit cap (PLANDIT-24). null removes it. */
+export const aiLimitUpdateSchema = z.object({
+  monthlyCreditLimit: z.number().int().min(1).max(10_000_000).nullable(),
+});

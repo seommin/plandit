@@ -34,6 +34,7 @@ const DESCRIPTIONS: Record<ErrorCode, string> = {
   [ErrorCode.SERVICE_UNAVAILABLE]: "의존 서비스(DB·Redis) 응답 없음",
   [ErrorCode.ATTENDEE_NOT_ELIGIBLE]: "함께 갈 수 없는 사람(워크스페이스 멤버가 아님, 개인 캘린더). details에 userId 목록",
   [ErrorCode.CALENDAR_MEMBERS_CHANGED]: "캘린더에 새로 추가될 사람이 확인한 목록과 다름. details.newCalendarMemberIds로 다시 확인",
+  [ErrorCode.AI_MONTHLY_LIMIT]: "이번 호출의 선차감액을 더하면 워크스페이스의 AI 월 한도를 넘음. details에 limit·used·requested·resetsAt",
 };
 
 const MESSAGES: Record<ErrorCode, string> = {
@@ -54,6 +55,7 @@ const MESSAGES: Record<ErrorCode, string> = {
   [ErrorCode.SERVICE_UNAVAILABLE]: "Service unavailable.",
   [ErrorCode.ATTENDEE_NOT_ELIGIBLE]: "Some attendees cannot join this trip.",
   [ErrorCode.CALENDAR_MEMBERS_CHANGED]: "The people to add to the calendar changed.",
+  [ErrorCode.AI_MONTHLY_LIMIT]: "This call would go over the workspace's monthly AI credit limit.",
 };
 
 const TRACE_ID = "0d85ad5d-c5b6-4cf3-ba9f-b27e7906d209";

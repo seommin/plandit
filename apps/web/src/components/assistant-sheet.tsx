@@ -30,6 +30,7 @@ const COUNT_UNITS: Record<string, string> = { list_events: "개", find_free_slot
 const STOPPED: Record<string, string> = {
   STEP_LIMIT: "단계가 길어져 여기서 멈췄어요. 이어서 말해 주세요.",
   INSUFFICIENT_CREDITS: "크레딧이 부족해 멈췄어요.",
+  AI_MONTHLY_LIMIT: "이번 달 AI 사용 한도에 닿아 멈췄어요.",
   NOT_A_MEMBER: "이 워크스페이스의 멤버가 아니어서 멈췄어요.",
 };
 const stopMessage = (code: string) =>
@@ -239,9 +240,9 @@ function AssistantChat({ workspaces, defaultWorkspaceId, onClose, onChanged }: O
         {thread?.status === "IDLE" && thread.stopCode ? (
           <Notice tone="info">
             {stopMessage(thread.stopCode)}{" "}
-            {thread.stopCode === "INSUFFICIENT_CREDITS" ? (
+            {thread.stopCode === "INSUFFICIENT_CREDITS" || thread.stopCode === "AI_MONTHLY_LIMIT" ? (
               <Link className="underline" href="/credits">
-                충전하러 가기
+                {thread.stopCode === "INSUFFICIENT_CREDITS" ? "충전하러 가기" : "한도 보기"}
               </Link>
             ) : null}
           </Notice>

@@ -12,6 +12,7 @@ export type AuditAction =
   | "workspace.member_added"
   | "workspace.member_role_changed"
   | "workspace.member_removed"
+  | "workspace.ai_limit_changed"
   | "credit.adjusted"
   | "payment.approved"
   | "payment.failed"
