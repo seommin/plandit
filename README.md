@@ -135,6 +135,7 @@ pnpm dev
 | 일정 이동 | 알림 있는 일정 시간 변경 | 옛 시각 0건, 새 시각 작업 존재 | `reminders.e2e-spec.ts` |
 | 잔액 부족 | 잔액 0에서 문자 알림 | 건너뜀, 차감 없음, 푸시 대체 | `reminders.e2e-spec.ts` |
 | 권한 | MEMBER가 역할 변경, 비멤버 조회 | 403 / 404(존재 숨김) | `workspaces.e2e-spec.ts` |
+| 캘린더 권한 | VIEWER의 캘린더·일정 수정, EDITOR의 멤버 관리, 비멤버 | 403 / 404(존재 숨김) | `calendars.e2e-spec.ts` |
 | 감사 로그 | 성공한 변경, 거절·재시도 | 변경당 정확히 1행, 거절·재시도 0행 | `audit.e2e-spec.ts` |
 | API 키 | 폐기·만료·스코프 없음·한도 초과 | 401 / 403 / 429 | `api-keys.e2e-spec.ts` |
 

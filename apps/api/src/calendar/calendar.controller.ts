@@ -95,8 +95,8 @@ export class CalendarController {
     description:
       "내 캘린더 목록과 기간 안 일정을 함께 준다(기본 개인 캘린더가 없으면 먼저 만든다). 일정은 내가 만든 비공개(PRIVATE) 일정과 내가 멤버인 캘린더의 CALENDAR·PUBLIC_LINK 일정이고, `isImportant`는 내 중요 표시다.",
   })
-  @ApiQuery({ name: "from", required: false, description: "기간 시작(ISO 8601). 빼면 2026-06-01T00:00:00Z" })
-  @ApiQuery({ name: "to", required: false, description: "기간 끝(ISO 8601). 빼면 2026-07-01T00:00:00Z" })
+  @ApiQuery({ name: "from", required: false, description: "기간 시작(ISO 8601). 빼면 이번 달 1일 00:00(UTC)" })
+  @ApiQuery({ name: "to", required: false, description: "기간 끝(ISO 8601). 빼면 다음 달 1일 00:00(UTC)" })
   @ApiOkResponse({
     example: {
       calendars: [CALENDAR_EXAMPLE],
@@ -148,8 +148,9 @@ export class CalendarController {
       orderBy: [{ type: "asc" }, { createdAt: "asc" }],
     });
 
-    const rangeStart = from ? new Date(from) : new Date(Date.UTC(2026, 5, 1));
-    const rangeEnd = to ? new Date(to) : new Date(Date.UTC(2026, 6, 1));
+    const now = new Date();
+    const rangeStart = from ? new Date(from) : new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+    const rangeEnd = to ? new Date(to) : new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1));
 
     const events = await prisma.event.findMany({
       where: {
@@ -326,11 +327,11 @@ export class CalendarController {
   @ApiOperation({
     summary: "캘린더 수정 (캘린더 OWNER·ADMIN)",
     description:
-      "보낸 필드만 바꾼다(하나 이상). 종류(`type`)와 워크스페이스는 바꿀 수 없다. 캘린더가 없거나 OWNER·ADMIN이 아니면 404.",
+      "보낸 필드만 바꾼다(하나 이상). 종류(`type`)와 워크스페이스는 바꿀 수 없다. 캘린더가 없거나 멤버가 아니면 404, 멤버지만 OWNER·ADMIN이 아니면 403.",
   })
   @ApiZodBody(calendarUpdateSchema, { name: "개발팀 공용", color: "#16A34A" })
   @ApiOkResponse({ example: { calendar: { ...CALENDAR_EXAMPLE, name: "개발팀 공용", color: "#16A34A" } } })
-  @ApiErrors(ErrorCode.BAD_REQUEST, ErrorCode.NOT_FOUND)
+  @ApiErrors(ErrorCode.BAD_REQUEST, ErrorCode.FORBIDDEN, ErrorCode.NOT_FOUND)
   async update(
     @Req() request: RequestWithUser,
     @Param("calendarId") calendarId: string,
@@ -373,7 +374,7 @@ export class CalendarController {
   @ApiOperation({
     summary: "캘린더 삭제 (캘린더 OWNER·ADMIN)",
     description:
-      "캘린더의 일정·멤버·초대도 함께 지워진다. 기본 개인 캘린더는 지울 수 없다(403). 캘린더가 없거나 OWNER·ADMIN이 아니면 404.",
+      "캘린더의 일정·멤버·초대도 함께 지워진다. 기본 개인 캘린더는 지울 수 없다(403). 캘린더가 없거나 멤버가 아니면 404, 멤버지만 OWNER·ADMIN이 아니면 403.",
   })
   @ApiOkResponse({ example: { ok: true } })
   @ApiErrors(ErrorCode.FORBIDDEN, ErrorCode.NOT_FOUND)
@@ -456,11 +457,11 @@ export class CalendarController {
   @ApiOperation({
     summary: "멤버 역할 바꾸기 (캘린더 OWNER·ADMIN)",
     description:
-      "ADMIN·EDITOR·VIEWER 중 하나로 바꾼다(OWNER로는 못 바꾼다). 내 역할은 바꿀 수 없다(400). 캘린더나 멤버가 없거나 OWNER·ADMIN이 아니면 404.",
+      "ADMIN·EDITOR·VIEWER 중 하나로 바꾼다(OWNER로는 못 바꾼다). 내 역할은 바꿀 수 없다(400). 캘린더나 멤버가 없거나 내가 멤버가 아니면 404, 멤버지만 OWNER·ADMIN이 아니면 403.",
   })
   @ApiZodBody(calendarMemberUpdateSchema, { role: "EDITOR" })
   @ApiOkResponse({ example: { member: MEMBER_EXAMPLE } })
-  @ApiErrors(ErrorCode.BAD_REQUEST, ErrorCode.NOT_FOUND)
+  @ApiErrors(ErrorCode.BAD_REQUEST, ErrorCode.FORBIDDEN, ErrorCode.NOT_FOUND)
   async updateMember(
     @Req() request: RequestWithUser,
     @Param("calendarId") calendarId: string,
@@ -538,10 +539,10 @@ export class CalendarController {
   @ApiOperation({
     summary: "멤버 내보내기 (캘린더 OWNER·ADMIN)",
     description:
-      "나 자신과 마지막 남은 OWNER는 내보낼 수 없다(400). 캘린더나 멤버가 없거나 OWNER·ADMIN이 아니면 404.",
+      "나 자신과 마지막 남은 OWNER는 내보낼 수 없다(400). 캘린더나 멤버가 없거나 내가 멤버가 아니면 404, 멤버지만 OWNER·ADMIN이 아니면 403.",
   })
   @ApiOkResponse({ example: { ok: true } })
-  @ApiErrors(ErrorCode.BAD_REQUEST, ErrorCode.NOT_FOUND)
+  @ApiErrors(ErrorCode.BAD_REQUEST, ErrorCode.FORBIDDEN, ErrorCode.NOT_FOUND)
   async removeMember(
     @Req() request: RequestWithUser,
     @Param("calendarId") calendarId: string,
@@ -595,7 +596,7 @@ export class CalendarController {
   @ApiOperation({
     summary: "이메일로 초대 (캘린더 OWNER·ADMIN)",
     description:
-      "가입한 이메일이면 바로 멤버로 넣고(이미 멤버면 역할만 바뀐다) `status: \"member\"`. 아니면 14일간 유효한 초대 링크를 만들어 `status: \"invited\"`와 `url`을 돌려준다(같은 이메일의 유효한 초대가 있으면 새 토큰으로 갱신). 메일은 보내지 않으니 링크는 부른 쪽이 전달한다. 개인 캘린더는 공유(SHARED) 캘린더로 바뀐다. 나 자신은 초대할 수 없다(400). 캘린더가 없거나 OWNER·ADMIN이 아니면 404.",
+      "가입한 이메일이면 바로 멤버로 넣고(이미 멤버면 역할만 바뀐다) `status: \"member\"`. 아니면 14일간 유효한 초대 링크를 만들어 `status: \"invited\"`와 `url`을 돌려준다(같은 이메일의 유효한 초대가 있으면 새 토큰으로 갱신). 메일은 보내지 않으니 링크는 부른 쪽이 전달한다. 개인 캘린더는 공유(SHARED) 캘린더로 바뀐다. 나 자신은 초대할 수 없다(400). 캘린더가 없거나 멤버가 아니면 404, 멤버지만 OWNER·ADMIN이 아니면 403.",
   })
   @ApiZodBody(calendarInviteSchema, { email: "haneul@example.com", role: "EDITOR" })
   @ApiCreatedResponse({
@@ -616,7 +617,7 @@ export class CalendarController {
       },
     },
   })
-  @ApiErrors(ErrorCode.BAD_REQUEST, ErrorCode.NOT_FOUND)
+  @ApiErrors(ErrorCode.BAD_REQUEST, ErrorCode.FORBIDDEN, ErrorCode.NOT_FOUND)
   async invite(
     @Req() request: RequestWithUser,
     @Param("calendarId") calendarId: string,
