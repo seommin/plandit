@@ -135,3 +135,10 @@
 - **버전 고르기**: 최신 16.3.8은 공개된 지 1시간 반이라 pnpm 11의 공급망 보호(새 버전은 하루가 지나야 설치, `minimumReleaseAge`)에 걸렸고, 설치 명령이 `pnpm-workspace.yaml`에 예외(`minimumReleaseAgeExclude`)를 스스로 추가했음. 예외를 되돌리고 하루가 지난 16.3.7을 골랐다. 설치 뒤에는 `pnpm-workspace.yaml`에 예외가 생기지 않았는지 꼭 확인한다
 - **같이 겪은 실수**: 웹 서버만 죽고 api·워커·모의 서버가 살아 있는 상태에서 `pnpm dev`를 다시 실행 → 새 api가 `EADDRINUSE`로 실패하고 옛 api가 대신 응답함. 다시 띄우기 전에 2번처럼 명령줄로 남은 프로세스를 먼저 정리한다
 - 운영(`next start`)은 개발 서버가 아니므로 이 누수와 무관하지만, 배포 후 메모리 지표로 확인한다(PLANDIT-11)
+
+## 20. 효과(useEffect)가 `scrollIntoView()`를 반환하면 화면이 "This page couldn't load"로 바뀐다
+
+- **증상**: AI 일정 비서 시트에서 메시지를 보내자마자 화면 전체가 Next.js 오류 화면으로 바뀜. API 요청은 둘 다 성공(202)했고, 콘솔에는 `Uncaught TypeError: i is not a function`(React가 이전 효과의 정리 함수를 부르는 곳)
+- **원인**: `useEffect(() => endRef.current?.scrollIntoView({ block: "end" }), [...])`처럼 화살표 함수가 호출 결과를 그대로 반환했다. 최신 Chromium은 `scrollIntoView()`가 `undefined` 대신 **Promise**를 돌려주고, React는 효과가 반환한 값을 정리 함수로 저장했다가 다음 렌더에서 호출하므로 Promise를 함수처럼 부르다 실패한다. 타입은 여전히 `void`라 `tsc`·빌드에서 잡히지 않는다
+- **해결**: 효과 본문을 중괄호로 감싸 아무것도 반환하지 않게 했다(`components/assistant-sheet.tsx`). 다른 화면에는 같은 패턴이 없음을 확인
+- **재발 방지**: 효과는 정리 함수가 아니면 반환하지 않는다. 스크롤·포커스처럼 DOM 메서드를 부르는 한 줄 효과도 `() => { … }`로 쓴다

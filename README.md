@@ -113,6 +113,7 @@ pnpm dev
 
 - **웹훅 누락 → 재조회로 확정**: 금액 끝을 `05`로 충전하면 모의 PG가 웹훅을 보내지 않습니다. 결제 결과 화면은 "확인이 늦어지고 있어요"에서 멈추고, 결제 탭에는 "결제 대기"로 남습니다. 그 뒤 워커의 재조회 작업이 PG에 다시 물어 승인합니다. 기본값으로는 결제 5분 경과 후 1분 주기라 최대 6분쯤 걸립니다. `.env`의 `RECONCILE_MIN_AGE_MS=30000`으로 줄일 수 있습니다.
 - **일정 옮기기**: 문자 알림이 걸린 일정을 끌어서 다른 시각으로 옮기면 옛 시각에는 아무것도 나가지 않고 새 시각에 한 번 나갑니다.
+- **AI 일정 비서**: 캘린더 머리의 비서 아이콘을 누르고 "내일 오후에 1시간 회의 잡아줘"를 보냅니다. 키 없이 도는 모의 모델(`LLM_PROVIDER=mock`)이 실제 도구로 캘린더를 확인하고 빈 시간을 찾아 회의를 제안합니다. "만들기"를 눌러야 일정이 생기고, 호출마다 쓴 크레딧만 빠집니다.
 - **공개 API**: 설정 → 워크스페이스 → API 키 발급 후 `curl -H "Authorization: Bearer pk_…" http://localhost:4000/v1/events`로 부릅니다. 요청 수 제한을 넘으면 429와 `Retry-After`가 옵니다.
 
 ## 시나리오와 테스트
@@ -138,6 +139,9 @@ pnpm dev
 | 캘린더 권한 | VIEWER의 캘린더·일정 수정, EDITOR의 멤버 관리, 비멤버·남의 비공개 일정 | 403 / 404(존재 숨김) | `calendars.e2e-spec.ts` |
 | 감사 로그 | 성공한 변경, 거절·재시도 | 변경당 정확히 1행, 거절·재시도 0행 | `audit.e2e-spec.ts` |
 | API 키 | 폐기·만료·스코프 없음·한도 초과 | 401 / 403 / 429 | `api-keys.e2e-spec.ts` |
+| AI 비서 승인 | 비서가 제안한 일정에 "만들기"를 세 번 동시에 | 승인 전 0건, 승인 후 정확히 1건 | `assistant.e2e-spec.ts` |
+| AI 비서 권한 | 승인 기다리는 사이 캘린더 역할이 VIEWER로 | 실행 안 함, 이유를 AI에 전달 | `assistant.e2e-spec.ts` |
+| AI 비서 과금 | 단계 중 LLM 오류·잔액 부족·단계 한도 | 실패한 호출만 전액 환불, 사용 건마다 `DEBIT + ADJUST + REFUND = −credits` | `assistant.e2e-spec.ts` |
 
 ## 테스트 실행
 
@@ -159,6 +163,7 @@ pnpm lint && pnpm typecheck && pnpm test && pnpm test:e2e
 | [0003](docs/adr/0003-webhook-idempotency.md) | 웹훅은 서명을 확인하고, 이벤트 id와 원장 멱등키로 두 번 걸러낸다 |
 | [0004](docs/adr/0004-reminder-job-versioning.md) | 리마인더 예약 작업은 발송 시각을 id에 담고, 옛 작업은 실행할 때 스스로 버린다 |
 | [0005](docs/adr/0005-ai-credit-reserve-settle.md) | AI 호출은 최대 금액을 먼저 잡고, 끝나면 쓴 만큼만 청구한다(실패하면 전액 환불) |
+| [0006](docs/adr/0006-assistant-persisted-tool-loop.md) | AI 일정 비서의 도구 호출 루프는 한 단계씩 DB에 남기며 진행하고, 일정 변경은 승인 뒤에만 실행한다 |
 
 더 짧은 요약과 이슈별 완료 조건은 [docs/PLAN.md](docs/PLAN.md), 데이터 모델은 [docs/ERD.md](docs/ERD.md)에 있습니다.
 
@@ -171,7 +176,7 @@ pnpm lint && pnpm typecheck && pnpm test && pnpm test:e2e
 | 권한 | **워크스페이스 역할**(OWNER > ADMIN > MEMBER: 결제·크레딧·멤버 관리) + **캘린더 역할**(OWNER·ADMIN·EDITOR·VIEWER: 일정 데이터). 둘을 섞지 않습니다 |
 | 크레딧·결제 | 원장([0001](docs/adr/0001-ledger-append-only.md)), 모의 PG 충전·웹훅·재조회([0002](docs/adr/0002-reserve-before-external-call.md), [0003](docs/adr/0003-webhook-idempotency.md)) |
 | Redis/Queue | BullMQ 리마인더 발송·재조회 작업([0004](docs/adr/0004-reminder-job-versioning.md)) |
-| LLM · RAG · Tool Calling · MCP | `LlmClient` + Claude 어댑터와 토큰 기준 크레딧 과금(선차감 → 정산, 실패 환불, [0005](docs/adr/0005-ai-credit-reserve-settle.md)). AI 여행 일정: 목적지·기간·함께 갈 멤버로 초안을 만들고 확인 후 캘린더에 한 번에 넣기(구조화 출력, 참석자 캘린더 권한 자동 추가). 2주차 계획: 일정 비서 에이전트(도구 호출 루프, 쓰기 도구는 사용자 승인 후 실행), 회의록 업로드 RAG(pgvector), 같은 도구의 MCP 서버, AI 크레딧 한도 → [PLAN.md](docs/PLAN.md#2주차--ai-일정-비서-개요) |
+| LLM · RAG · Tool Calling · MCP | `LlmClient` + Claude 어댑터와 토큰 기준 크레딧 과금(선차감 → 정산, 실패 환불, [0005](docs/adr/0005-ai-credit-reserve-settle.md)). AI 여행 일정: 목적지·기간·함께 갈 멤버로 초안을 만들고 확인 후 캘린더에 한 번에 넣기(구조화 출력, 참석자 캘린더 권한 자동 추가). AI 일정 비서: 도구 호출 루프(캘린더·일정 조회, 빈 시간 찾기, 일정 만들기)를 한 단계씩 DB에 남기며 워커가 진행하고, 일정 변경은 사용자 승인 뒤에만 실행([0006](docs/adr/0006-assistant-persisted-tool-loop.md)). 2주차 계획: 회의록 업로드 RAG(pgvector), 같은 도구의 MCP 서버, AI 크레딧 한도 → [PLAN.md](docs/PLAN.md#2주차--ai-일정-비서-개요) |
 
 ## AI 개발 도구로 일한 방식
 

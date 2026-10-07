@@ -250,12 +250,13 @@
 ## 2주차 — AI 일정 비서 (개요)
 
 - PLANDIT-20 `LlmClient` + Claude 어댑터, 토큰→크레딧 환산표, 예상 선차감(DEBIT) → 실사용 정산(ADJUST), 실패 환불, `ai_usages`. 아래 상세
-- PLANDIT-21 **AI 에이전트(Tool Calling 루프)**: "다음 주에 팀 전원이 되는 시간에 회의 잡아줘" → 모델이 도구를 여러 단계 호출(`list_events` → `find_free_slots` → `create_event`). 최대 단계 수·크레딧 한도·타임아웃, 쓰기 도구는 **사용자 승인 후 실행**(승인 대기 상태 저장), 단계별 도구 호출·결과 기록
+- PLANDIT-21 **AI 에이전트(Tool Calling 루프)**: "내일 오후에 1시간 팀 회의 잡아줘" → 모델이 도구를 여러 단계 호출(`list_calendars` → `find_free_slots` → `create_event`). 최대 단계 수·크레딧 한도, 쓰기 도구는 **사용자 승인 후 실행**(승인 대기 상태 저장), 단계별 도구 호출·결과 기록. 빈 시간은 요청자가 볼 수 있는 일정 기준. 아래 상세 ✅
 - PLANDIT-22 **RAG**: 임베딩은 Anthropic API에 없으므로 별도 제공자(예: Voyage AI)를 `EmbeddingClient` 인터페이스 뒤에 둔다(PLANDIT-20에서 옮김). 일정(제목·설명·장소) + **회의록 파일(PDF·TXT) 업로드** → 텍스트 추출·청킹·임베딩(pgvector)은 큐 작업으로 비동기 처리(진행 상태 표시, 크기·형식 검증) → "지난달 A사 미팅에서 뭐 정했지?"에 근거 인용과 함께 답변. 권한 범위 밖 문서·일정은 검색 대상에서 제외
 - PLANDIT-23 같은 도구를 **MCP 서버**로 노출(사용자 토큰 기반)
 - PLANDIT-24 AI 권한·한도: 워크스페이스별 월 AI 크레딧 상한(LLM 실패 환불은 PLANDIT-20에서)
 - PLANDIT-25 README에 AI 데모 GIF
 - PLANDIT-26 **AI 여행 일정 만들기**(양식 → 초안 → 확인 → 한 번에 저장, 함께 갈 멤버는 참석자로, 캘린더 멤버가 아니면 자동 추가). 아래 상세
+- PLANDIT-27 여행 초안을 채팅으로 고치기("둘째 날 오후는 쉬게 해줘") — PLANDIT-21의 대화·승인 틀에 초안 수정 도구를 붙인다
 
 ### PLANDIT-20 · LLM 연결 + AI 크레딧 과금
 AI 기능이 함께 쓰는 바닥. 기능(PLANDIT-21·26)은 `AiUsageService`만 부르고, 모델 호출·과금·환불은 여기서 끝낸다.
@@ -280,7 +281,7 @@ AI 기능이 함께 쓰는 바닥. 기능(PLANDIT-21·26)은 `AiUsageService`만
 
 ### PLANDIT-26 · AI 여행 일정 만들기
 양식으로 목적지·기간·함께 갈 멤버를 받으면 AI가 날짜별 여행 일정 초안을 만들고, 사용자가 확인·수정한 뒤 캘린더에 한 번에 넣는다.
-채팅으로 초안 고치기("둘째 날 오후는 쉬게 해줘")는 PLANDIT-21에서 같은 초안에 붙인다. **선행: PLANDIT-20**(`LlmClient`·Claude 어댑터·`ai_usages`·예상 선차감 → 정산).
+채팅으로 초안 고치기("둘째 날 오후는 쉬게 해줘")는 PLANDIT-27로 뺐다(PLANDIT-21 결정 3). **선행: PLANDIT-20**(`LlmClient`·Claude 어댑터·`ai_usages`·예상 선차감 → 정산).
 - [x] 입력 스키마(`packages/shared/trips.ts`): calendarId, destination(1~80자), startDate·endDate(`YYYY-MM-DD`, 최대 7일), attendeeUserIds(0~20명, 본인 제외), pace(`RELAXED / NORMAL / PACKED`), interests(관광·맛집·휴식·쇼핑·액티비티 복수 선택), request(자유 요청 500자 이하)
 - [x] 출력 스키마(같은 파일): `{ timezone, days: [{ date, items: [{ title, startTime "HH:mm", endTime "HH:mm", location?, description?, category: MOVE / MEAL / SIGHT / STAY / FREE }] }], notes? }`, 하루 최대 10개. 이 zod 스키마를 구조화 출력(`output_config.format`)으로 준다(Opus 5.5는 강제 `tool_choice`가 400이라 도구로 받지 않음). 구조화 출력이 받지 않는 조건(글자 수·최솟값·개수·정규식)은 `toLlmJsonSchema`가 걷어 내고, 응답을 원래 zod 스키마로 다시 검증
 - [x] 서버 추가 검증: 날짜가 요청 기간 안, 종료 > 시작(자정을 넘는 항목 없음), timezone이 IANA 이름(`Intl.supportedValuesOf("timeZone")`). 어기면 FAILED(`INVALID_OUTPUT`) + 전액 환불, 화면에서 "다시 만들기"(자동 재요청은 하지 않음 — 재요청마다 과금되는 호출이 하나 더 생기므로)
@@ -305,6 +306,39 @@ AI 기능이 함께 쓰는 바닥. 기능(PLANDIT-21·26)은 `AiUsageService`만
   - e2e(모의 `LlmClient` + 실제 BullMQ 워커): 생성 → READY → 적용 → 일정 N건·참석자 N×M행 / 같은 `Idempotency-Key`로 생성 두 번 → 초안·DEBIT 1건 / 적용 두 번·동시 적용 2건 → 일정 N건 유지 / 되돌리기 → 그 초안의 일정만 삭제 / VIEWER 403 / 다른 워크스페이스 캘린더·남의 초안 404 / 워크스페이스 밖 사용자를 참석자로 → 400 / 초안 뒤 참석자가 워크스페이스를 떠남 → 적용 400 / **자동 추가**: 캘린더 OWNER가 캘린더 밖 워크스페이스 멤버와 적용 → 그 멤버가 VIEWER로 추가되고 그 계정의 일정 목록에 N건 / 이미 EDITOR인 멤버는 EDITOR 유지 / 적용 두 번 → 캘린더 멤버 행 1건 / EDITOR인 요청자가 캘린더 밖 멤버를 고름 → 403 / `newCalendarMemberIds`가 서버 목록과 다름 → 409, 멤버·일정 0건 / 되돌리기 → 일정만 삭제, 추가된 멤버는 남음 / 잔액 부족 409, LLM 호출 0회 / LLM 오류·스키마 위반·타임아웃 → FAILED + 전액 환불 / 불변식 `선차감(DEBIT) = 실사용 + 되돌려준 크레딧(ADJUST·REFUND)`
   - 개발 서버(모의 AI): 375px·1440px에서 만들기 → 미리보기(항목 빼기·고치기) → 캘린더에 넣기 → 되돌리기 토스트, 가로 스크롤 없음. 함께 가는 멤버 계정에 보이는지는 e2e(그 계정의 일정 목록)로 확인
 - **결정**: 캘린더 멤버가 아닌 참석자는 적용 때 그 캘린더에 VIEWER로 자동 추가한다(검토한 다른 안: 참석자에게는 캘린더 멤버가 아니어도 그 일정만 보이게 일정 목록 조건을 바꾸기 — 기존 권한 모델을 바꾸므로 택하지 않음)
+
+### PLANDIT-21 · AI 일정 비서 (Tool Calling 에이전트)
+"내일 오후에 1시간 팀 회의 잡아줘" → 모델이 도구를 여러 번 불러 답을 찾고, **일정을 바꾸는 도구는 사용자가 승인해야 실행**된다. 선행: PLANDIT-20(`AiUsageService`). 도구 정의(`assistant-tools.ts`)는 PLANDIT-23(MCP)이 그대로 쓴다.
+- **결정**(2026-10-07)
+  1. `find_free_slots`는 **요청자가 볼 수 있는 일정만**으로 계산한다(일정 목록과 같은 규칙). 팀원의 개인 캘린더 일정은 모르므로 결과에 "보이는 일정 기준"(`basis`)을 넣고 모델이 사용자에게 알린다. 검토한 다른 안: 워크스페이스 멤버의 모든 캘린더에서 바쁜 시간대만 — 워크스페이스 역할로 캘린더 데이터를 보게 되어 권한 규칙에 예외가 생기므로 택하지 않음(PLANDIT-26과 같은 판단)
+  2. 쓰기 도구는 **`create_event` 하나**. 옮기기·삭제는 같은 승인 틀에 나중에 추가
+  3. 범위: API·워커 + **web 채팅 시트**. PLANDIT-26의 "채팅으로 여행 초안 고치기"는 PLANDIT-27로 뺀다
+- [x] **수동 루프 + 상태 저장**([ADR 0006](adr/0006-assistant-persisted-tool-loop.md)): 승인은 몇 분 뒤 다른 HTTP 요청으로 오므로 SDK 도구 실행기(프로세스 안 루프)로는 멈췄다 이어갈 수 없다. 대화·단계를 DB에 남기고 워커 작업 `assistant.run`이 저장된 상태에서 한 단계씩 진행(모델 호출 → 도구 → 모델 호출 …). 어디서 멈췄다 다시 돌려도 이어진다
+- [x] `LlmClient` 확장: `tools`(이름·설명·JSON Schema), `cache`(프롬프트 캐시), 결과에 `toolCalls`·`replay`, `stopReason: tool_use`. 사용자 메시지에 `toolResults`. Claude 어댑터는 `strict: true` 도구 + `tool_choice` 없음(Opus 5.5는 강제 선택이 400) + 최상위 `cache_control`
+  - **thinking 블록 보존**: Opus 5.5는 thinking 블록이 대화 앞부분에 묶여 있어 앞부분이 바뀐 대화를 다시 보내면 400. 그래서 어시스턴트 응답 블록을 **받은 그대로 저장해 다시 보내고**(`replay`), 대화는 append-only, 시스템 프롬프트·도구 목록은 고정. 바뀌는 "지금 시각·시간대"는 사용자 메시지 첫 줄(`[지금] …`)에 넣는다. 같은 이유로 프롬프트 캐시도 앞부분이 그대로 재사용된다
+  - 도구 입력 스키마는 `toLlmJsonSchema(schema, "input")` — 기본값 있는 필드는 모델에게 선택 항목. 실행 전 원래 zod 스키마로 다시 검증
+- [x] 모델: `AssistantThread`(status IDLE / RUNNING / WAITING_APPROVAL, `pendingUsageId`, `stopCode`) + `AssistantMessage`(USER / ASSISTANT / TOOL_RESULTS, unique(thread, seq), 모델에 보낸 그대로의 `content`) + `AssistantToolCall`(PENDING → DONE·ERROR, 변경은 WAITING_APPROVAL → DONE·ERROR·REJECTED, 승인 카드용 `preview`) — `docs/ERD.md`
+- [x] 과금: **LLM 호출 1번 = `AiUsage` 1건**(feature `SCHEDULE_ASSISTANT`), 기존 `reserve → execute` 그대로
+  - 메시지 저장 + 첫 호출 선차감을 한 트랜잭션(잔액 부족이면 409, 아무것도 저장 안 함). 다음 단계는 워커가 스레드 행 `FOR UPDATE` 후 선차감하고 `pendingUsageId`에 기록 → 재시도해도 같은 단계를 두 번 예약하지 않고, 예약된 호출은 `execute`의 CALLING 선기록으로 한 번만 실행
+  - 응답과 도구 호출 행은 정산 트랜잭션(`onSuccess`) 안에서 저장. 실패(오류·거절·잘림·멈춘 건 정리)는 `onFeatureFailure("SCHEDULE_ASSISTANT")`가 환불 트랜잭션 안에서 대화를 IDLE + `stopCode`로
+  - 메시지 하나에 최대 `ASSISTANT_MAX_STEPS`(8)번 → 넘으면 `STEP_LIMIT`. 중간에 잔액이 모자라면 `INSUFFICIENT_CREDITS`로 멈춤. 앞 단계는 결과를 냈으므로 청구, 실패한 호출만 환불
+- [x] 도구(`apps/api/src/assistant/assistant-tools.ts`, 읽기는 바로 실행, 쓰기는 승인 대기)
+  - `list_calendars`: 이 워크스페이스에서 내가 멤버인 캘린더·역할·writable
+  - `list_members`: 워크스페이스 멤버 이름·userId(이메일은 보내지 않음) — "민수랑"을 사람으로 바꾸기 위해
+  - `list_events`(from, to ≤ 31일, calendarId?): 일정 목록 API와 같은 공개 범위, 사용자 시간대의 현지 시각으로
+  - `find_free_slots`(fromDate, toDate ≤ 14일, durationMinutes, dayStart·dayEnd, includeWeekends): 비어 있는 **시간대(범위)**를 돌려줌(30분 단위 후보를 늘어놓지 않음). 지금 이후만(다음 정각·30분으로 올림), 종일 일정은 바쁜 시간으로 치지 않고 따로. 서머타임 반영(`free-slots.ts`)
+  - `create_event`(calendarId, title, startsAt·endsAt 오프셋 포함 ≤ 24시간, location?, description?, attendeeUserIds?): `POST /events`와 같은 권한(OWNER·ADMIN·EDITOR, 이 워크스페이스 캘린더), 참석자는 그 캘린더 멤버만
+  - 잘못된 입력·모르는 도구·권한 없음은 실행하지 않고 오류 결과로 모델에 돌려준다(모델이 고쳐서 다시 부름)
+- [x] 승인: `POST …/tool-calls/:id/approve`·`reject`. 승인 시 스레드 행 잠금 → 권한·참석자 **다시 확인** → 일정 생성 + 결과 기록 한 트랜잭션. 두 번·동시에 눌러도 일정 1건, 반대 결정은 409. 승인 대기 중 새 메시지를 보내면 대기 중인 제안은 거절로 처리하고 이어간다. 진행 중(RUNNING)에 보낸 메시지는 409
+- [x] API `/workspaces/:workspaceId/assistant/threads`(MEMBER+, 남의 대화 404): 만들기·목록(cursor·최신순)·조회(화면용 `items`: 사용자 말, AI 답, 도구 단계 — 읽은 개수만, 원문 없음)·메시지 보내기(202)·승인·거절. Swagger 분류 "AI 일정 비서"
+- [x] 워커 `AssistantProcessor`(`ASSISTANT_CONCURRENCY`), 작업 id는 트리거(메시지·결정)마다 하나. 단계마다 요청자가 아직 워크스페이스 멤버인지 확인(떠났으면 예약된 호출을 바로 환불하고 `NOT_A_MEMBER`). 재시도를 다 써도 실패하면 대화를 IDLE(`INTERNAL`)로 닫아 다시 쓸 수 있게
+- [x] 모의 모델(`LLM_PROVIDER=mock`, 공개 데모): 실제 도구로 "캘린더 확인 → 앞으로 일주일 1시간 빈 때 → 회의 제안(승인 대기) → 결과 보고"를 진행 — 키 없이 데모·GIF(PLANDIT-25) 가능
+- [x] web: 캘린더 머리의 비서 아이콘 → `AssistantSheet`(375px 먼저). 보는 워크스페이스(전체면 개인)로 시작, 시트 안에서 바꿀 수 있음. 제안 문구 3개, 도구 단계는 한 줄("일정 확인 · 3개"), 일정 변경은 카드(제목·시각·캘린더·참석자 + 거절/만들기), 진행 중 1.5초마다 확인, 멈춘 이유 안내(잔액 부족이면 충전 링크), 이 대화에서 쓴 크레딧. 워크스페이스별 마지막 대화를 기억해 시트를 닫았다 열어도 이어서. 승인하면 캘린더를 다시 불러옴
+- 하지 않은 것: 스트리밍(단계마다 폴링으로 충분), 대화 삭제, thinking 요약 표시(`display: "updates"`는 베타 헤더가 더 필요 — 단계 줄로 대신), 도구 호출 지표(AI 호출 지표 `plandit_ai_*`로 충분)
+- **완료 조건**: ✅
+  - 단위(`assistant.spec.ts`, `anthropic.adapter.spec.ts`): 빈 시간(겹침 합치기·맞닿은 일정·창 밖·짧은 틈 제외·주말·지금 이후·파리 서머타임), 도구 입력 검증(시각 오프셋 필수, 24시간, 중복 참석자, 기간 상한), 도구 목록 고정·닫힌 스키마·기본값은 선택, 시스템 프롬프트에 날짜 없음, 어댑터의 strict 도구·캐시·tool_result 변환·응답 블록 그대로 다시 보내기·tool_use 파싱, 모의 대화 순서
+  - e2e(`assistant.e2e-spec.ts`, 모의 `LlmClient` + 실제 Postgres·Redis): 읽기 도구 2개를 한 단계에 → 빈 시간 → 승인 대기(일정 0건) → 승인 → 일정 1건·참석자 → 마지막 답, 모델이 받은 대화(두 결과가 한 메시지, 앞선 응답이 그대로, 고정된 앞부분) / 워커 두 개가 동시에 돌아도 호출 4번 / 남의 개인 일정은 목록·빈 시간에 없음 / 거절 → 일정 0건, 반복 클릭 200, 반대 결정 409 / 승인 세 번 동시 → 일정 1건 / 기다리는 사이 VIEWER가 됨 → 실행 안 함, 이유를 모델에 / 잘못된 입력·모르는 도구·캘린더 밖 참석자 → 오류 결과 / 단계 한도 → 다음 메시지로 이어감 / 잔액 부족: 보내기 409(행 0) · 다음 단계에서 멈춤 / LLM 오류 → 그 호출만 전액 환불 / 진행 중 409, 승인 대기 중 새 메시지 → 제안 거절 / 메시지를 보낸 뒤 워크스페이스를 떠남 → 모델 호출 없이 그 선차감 바로 환불 / 남의 대화·비멤버 404, 목록 cursor / **실제 BullMQ 워커가 스스로** 모의 대본을 끝까지 / 불변식: 사용 건마다 `DEBIT + ADJUST + REFUND = −credits`, 원장 합계 = 잔액, 남은 예약 0
+  - 화면(375·1440px, 실제 워커 + 모의 모델): 제안 문구로 시작 → 단계 표시 → 승인 카드 → 만들기 → 캘린더에 바로 표시 → 마지막 답, 가로 스크롤 없음. 확인 중 고친 것: 효과가 `scrollIntoView()`의 Promise를 반환해 화면이 깨지던 문제(troubleshooting 20), 승인 버튼 두 개가 넘치던 문제(같은 배치인 여행 일정 확인 줄의 버그는 별도 수정)
 
 ## 3주차 — 규모·운영 (개요)
 

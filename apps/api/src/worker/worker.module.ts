@@ -1,6 +1,7 @@
 import { Module } from "@nestjs/common";
 
 import { AiModule } from "../ai/ai.module";
+import { AssistantModule } from "../assistant/assistant.module";
 import { AuditModule } from "../audit/audit.module";
 import { loggerModule } from "../common/logger";
 import { CreditModule } from "../credit/credit.module";
@@ -8,6 +9,7 @@ import { PaymentModule } from "../payment/payment.module";
 import { ReminderModule } from "../reminder/reminder.module";
 import { TripModule } from "../trip/trip.module";
 import { AiUsageReconcileProcessor } from "./ai-usage-reconcile.processor";
+import { AssistantProcessor } from "./assistant.processor";
 import { LedgerCheckProcessor } from "./ledger-check.processor";
 import { PaymentReconcileProcessor } from "./payment-reconcile.processor";
 import { ReminderProcessor } from "./reminder.processor";
@@ -15,7 +17,7 @@ import { TripPlanProcessor } from "./trip-plan.processor";
 
 /** Background jobs. Same services as the HTTP app, different entrypoint (src/worker.ts). */
 @Module({
-  imports: [loggerModule, AuditModule, CreditModule, PaymentModule, ReminderModule, AiModule, TripModule],
-  providers: [PaymentReconcileProcessor, ReminderProcessor, AiUsageReconcileProcessor, TripPlanProcessor, LedgerCheckProcessor],
+  imports: [loggerModule, AuditModule, CreditModule, PaymentModule, ReminderModule, AiModule, TripModule, AssistantModule],
+  providers: [PaymentReconcileProcessor, ReminderProcessor, AiUsageReconcileProcessor, TripPlanProcessor, LedgerCheckProcessor, AssistantProcessor],
 })
 export class WorkerModule {}

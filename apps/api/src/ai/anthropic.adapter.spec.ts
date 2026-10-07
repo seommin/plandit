@@ -69,7 +69,47 @@ describe("AnthropicAdapter", () => {
         model: "claude-opus-5-5",
         text: '{"ok":true}',
         stopReason: "end",
+        toolCalls: [],
+        replay: [{ type: "text", text: '{"ok":' }, { type: "text", text: "true}" }],
         attempts: [{ model: "claude-opus-5-5", inputTokens: 120, outputTokens: 45, cacheReadInputTokens: 0, cacheWriteInputTokens: 0 }],
+      });
+    } finally {
+      await api.close();
+    }
+  });
+
+  it("sends strict tools and caching, replays the assistant turn verbatim, and returns tool calls", async () => {
+    const thinking = { type: "thinking", thinking: "", signature: "sig-abc" };
+    const toolUse = { type: "tool_use", id: "toolu_2", name: "find_free_slots", input: { fromDate: "2026-10-08" } };
+    const api = await fakeApi((_, res) => json(res, 200, message({ content: [thinking, toolUse], stop_reason: "tool_use" })));
+    try {
+      const earlier = [thinking, { type: "tool_use", id: "toolu_1", name: "list_calendars", input: {} }];
+      const result = await adapter(api.baseURL).complete({
+        ...request,
+        messages: [
+          { role: "user", content: "회의 잡아줘" },
+          { role: "assistant", content: "", replay: earlier },
+          { role: "user", content: "", toolResults: [{ toolCallId: "toolu_1", content: '{"calendars":[]}' }] },
+        ],
+        tools: [{ name: "list_calendars", description: "캘린더", inputSchema: { type: "object", properties: {}, additionalProperties: false } }],
+        cache: true,
+      });
+
+      expect(api.seen[0].body).toMatchObject({
+        tools: [{ name: "list_calendars", description: "캘린더", input_schema: { type: "object", properties: {} }, strict: true }],
+        cache_control: { type: "ephemeral" },
+        messages: [
+          { role: "user", content: "회의 잡아줘" },
+          { role: "assistant", content: earlier },
+          { role: "user", content: [{ type: "tool_result", tool_use_id: "toolu_1", content: '{"calendars":[]}', is_error: false }] },
+        ],
+      });
+      expect(api.seen[0].body).not.toHaveProperty("tool_choice");
+      expect(result).toMatchObject({
+        text: "",
+        stopReason: "tool_use",
+        toolCalls: [{ id: "toolu_2", name: "find_free_slots", input: { fromDate: "2026-10-08" } }],
+        replay: [thinking, toolUse],
       });
     } finally {
       await api.close();
@@ -113,6 +153,7 @@ describe("AnthropicAdapter", () => {
 
   it.each([
     ["refusal", "refusal"],
+    ["tool_use", "tool_use"],
     ["max_tokens", "max_tokens"],
     ["model_context_window_exceeded", "max_tokens"],
     ["stop_sequence", "end"],

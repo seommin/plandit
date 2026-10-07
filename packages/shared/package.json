@@ -13,7 +13,8 @@
     "./reminders": "./src/reminders.ts",
     "./api-keys": "./src/api-keys.ts",
     "./ai": "./src/ai.ts",
-    "./trips": "./src/trips.ts"
+    "./trips": "./src/trips.ts",
+    "./assistant": "./src/assistant.ts"
   },
   "scripts": {
     "build": "tsc --noEmit",

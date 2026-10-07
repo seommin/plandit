@@ -3,7 +3,7 @@ import { Logger } from "@nestjs/common";
 
 import { AI_FALLBACK_MODELS, type AttemptUsage } from "@plandit/shared/ai";
 
-import { LlmError, type LlmClient, type LlmErrorCode, type LlmRequest, type LlmResult } from "./llm-client";
+import { LlmError, type LlmClient, type LlmErrorCode, type LlmMessage, type LlmRequest, type LlmResult } from "./llm-client";
 
 /** Server-side refusal fallback, the `"default"` form (Anthropic picks the fallback model by refusal category). */
 const FALLBACK_BETA = "server-side-fallback-2026-07-01";
@@ -59,11 +59,23 @@ export class AnthropicAdapter implements LlmClient {
         model: this.options.model,
         max_tokens: request.maxOutputTokens,
         system: request.system,
-        messages: request.messages,
+        messages: request.messages.map(toParam),
         output_config: {
           effort: request.effort ?? "medium",
           ...(request.jsonSchema ? { format: { type: "json_schema" as const, schema: request.jsonSchema } } : {}),
         },
+        ...(request.tools?.length
+          ? {
+              // strict: the input matches the schema. tool_choice stays auto — forcing a tool is a 400 on this model.
+              tools: request.tools.map((tool) => ({
+                name: tool.name,
+                description: tool.description,
+                input_schema: tool.inputSchema as Anthropic.Beta.BetaTool.InputSchema,
+                strict: true,
+              })),
+            }
+          : {}),
+        ...(request.cache ? { cache_control: { type: "ephemeral" as const } } : {}),
         ...(this.options.refusalFallback ? { betas: [FALLBACK_BETA], fallbacks: "default" as const } : {}),
       });
     } catch (error) {
@@ -74,9 +86,26 @@ export class AnthropicAdapter implements LlmClient {
       model: message.model,
       text: message.content.flatMap((block) => (block.type === "text" ? [block.text] : [])).join(""),
       stopReason: toStopReason(message.stop_reason),
+      toolCalls: message.content.flatMap((block) => (block.type === "tool_use" ? [{ id: block.id, name: block.name, input: block.input }] : [])),
+      // Every block as received (thinking included, even when its text is empty): it goes back unchanged.
+      replay: message.content,
       attempts: attemptsOf(message),
     };
   }
+}
+
+function toParam(message: LlmMessage): Anthropic.Beta.BetaMessageParam {
+  if (message.role === "assistant") {
+    return { role: "assistant", content: (message.replay as Anthropic.Beta.BetaContentBlockParam[] | undefined) ?? message.content };
+  }
+  if (!message.toolResults?.length) return { role: "user", content: message.content };
+  return {
+    role: "user",
+    content: [
+      ...message.toolResults.map((r) => ({ type: "tool_result" as const, tool_use_id: r.toolCallId, content: r.content, is_error: r.isError ?? false })),
+      ...(message.content ? [{ type: "text" as const, text: message.content }] : []),
+    ],
+  };
 }
 
 function toStopReason(reason: Anthropic.Beta.BetaStopReason | null): LlmResult["stopReason"] {
@@ -84,6 +113,8 @@ function toStopReason(reason: Anthropic.Beta.BetaStopReason | null): LlmResult["
     case "end_turn":
     case "stop_sequence":
       return "end";
+    case "tool_use":
+      return "tool_use";
     case "max_tokens":
     case "model_context_window_exceeded":
       return "max_tokens";
