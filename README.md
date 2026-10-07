@@ -8,7 +8,7 @@
 - 돈: 추가만 되는 원장, 멱등키, 행 잠금, 외부 호출 전 선기록, 재조회로 확정 → [설계 결정](#설계-결정)
 - 큐: BullMQ 지연 작업, 일정이 옮겨져도 한 번만 발송, 초당 제한(429) 재시도, 실패 시 자동 환불
 - 권한: 워크스페이스 역할(결제·멤버) + 캘린더 역할(데이터), 감사 로그, 공개 API 키(스코프·요청 수 제한)
-- 운영: 요청마다 추적 id(로그 → 작업 → 감사 기록까지), Prometheus 지표, [장애 대응 런북](docs/runbook.md), [겪은 문제 기록](docs/troubleshooting.md)
+- 운영: 요청마다 추적 id(로그 → 작업 → 감사 기록까지), Prometheus 지표, 매일 원장 정합성 검사(`pnpm check:ledger`), [장애 대응 런북](docs/runbook.md), [겪은 문제 기록](docs/troubleshooting.md)
 
 ## 구조
 
@@ -128,6 +128,7 @@ pnpm dev
 | 웹훅 누락 | 금액 끝 `05` | 재조회로 APPROVED, 늦게 온 웹훅은 `ALREADY_APPLIED` | `reconcile.e2e-spec.ts` |
 | 위조 웹훅 | 서명 없이 호출 | 401, 아무것도 바뀌지 않음 | `payments`, `reminders` |
 | 동시 차감 | 잔액 30에 1크레딧 차감 50개 동시 | 정확히 30개 성공, `balanceAfter` 29→0 | `credits.e2e-spec.ts` |
+| 원장 정합성 검사 | `pnpm check:ledger`(워커는 매일 05:00) | 원장 합계 = 잔액, 행마다 잔액이 누계와 같음. 어긋나면 그 계정·행을 짚고 종료 코드 1 | `ledger-check.e2e-spec.ts` |
 | 문자 발송 | 문자 알림 | 차감 1 → 전달, 수신함 도착 | `reminders.e2e-spec.ts` |
 | 대량 발송·실패 | 100명 중 30명 실패, 초당 제한 | 429 재시도 발생, `차감 = 성공 + 환불`, 이중 환불 0 | `reminders.e2e-spec.ts` |
 | 결과 웹훅 재전송 | 같은 결과 두 번 | 환불 1행 | `reminders.e2e-spec.ts` |

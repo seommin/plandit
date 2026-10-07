@@ -1,4 +1,4 @@
-import { collectDefaultMetrics, Counter, Histogram, register } from "prom-client";
+import { collectDefaultMetrics, Counter, Gauge, Histogram, register } from "prom-client";
 
 /**
  * Prometheus metrics (default registry, one per process). The api serves them at /metrics; the worker at
@@ -42,5 +42,10 @@ export const aiCallDuration =
     labelNames: ["provider"],
     buckets: [1, 5, 15, 30, 60, 120, 300, 600],
   });
+
+/** Set by the worker's daily ledger check (PLANDIT-12): problems found in the last run. Alert on > 0. */
+export const ledgerCheckIssues =
+  (register.getSingleMetric("plandit_ledger_check_issues") as Gauge<"kind"> | undefined) ??
+  new Gauge({ name: "plandit_ledger_check_issues", help: "Ledger/balance mismatches found by the last daily check", labelNames: ["kind"] });
 
 export { register };
