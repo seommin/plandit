@@ -187,9 +187,9 @@ export class EventsController {
 
   @Patch(":eventId")
   @ApiOperation({
-    summary: "일정 수정 (만든 사람 또는 캘린더 OWNER·ADMIN·EDITOR)",
+    summary: "일정 수정 (만든 사람 또는 캘린더 OWNER·ADMIN·EDITOR, 비공개 일정은 만든 사람만)",
     description:
-      "보낸 필드만 바꾼다. 일정이 없거나 볼 수 없으면 404, 볼 수는 있지만 쓰기 역할이 아니면 403. 다른 캘린더로 옮기면 그 캘린더에도 쓰기 역할이 있어야 한다(멤버가 아니면 404, 역할이 모자라면 403). 저장 후 이 일정의 알림을 현재 시작 시각 기준으로 다시 예약한다 — 시각이 바뀌었으면 새 시각에 발송되고 이전 예약은 발송되지 않는다.",
+      "보낸 필드만 바꾼다. 일정이 없거나 볼 수 없으면(남의 비공개 일정은 쓰기 역할이어도) 404, 볼 수는 있지만 쓰기 역할이 아니면 403. 다른 캘린더로 옮기면 그 캘린더에도 쓰기 역할이 있어야 한다(멤버가 아니면 404, 역할이 모자라면 403). 저장 후 이 일정의 알림을 현재 시작 시각 기준으로 다시 예약한다 — 시각이 바뀌었으면 새 시각에 발송되고 이전 예약은 발송되지 않는다.",
   })
   @ApiZodBody(eventUpdateSchema, { startsAt: "2026-09-30T02:00:00.000Z", endsAt: "2026-09-30T03:00:00.000Z", location: "5층 대회의실" })
   @ApiOkResponse({
@@ -325,8 +325,8 @@ export class EventsController {
 
   @Delete(":eventId")
   @ApiOperation({
-    summary: "일정 삭제 (만든 사람 또는 캘린더 OWNER·ADMIN·EDITOR)",
-    description: "알림 설정·공개 링크도 함께 지워지고, 이미 예약된 알림은 발송되지 않는다. 일정이 없거나 볼 수 없으면 404, 볼 수는 있지만 쓰기 역할이 아니면 403.",
+    summary: "일정 삭제 (만든 사람 또는 캘린더 OWNER·ADMIN·EDITOR, 비공개 일정은 만든 사람만)",
+    description: "알림 설정·공개 링크도 함께 지워지고, 이미 예약된 알림은 발송되지 않는다. 일정이 없거나 볼 수 없으면(남의 비공개 일정은 쓰기 역할이어도) 404, 볼 수는 있지만 쓰기 역할이 아니면 403.",
   })
   @ApiOkResponse({ example: { ok: true } })
   @ApiErrors(ErrorCode.FORBIDDEN, ErrorCode.NOT_FOUND)
