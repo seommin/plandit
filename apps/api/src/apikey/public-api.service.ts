@@ -45,8 +45,9 @@ export class PublicApiService {
 
   async createEvent(key: ApiKeyPrincipal, input: z.infer<typeof eventCreateSchema>) {
     if (!input.calendarId) throw new ApiError(ErrorCode.VALIDATION_FAILED, "calendarId is required for API keys.");
-    const calendar = await getWritableCalendar(input.calendarId, key.userId);
-    if (!calendar || calendar.workspaceId !== key.workspaceId) throw new ApiError(ErrorCode.NOT_FOUND, "Calendar not found.");
+    // Outside the key's workspace is 404 before any role check: the key cannot see those calendars at all.
+    const calendar = await getWritableCalendar(input.calendarId, key.userId, key.workspaceId);
+    if (!calendar) throw new ApiError(ErrorCode.NOT_FOUND, "Calendar not found.");
 
     const event = await prisma.event.create({
       data: {

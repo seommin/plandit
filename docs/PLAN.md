@@ -194,7 +194,8 @@
 - [x] `docs/adr/0001-ledger-append-only.md`, `0002-reserve-before-external-call.md`, `0003-webhook-idempotency.md`, `0004-reminder-job-versioning.md`
 - [x] 버그 수정(문서 작업 중 발견): 공개 링크 조회 API가 링크 주인이 가린 설명·장소와 내부 id·캘린더 정보까지 그대로 돌려줌(가리기는 공개 페이지 화면에서만) → 공개 페이지에 필요한 값만, 가린 항목은 서버에서 `null`. e2e `shares.e2e-spec.ts`
 - [x] 버그 수정: 새로 받은 폴더에서 Prisma 클라이언트가 생성되지 않아 `seed:demo` 실패 → 루트 `postinstall`에서 생성(troubleshooting 12)
-- 후속(확인 필요): 캘린더 API는 역할이 모자란 행위(VIEWER의 수정 등)에 403 대신 404를 준다 — "권한 부족 행위는 403" 규칙과 다름. `GET /calendar/state`는 `from`·`to`가 없으면 2026년 6월로 고정된 기본값을 쓴다(화면은 항상 넘기므로 영향 없음)
+- [x] 후속: 캘린더·일정 API가 역할이 모자란 행위(VIEWER의 수정 등)에 404를 주던 문제 → 멤버지만 역할 부족은 403, 비멤버·볼 수 없는 일정(남의 PRIVATE)은 그대로 404. 고친 곳은 공용 권한 함수(`event-permissions.ts`) 하나라 캘린더 수정·삭제·멤버 관리·초대, 일정 만들기·수정·삭제, 공개 링크, 알림 설정이 함께 바뀜. `/v1/events`는 키의 워크스페이스 밖이면 역할과 상관없이 404. Swagger 오류 목록·설명 수정, web은 기존 `FORBIDDEN` 문구 사용. e2e `calendars.e2e-spec.ts`, `api-keys.e2e-spec.ts`
+- [x] 후속: `GET /calendar/state`는 `from`·`to`가 없으면 2026년 6월로 고정된 기본값을 쓰던 것 → 이번 달(UTC)
 - **완료 조건**: 처음 보는 사람이 README만 읽고 10분 안에 충전·리마인더 시나리오를 재현 ✅ 새로 받은 폴더에서 README 절차 그대로 실행 — 설치·마이그레이션·데모 데이터(위 postinstall 수정 후) → 10,003원 충전: 웹훅 2회 발송·이벤트 1행·원장 1행, 잔액 +1,000 → 팀 일정 문자 리마인더: 가상 수신함 도착
 
 ### PLANDIT-11 · 무료 배포 [S]

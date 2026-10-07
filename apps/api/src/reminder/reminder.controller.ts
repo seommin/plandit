@@ -34,13 +34,13 @@ export class ReminderController {
   }
 
   @Get("events/:eventId/reminders")
-  @ApiOperation({ summary: "일정의 알림 목록", description: "일정을 수정할 수 있는 사람만(없거나 권한이 없으면 404)." })
+  @ApiOperation({ summary: "일정의 알림 목록", description: "일정을 수정할 수 있는 사람만(일정이 없거나 볼 수 없으면 404, 볼 수만 있으면 403)." })
   @ApiOkResponse({
     example: {
       reminders: [{ id: "cmumab1x20007qwyj0k2t9f1c", eventId: "cmum9ih8o0005qwyjimytsk02", minutesBefore: 10, channel: "SMS", audience: "CREATOR", createdById: "cmum8us8f0000ekyjnxhqh0h4", createdAt: "2026-09-29T05:54:02.113Z" }],
     },
   })
-  @ApiErrors(ErrorCode.NOT_FOUND)
+  @ApiErrors(ErrorCode.FORBIDDEN, ErrorCode.NOT_FOUND)
   async list(@Req() request: RequestWithUser, @Param("eventId") eventId: string) {
     return { reminders: await this.reminders.list(await this.writableEventId(request, eventId)) };
   }
@@ -50,10 +50,10 @@ export class ReminderController {
   @ApiOperation({
     summary: "일정의 알림 전체 바꾸기",
     description:
-      "목록을 통째로 바꾸고 지연 작업을 다시 예약한다(최대 5개, 같은 시점·채널 중복 불가). 크레딧은 여기서 빠지지 않는다 — 발송 시점에 워커가 차감하고, 실패하면 환불한다. 문자·알림톡은 받는 사람마다 1크레딧, 푸시는 무료.",
+      "목록을 통째로 바꾸고 지연 작업을 다시 예약한다(최대 5개, 같은 시점·채널 중복 불가). 크레딧은 여기서 빠지지 않는다 — 발송 시점에 워커가 차감하고, 실패하면 환불한다. 문자·알림톡은 받는 사람마다 1크레딧, 푸시는 무료. 일정이 없거나 볼 수 없으면 404, 볼 수만 있으면 403.",
   })
   @ApiZodBody(reminderSetSchema, { reminders: [{ minutesBefore: 10, channel: "SMS", audience: "CREATOR" }, { minutesBefore: 0, channel: "PUSH", audience: "CREATOR" }] })
-  @ApiErrors(ErrorCode.VALIDATION_FAILED, ErrorCode.NOT_FOUND)
+  @ApiErrors(ErrorCode.VALIDATION_FAILED, ErrorCode.FORBIDDEN, ErrorCode.NOT_FOUND)
   async set(
     @Req() request: RequestWithUser,
     @Param("eventId") eventId: string,
