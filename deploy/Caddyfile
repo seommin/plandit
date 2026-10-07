@@ -3,10 +3,17 @@
 	encode zstd gzip
 
 	# The mock PG's payment page and the virtual SMS inbox are pages people open in a browser. The rest of the mocks
-	# (reserve, admin, webhook resend), the api and the webhooks stay inside the Docker network.
+	# (reserve, admin, webhook resend), the rest of the api (internal-secret routes, /metrics, /health) and the
+	# webhooks stay inside the Docker network.
 	@mockPages path /pg/pay/* /inbox /inbox/*
 	handle @mockPages {
 		reverse_proxy mocks:4100
+	}
+
+	# The public API — REST and the MCP server (/v1/mcp). Every request needs an API key and counts against its rate limit.
+	@publicApi path /v1 /v1/*
+	handle @publicApi {
+		reverse_proxy api:4000
 	}
 
 	handle {

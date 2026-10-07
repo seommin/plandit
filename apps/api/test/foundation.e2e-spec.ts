@@ -42,6 +42,7 @@ describe("PLANDIT-1 foundation (e2e)", () => {
       expect(doc.paths[path].post.parameters).toEqual(expect.arrayContaining([expect.objectContaining({ name: "x-mock-signature", in: "header" })]));
     }
     expect(doc.paths["/v1/events"].get.security).toEqual([{ "api-key": [] }]);
+    expect(doc.paths["/v1/mcp"].post.security).toEqual([{ "api-key": [] }]);
     expect(doc.paths["/workspaces/{workspaceId}/payments/charge"].post.responses["401"]).toBeDefined();
   });
 

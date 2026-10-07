@@ -19,6 +19,7 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "0.129.0",
+    "@modelcontextprotocol/sdk": "1.32.1",
     "@nestjs/common": "11.1.9",
     "@nestjs/core": "11.1.9",
     "@nestjs/platform-express": "11.1.9",

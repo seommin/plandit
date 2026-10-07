@@ -7,8 +7,12 @@ import { freeRanges, nextHalfHour } from "./free-slots";
 
 type Db = Prisma.TransactionClient | typeof prisma;
 
-/** Who the assistant acts for. Every tool sees exactly what this person could see or do through the API. */
-export type ToolContext = { userId: string; workspaceId: string; timezone: string; now: Date };
+/**
+ * Who the assistant acts for. Every tool sees exactly what this person could see or do through the API.
+ * `workspaceOnly`: events of this workspace's calendars only — an API key (MCP) is bound to one workspace, like /v1.
+ * Without it (the in-app assistant) the person's whole schedule counts, so their personal events make them busy.
+ */
+export type ToolContext = { userId: string; workspaceId: string; timezone: string; now: Date; workspaceOnly?: boolean };
 
 /** Becomes the tool result with is_error: the model reads the message and can try again. */
 export class ToolError extends Error {}
@@ -40,10 +44,11 @@ const date = z.iso.date().describe("YYYY-MM-DD (사용자 시간대 기준 날�
 const clock = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/).describe("HH:mm");
 
 /** The same rule as GET /events: my PRIVATE events, plus CALENDAR/PUBLIC_LINK events of calendars I am on. */
-const visibleTo = (userId: string): Prisma.EventWhereInput => ({
+const visibleTo = (ctx: ToolContext): Prisma.EventWhereInput => ({
+  ...(ctx.workspaceOnly ? { calendar: { workspaceId: ctx.workspaceId } } : {}),
   OR: [
-    { visibility: "PRIVATE", createdById: userId },
-    { visibility: { in: ["CALENDAR", "PUBLIC_LINK"] }, calendar: { members: { some: { userId } } } },
+    { visibility: "PRIVATE", createdById: ctx.userId },
+    { visibility: { in: ["CALENDAR", "PUBLIC_LINK"] }, calendar: { members: { some: { userId: ctx.userId } } } },
   ],
 });
 
@@ -97,12 +102,12 @@ const listEventsInput = z
 
 const listEvents: Tool<z.infer<typeof listEventsInput>> = {
   name: "list_events",
-  description: `사용자가 볼 수 있는 일정(모든 캘린더) 중 기간과 겹치는 것. 일정 내용을 묻거나 약속이 있는지 확인할 때 부른다. 한 번에 최대 31일, ${MAX_EVENTS}개.`,
+  description: `사용자가 볼 수 있는 일정 중 기간과 겹치는 것. 일정 내용을 묻거나 약속이 있는지 확인할 때 부른다. 한 번에 최대 31일, ${MAX_EVENTS}개.`,
   input: listEventsInput,
   write: false,
   async run(ctx, input) {
     const events = await prisma.event.findMany({
-      where: { AND: [visibleTo(ctx.userId), overlapping(new Date(input.from), new Date(input.to))], ...(input.calendarId ? { calendarId: input.calendarId } : {}) },
+      where: { AND: [visibleTo(ctx), overlapping(new Date(input.from), new Date(input.to))], ...(input.calendarId ? { calendarId: input.calendarId } : {}) },
       include: { calendar: { select: { name: true } } },
       orderBy: [{ startsAt: "asc" }, { createdAt: "asc" }],
       take: MAX_EVENTS + 1,
@@ -147,7 +152,7 @@ const findFreeSlots: Tool<z.infer<typeof findFreeSlotsInput>> = {
     const from = new Date(Date.parse(`${input.fromDate}T00:00:00Z`) - day); // a day either side covers any time zone
     const to = new Date(Date.parse(`${input.toDate}T00:00:00Z`) + 2 * day);
     const events = await prisma.event.findMany({
-      where: { AND: [visibleTo(ctx.userId), overlapping(from, to)], status: { not: "CANCELLED" } },
+      where: { AND: [visibleTo(ctx), overlapping(from, to)], status: { not: "CANCELLED" } },
       select: { title: true, startsAt: true, endsAt: true, allDay: true },
       orderBy: { startsAt: "asc" },
     });
@@ -240,7 +245,10 @@ const createEvent: Tool<CreateEventInput> = {
   },
 };
 
-/** Fixed order: the list is part of the cached, thinking-bound prompt prefix, so it must not change between turns. */
+/**
+ * Fixed order: the list is part of the cached, thinking-bound prompt prefix, so it must not change between turns.
+ * Editing a tool (name, description, schema) changes that prefix for conversations already under way too.
+ */
 export const ASSISTANT_TOOLS: Tool<unknown>[] = [listCalendars, listMembers, listEvents, findFreeSlots, createEvent];
 
 export const toolNamed = (name: string) => ASSISTANT_TOOLS.find((t) => t.name === name);
