@@ -132,4 +132,13 @@ describe("assistant prompt", () => {
     expect(report).toMatchObject({ stopReason: "end", toolCalls: [] });
     expect(report.text).toContain("일정을 넣었어요");
   });
+
+  it("mock reads 내일 and 오후 when it looks for free time", () => {
+    const messages = buildAssistantRequest([{ role: "user", content: userTurn("내일 오후에 1시간 회의 잡아줘", kst("2026-10-07T14:03:00"), "Asia/Seoul") }]).messages;
+    messages.push({ role: "assistant", content: "" }, { role: "user", content: "", toolResults: [{ toolCallId: "t1", content: JSON.stringify({ calendars: [] }) }] });
+    const reply = mockAssistantReply(buildAssistantRequest(messages));
+    expect(reply.text).toBe("내일 오후 중 1시간 비는 때를 찾아볼게요.");
+    expect(reply.toolCalls![0]).toMatchObject({ name: "find_free_slots", input: { fromDate: "2026-10-08", toDate: "2026-10-08", dayStart: "13:00" } });
+    expect(toolNamed("find_free_slots")!.input.safeParse(reply.toolCalls![0].input).success).toBe(true);
+  });
 });
