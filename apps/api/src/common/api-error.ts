@@ -18,6 +18,7 @@ export enum ErrorCode {
   CALENDAR_MEMBERS_CHANGED = "CALENDAR_MEMBERS_CHANGED",
   AI_MONTHLY_LIMIT = "AI_MONTHLY_LIMIT",
   DOCUMENT_UNREADABLE = "DOCUMENT_UNREADABLE",
+  TRIP_DRAFT_CHANGED = "TRIP_DRAFT_CHANGED",
 }
 
 export const ERROR_STATUS: Record<ErrorCode, number> = {
@@ -40,6 +41,7 @@ export const ERROR_STATUS: Record<ErrorCode, number> = {
   [ErrorCode.CALENDAR_MEMBERS_CHANGED]: 409,
   [ErrorCode.AI_MONTHLY_LIMIT]: 409,
   [ErrorCode.DOCUMENT_UNREADABLE]: 400,
+  [ErrorCode.TRIP_DRAFT_CHANGED]: 409,
 };
 
 export class ApiError extends Error {

@@ -344,6 +344,126 @@ describe("PLANDIT-26 AI trip plans (e2e)", () => {
     });
   });
 
+  describe("revise by chat (PLANDIT-27)", () => {
+    type Revision = { id: string; request: string; status: string; failureCode: string | null; credits: number; estimatedCredits: number; proposedDraft?: TripDraft; baseDraft?: TripDraft };
+    const revisions = (id: string) => `${base()}/${id}/revisions`;
+    const ask = (user: User, id: string, request = "둘째 날 오후는 쉬게 해줘", key: string = randomUUID()) =>
+      as(app, user.id).post(revisions(id)).set("idempotency-key", key).send({ request });
+    const last = async (id: string) => {
+      const list = (await plan(owner, id).expect(200)).body.revisions as Revision[];
+      return list[list.length - 1];
+    };
+    const secondDay = (draft: TripDraft) => draft.days[1].items.map((i) => i.title);
+
+    it("proposes a rewrite without touching the draft, and applies it only when accepted", async () => {
+      const p = await ready(owner, form({ destination: "강릉" }));
+      expect(secondDay(p.draft)).toContain("강릉 둘러보기");
+      const start = await balance();
+
+      const asked = await ask(owner, p.id).expect(202);
+      const pending = (asked.body.revisions as Revision[])[0];
+      expect(pending).toMatchObject({ request: "둘째 날 오후는 쉬게 해줘", status: "PENDING" });
+      expect(await balance()).toBe(start - pending.estimatedCredits);
+
+      expect(await plans.revise(pending.id)).toBe("SUCCEEDED");
+      const proposed = await last(p.id);
+      expect(proposed.status).toBe("PROPOSED");
+      expect(secondDay(proposed.proposedDraft!)).toEqual(["점심", "숙소에서 쉬기", "저녁"]);
+      expect(proposed.baseDraft).toEqual(p.draft);
+      expect(secondDay((await plan(owner, p.id).expect(200)).body.draft)).toContain("강릉 둘러보기"); // not yet
+
+      const accepted = await as(app, owner.id).post(`${revisions(p.id)}/${proposed.id}/accept`).expect(200);
+      expect(secondDay(accepted.body.draft)).toEqual(["점심", "숙소에서 쉬기", "저녁"]);
+      expect(accepted.body.draft.days[0]).toEqual(p.draft.days[0]); // other days untouched
+      await as(app, owner.id).post(`${revisions(p.id)}/${proposed.id}/accept`).expect(200); // a repeated click
+      await as(app, owner.id).post(`${revisions(p.id)}/${proposed.id}/discard`).expect(409);
+      const done = await last(p.id);
+      expect(done).toMatchObject({ status: "ACCEPTED" });
+      expect(done.proposedDraft).toBeUndefined();
+      expect(done.credits).toBeGreaterThan(0);
+      expect(await balance()).toBe(start - done.credits);
+    });
+
+    it("makes one revision per Idempotency-Key, refuses a second while one is being written, and lets a new one replace an undecided proposal", async () => {
+      const p = await ready(owner, form({ destination: "속초" }));
+      const key = randomUUID();
+      const results = await Promise.all([1, 2, 3].map(() => ask(owner, p.id, "둘째 날 오후는 쉬게 해줘", key)));
+      expect(results.map((r) => r.status)).toEqual([202, 202, 202]);
+      const [first] = (await plan(owner, p.id).expect(200)).body.revisions as Revision[];
+      expect(await prisma.tripPlanRevision.count({ where: { tripPlanId: p.id } })).toBe(1);
+      await ask(owner, p.id, "다른 요청", key).expect(409); // same key, other words
+      expect((await ask(owner, p.id, "첫째 날 오전은 쉬게").expect(409)).body.code).toBe("CONFLICT"); // still being written
+
+      await plans.revise(first.id);
+      await ask(owner, p.id, "첫째 날 오전은 쉬게 해줘").expect(202); // replaces the undecided proposal
+      const list = (await plan(owner, p.id).expect(200)).body.revisions as Revision[];
+      expect(list.map((r) => r.status)).toEqual(["DISCARDED", "PENDING"]);
+      await as(app, owner.id).post(`${revisions(p.id)}/${first.id}/accept`).expect(409);
+      await plans.revise(list[1].id);
+      await as(app, owner.id).post(`${revisions(p.id)}/${list[1].id}/discard`).expect(200);
+      expect((await plan(owner, p.id).expect(200)).body.draft).toEqual(p.draft); // discarded: nothing changed
+    });
+
+    it("never overwrites edits made by hand after the request", async () => {
+      const p = await ready(owner, form({ destination: "여수" }));
+      await ask(owner, p.id).expect(202);
+      const pending = await last(p.id);
+      const days = p.draft.days.map((d: TripDraft["days"][number], i: number) => (i === 0 ? { ...d, items: d.items.map((it) => ({ ...it, title: `${it.title}(수정)` })) } : d));
+      await as(app, owner.id).patch(`${base()}/${p.id}`).send({ days }).expect(200);
+      await plans.revise(pending.id);
+
+      const res = await as(app, owner.id).post(`${revisions(p.id)}/${pending.id}/accept`).expect(409);
+      expect(res.body.code).toBe("TRIP_DRAFT_CHANGED");
+      const kept = (await plan(owner, p.id).expect(200)).body.draft as TripDraft;
+      expect(kept.days[0].items[0].title).toContain("(수정)");
+      expect(secondDay(kept)).toContain("여수 둘러보기");
+    });
+
+    it("refunds a failed rewrite in full and leaves the draft as it was", async () => {
+      const p = await ready(owner, form({ destination: "전주" }));
+      llm.enqueue({ error: "LLM_OVERLOADED" });
+      await ask(owner, p.id).expect(202);
+      const failed = await last(p.id);
+      expect(await plans.revise(failed.id)).toBe("FAILED");
+      expect(await last(p.id)).toMatchObject({ status: "FAILED", failureCode: "LLM_OVERLOADED", credits: 0 });
+
+      // A rewrite that leaves the trip's dates is refused like a bad draft
+      llm.enqueue({ text: JSON.stringify({ ...p.draft, days: [{ date: "2027-01-01", items: p.draft.days[0].items }] }) });
+      await ask(owner, p.id, "날짜를 바꿔줘").expect(202);
+      expect(await plans.revise((await last(p.id)).id)).toBe("FAILED");
+      expect(await last(p.id)).toMatchObject({ status: "FAILED", failureCode: "INVALID_OUTPUT" });
+
+      const { aiUsageId } = await prisma.tripPlanRevision.findFirstOrThrow({ where: { id: failed.id } });
+      const rows = await prisma.creditLedger.findMany({ where: { refType: "AI_USAGE", refId: aiUsageId }, orderBy: { id: "asc" } });
+      expect(rows.map((r) => r.type)).toEqual(["DEBIT", "REFUND"]);
+      expect((await plan(owner, p.id).expect(200)).body.draft).toEqual(p.draft);
+    });
+
+    it("only on a READY plan of one's own, with a request and a key", async () => {
+      const p = await ready(owner, form({ destination: "경주" }));
+      await ask(editor, p.id).expect(404);
+      await as(app, owner.id).post(revisions(p.id)).send({ request: "쉬게 해줘" }).expect(400); // no key
+      await ask(owner, p.id, "   ").expect(400);
+      await ask(owner, p.id, "가".repeat(301)).expect(400);
+
+      const generating = await create(owner, form({ destination: "안동" })).expect(202);
+      await ask(owner, generating.body.id).expect(409);
+      await as(app, owner.id).post(`${base()}/${p.id}/apply`).send({ newCalendarMemberIds: [] }).expect(200);
+      await ask(owner, p.id).expect(409);
+    });
+
+    it("is rewritten by the real BullMQ worker on its own", async () => {
+      const p = await ready(owner, form({ destination: "통영" }));
+      await ask(owner, p.id).expect(202);
+      const worker: INestApplicationContext = await NestFactory.createApplicationContext(WorkerModule, { logger: false });
+      try {
+        await waitFor(async () => (await last(p.id)).status === "PROPOSED", 10_000);
+      } finally {
+        await worker.close();
+      }
+    }, 20_000);
+  });
+
   it("keeps the credit invariant for every trip usage once all settle: DEBIT + ADJUST + REFUND = −credits", async () => {
     await app.get(AiUsageService).reconcileStale(new Date(Date.now() + 31 * 60_000)); // close the plans never generated
     const usages = await prisma.aiUsage.findMany({ where: { feature: "TRIP_PLANNER" } });

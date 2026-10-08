@@ -19,7 +19,7 @@ import { MockLlmAdapter } from "../ai/mock-llm.adapter";
 import { ApiError, ErrorCode } from "../common/api-error";
 import { type PageQuery, pageArgs, toPage } from "../common/pagination";
 import { draftProblems, draftToEvents, parseDraft, sortDraft } from "./trip-draft";
-import { buildTripRequest, isTripRequest, largestTripInput, mockTripReply } from "./trip-prompt";
+import { buildTripRequest, buildTripRevisionRequest, isTripRequest, isTripRevision, largestTripInput, mockTripReply, mockTripRevision } from "./trip-prompt";
 import { TripPlanQueue } from "./trip-plan.queue";
 
 type Tx = Prisma.TransactionClient;
@@ -46,8 +46,16 @@ export class TripPlanService implements OnModuleInit {
     // Whatever fails the usage (model error, bad reply, the stale sweep) fails the plan in the same refund transaction.
     this.usages.onFeatureFailure("TRIP_PLANNER", async (tx, usage) => {
       await tx.tripPlan.updateMany({ where: { aiUsageId: usage.id, status: "GENERATING" }, data: { status: "FAILED", failureCode: usage.failureCode } });
+      // A revision's call failing leaves the plan's draft as it was; only the revision is closed.
+      await tx.tripPlanRevision.updateMany({
+        where: { aiUsageId: usage.id, status: "PENDING" },
+        data: { status: "FAILED", failureCode: usage.failureCode, decidedAt: new Date() },
+      });
     });
-    if (this.llm instanceof MockLlmAdapter) this.llm.respondTo(isTripRequest, mockTripReply);
+    if (this.llm instanceof MockLlmAdapter) {
+      this.llm.respondTo(isTripRequest, mockTripReply);
+      this.llm.respondTo(isTripRevision, mockTripRevision);
+    }
   }
 
   /** What the form needs: who can come along, and the most credits a trip of each length can reserve. */
@@ -148,6 +156,7 @@ export class TripPlanService implements OnModuleInit {
         calendar: { select: { id: true, name: true, color: true, timezone: true, type: true } },
         aiUsage: { select: { estimatedCredits: true, credits: true, status: true } },
         _count: { select: { events: true } },
+        revisions: { orderBy: { createdAt: "desc" }, take: 20, include: { aiUsage: { select: { estimatedCredits: true, credits: true } } } },
       },
     });
     if (!plan) throw new ApiError(ErrorCode.NOT_FOUND, "Trip plan not found.");
@@ -178,9 +187,110 @@ export class TripPlanService implements OnModuleInit {
       newCalendarMemberIds: attendees.filter((a) => a.inWorkspace && !a.onCalendar).map((a) => a.id).sort(),
       addedCalendarMemberIds: plan.addedCalendarMemberIds,
       eventCount: plan._count.events,
+      /** "고쳐 줘" requests, oldest first (the latest 20). A PROPOSED one carries both drafts for the preview. */
+      revisions: plan.revisions.reverse().map((r) => ({
+        id: r.id,
+        request: r.request,
+        status: r.status,
+        failureCode: r.failureCode,
+        estimatedCredits: r.aiUsage.estimatedCredits,
+        credits: r.aiUsage.credits,
+        ...(r.status === "PROPOSED" ? { baseDraft: r.baseDraft as TripDraft, proposedDraft: r.proposedDraft as TripDraft } : {}),
+        createdAt: r.createdAt,
+        decidedAt: r.decidedAt,
+      })),
       createdAt: plan.createdAt,
       appliedAt: plan.appliedAt,
     };
+  }
+
+  /**
+   * "둘째 날 오후는 쉬게 해줘" on a READY plan (PLANDIT-27): reserves credits and records the revision PENDING in one
+   * transaction, then queues the model call. A proposal still waiting for a decision is discarded (the new request
+   * supersedes it); one still being written is a 409. The same Idempotency-Key returns the same revision.
+   */
+  async requestRevision(member: WorkspaceMember, tripPlanId: string, requestKey: string, request: string) {
+    const key = { tripPlanId_requestKey: { tripPlanId, requestKey } };
+    const replay = async () => {
+      const existing = await prisma.tripPlanRevision.findUniqueOrThrow({ where: key });
+      if (existing.request !== request) throw new ApiError(ErrorCode.IDEMPOTENCY_CONFLICT, "Idempotency-Key was already used for a different request.");
+      if (existing.status === "PENDING") await this.queue.enqueueRevise(existing.id);
+      return this.get(member, tripPlanId);
+    };
+    await this.get(member, tripPlanId); // someone else's plan is a 404 before anything else
+    if (await prisma.tripPlanRevision.findUnique({ where: key })) return replay();
+
+    let revisionId: string | null;
+    try {
+      revisionId = await prisma.$transaction(async (tx) => {
+        const plan = await this.lockOwn(tx, member, tripPlanId);
+        // A double click waited for the lock behind the first: it is the same request, not a second one.
+        if (await tx.tripPlanRevision.findUnique({ where: key })) return null;
+        if (plan.status !== "READY") throw new ApiError(ErrorCode.CONFLICT, "Only a ready plan can be revised.");
+        if (await tx.tripPlanRevision.count({ where: { tripPlanId, status: "PENDING" } })) {
+          throw new ApiError(ErrorCode.CONFLICT, "The last request is still being worked on.");
+        }
+        await tx.tripPlanRevision.updateMany({ where: { tripPlanId, status: "PROPOSED" }, data: { status: "DISCARDED", decidedAt: new Date() } });
+        const draft = tripDraftSchema.parse(plan.draft);
+        const usage = await this.usages.reserve(
+          {
+            workspaceId: member.workspaceId,
+            userId: member.userId,
+            feature: "TRIP_PLANNER",
+            request: buildTripRevisionRequest(tripInputSchema.parse(plan.input), draft, request),
+          },
+          tx,
+        );
+        const revision = await tx.tripPlanRevision.create({ data: { tripPlanId, requestKey, request, baseDraft: draft, aiUsageId: usage.id } });
+        return revision.id;
+      }, TX);
+    } catch (error) {
+      // The same key raced us: the other request's revision (and its single reservation) is the answer.
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") return replay();
+      throw error;
+    }
+    if (!revisionId) return replay();
+    await this.queue.enqueueRevise(revisionId);
+    return this.get(member, tripPlanId);
+  }
+
+  /** Worker: the model's rewrite of a PENDING revision becomes its proposal, checked like a new draft. */
+  async revise(revisionId: string) {
+    const revision = await prisma.tripPlanRevision.findUnique({ where: { id: revisionId }, include: { tripPlan: { select: { input: true } } } });
+    if (!revision || revision.status !== "PENDING") return "SKIPPED";
+    const input = tripInputSchema.parse(revision.tripPlan.input);
+    const request = buildTripRevisionRequest(input, tripDraftSchema.parse(revision.baseDraft), revision.request);
+    const outcome = await this.usages.execute(revision.aiUsageId, request, {
+      parse: (result) => parseDraft(result.text, input),
+      onSuccess: async (tx, draft) => {
+        await tx.tripPlanRevision.updateMany({ where: { id: revision.id, status: "PENDING" }, data: { status: "PROPOSED", proposedDraft: draft } });
+      },
+    });
+    return outcome.status;
+  }
+
+  /**
+   * Accepts (the plan takes the proposed draft) or discards a proposal, once: a repeated click is fine, the opposite
+   * decision afterwards is a 409. Accepting needs the plan to still hold the draft the model was given - edited since
+   * means TRIP_DRAFT_CHANGED, so nothing done by hand is silently overwritten.
+   */
+  async decideRevision(member: WorkspaceMember, tripPlanId: string, revisionId: string, accept: boolean) {
+    await prisma.$transaction(async (tx) => {
+      const plan = await this.lockOwn(tx, member, tripPlanId);
+      const revision = await tx.tripPlanRevision.findFirst({ where: { id: revisionId, tripPlanId } });
+      if (!revision) throw new ApiError(ErrorCode.NOT_FOUND, "Revision not found.");
+      if (revision.status === (accept ? "ACCEPTED" : "DISCARDED")) return;
+      if (revision.status !== "PROPOSED") throw new ApiError(ErrorCode.CONFLICT, "This revision is not waiting for a decision.");
+      if (accept) {
+        if (plan.status !== "READY") throw new ApiError(ErrorCode.CONFLICT, "Only a ready plan can change.");
+        if (!isDeepStrictEqual(plan.draft, revision.baseDraft)) {
+          throw new ApiError(ErrorCode.TRIP_DRAFT_CHANGED, "The draft changed after this revision was requested.");
+        }
+        await tx.tripPlan.update({ where: { id: plan.id }, data: { draft: revision.proposedDraft as Prisma.InputJsonValue } });
+      }
+      await tx.tripPlanRevision.update({ where: { id: revision.id }, data: { status: accept ? "ACCEPTED" : "DISCARDED", decidedAt: new Date() } });
+    }, TX);
+    return this.get(member, tripPlanId);
   }
 
   /** The requester's own plans in this workspace, newest first. */

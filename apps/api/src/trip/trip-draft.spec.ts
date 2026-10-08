@@ -1,10 +1,10 @@
-import { tripDayCount, tripDates, type TripDraft, tripInputSchema } from "@plandit/shared/trips";
+import { diffTripDraft, tripDayCount, tripDates, type TripDraft, tripInputSchema } from "@plandit/shared/trips";
 
 import { ceilingRates, estimateInputTokens, reserveCredits } from "@plandit/shared/ai";
 
 import { requestText } from "../ai/llm-client";
 import { draftProblems, draftToEvents, localToInstant, parseDraft } from "./trip-draft";
-import { buildTripRequest, largestTripInput, mockTripReply, tripMaxOutputTokens } from "./trip-prompt";
+import { buildTripRequest, buildTripRevisionRequest, largestTripInput, mockTripReply, mockTripRevision, tripMaxOutputTokens } from "./trip-prompt";
 
 const input = tripInputSchema.parse({ calendarId: "c", destination: "부산", startDate: "2026-10-09", endDate: "2026-10-11" });
 const item = (startTime: string, endTime: string, title = "구경") => ({ title, startTime, endTime, location: null, description: null, category: "SIGHT" as const });
@@ -104,5 +104,59 @@ describe("trip request", () => {
     const parsed = parseDraft(reply.text!, input);
     expect(parsed.days.map((d) => d.date)).toEqual(["2026-10-09", "2026-10-10", "2026-10-11"]);
     expect(parsed.days[0].items[0].category).toBe("MOVE");
+  });
+});
+
+describe("revisions (PLANDIT-27)", () => {
+  const base = draft([
+    { date: "2026-10-09", items: [item("10:00", "11:00", "부산역 도착")] },
+    {
+      date: "2026-10-10",
+      items: [
+        { ...item("12:00", "13:00", "점심"), category: "MEAL" as const },
+        item("14:00", "16:30", "해운대 둘러보기"),
+        { ...item("18:30", "20:00", "저녁"), category: "MEAL" as const },
+      ],
+    },
+  ]);
+  const ask = (request: string) =>
+    JSON.parse(mockTripRevision(buildTripRevisionRequest(input, base, request)).text!) as TripDraft;
+
+  it("sends the model the current draft and the request, under a fixed system prompt", () => {
+    const a = buildTripRevisionRequest(input, base, "둘째 날 오후는 쉬게 해줘");
+    const b = buildTripRevisionRequest(input, base, "맛집 하나 더");
+    expect(a.system).toBe(b.system);
+    expect(a.messages[0].content).toContain(JSON.stringify(base));
+    expect(a.messages[0].content).toContain("<<<\n둘째 날 오후는 쉬게 해줘\n>>>");
+    expect(a.jsonSchema).toEqual(buildTripRequest(input).jsonSchema);
+  });
+
+  it("mock: rests the asked half of the asked day, keeping meals and every other day", () => {
+    const revised = ask("둘째 날 오후는 쉬게 해줘");
+    expect(revised.days[0]).toEqual(base.days[0]);
+    expect(revised.days[1].items.map((i) => [i.startTime, i.title, i.category])).toEqual([
+      ["12:00", "점심", "MEAL"],
+      ["13:00", "숙소에서 쉬기", "FREE"],
+      ["18:30", "저녁", "MEAL"],
+    ]);
+    expect(draftProblems(revised, input)).toEqual([]);
+    expect(ask("2번째 날 오후 휴식").days[1].items.map((i) => i.title)).toContain("숙소에서 쉬기");
+  });
+
+  it("mock: leaves anything else as it was, saying so in the notes", () => {
+    const same = ask("맛집 하나 더 넣어줘");
+    expect(same.days).toEqual(base.days);
+    expect(same.notes).toContain("모의 AI");
+  });
+
+  it("diffs a proposal against the draft it was made from: added, changed, kept, dropped", () => {
+    const next = draft([
+      { date: "2026-10-09", items: [item("10:30", "11:30", "부산역 도착")] },
+      { date: "2026-10-10", items: [{ ...item("12:00", "13:00", "점심"), category: "MEAL" as const }, { ...item("13:00", "18:00", "숙소에서 쉬기"), category: "FREE" as const }] },
+    ]);
+    expect(diffTripDraft(base, next).map((d) => ({ date: d.date, items: d.items.map((i) => [i.title, i.change]), removed: d.removed.map((i) => i.title) }))).toEqual([
+      { date: "2026-10-09", items: [["부산역 도착", "changed"]], removed: [] },
+      { date: "2026-10-10", items: [["점심", "same"], ["숙소에서 쉬기", "added"]], removed: ["해운대 둘러보기", "저녁"] },
+    ]);
   });
 });

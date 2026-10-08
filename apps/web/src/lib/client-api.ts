@@ -16,6 +16,7 @@ const MESSAGES: Record<string, string> = {
   ATTENDEE_NOT_ELIGIBLE: "함께 갈 수 없는 사람이 있어요. 워크스페이스 멤버인지 확인해주세요.",
   CALENDAR_MEMBERS_CHANGED: "캘린더에 새로 추가될 사람이 바뀌었어요. 다시 확인해주세요.",
   AI_MONTHLY_LIMIT: "이번 달 AI 사용 한도를 넘어요. 워크스페이스 관리자가 크레딧 화면에서 한도를 바꿀 수 있어요.",
+  TRIP_DRAFT_CHANGED: "AI에게 요청한 뒤 초안이 바뀌었어요. 고친 내용을 확인하고 다시 요청해 주세요.",
   DOCUMENT_UNREADABLE: "글자를 읽을 수 없는 파일이에요. PDF·TXT·MD만 되고, 스캔한 PDF처럼 그림뿐인 파일은 안 돼요.",
 };
 

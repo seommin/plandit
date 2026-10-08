@@ -3,7 +3,7 @@ import { ApiAcceptedResponse, ApiHeader, ApiOkResponse, ApiOperation, ApiQuery, 
 import { z } from "zod";
 
 import type { WorkspaceMember } from "@plandit/database/prisma";
-import { tripApplySchema, tripInputSchema, tripPlanUpdateSchema } from "@plandit/shared/trips";
+import { tripApplySchema, tripInputSchema, tripPlanUpdateSchema, tripRevisionSchema } from "@plandit/shared/trips";
 
 import { ApiError, ErrorCode } from "../common/api-error";
 import { ApiPageQuery, pageQuerySchema } from "../common/pagination";
@@ -46,8 +46,18 @@ const PLAN_EXAMPLE = {
   newCalendarMemberIds: ["cmum8us8f0000ekyjnxhqh0h4"],
   addedCalendarMemberIds: [],
   eventCount: 0,
+  revisions: [
+    { id: "cmuq9rev0001qwyj2k3l4abcd", request: "둘째 날 오후는 쉬게 해줘", status: "ACCEPTED", failureCode: null, estimatedCredits: 41, credits: 15, createdAt: "2026-09-30T02:03:00.000Z", decidedAt: "2026-09-30T02:03:40.000Z" },
+  ],
   createdAt: "2026-09-30T02:00:00.000Z",
   appliedAt: null,
+};
+
+const requireKey = (requestKey: string | undefined) => {
+  if (!requestKey || requestKey.length < 8 || requestKey.length > 128) {
+    throw new ApiError(ErrorCode.VALIDATION_FAILED, "Idempotency-Key header (8-128 chars) is required.");
+  }
+  return requestKey;
 };
 
 @ApiTags("AI 여행 일정")
@@ -86,10 +96,7 @@ export class TripPlanController {
     @Headers("idempotency-key") requestKey: string | undefined,
     @Body(new ZodPipe(tripInputSchema)) body: z.infer<typeof tripInputSchema>,
   ) {
-    if (!requestKey || requestKey.length < 8 || requestKey.length > 128) {
-      throw new ApiError(ErrorCode.VALIDATION_FAILED, "Idempotency-Key header (8-128 chars) is required.");
-    }
-    return this.plans.create(member, requestKey, body);
+    return this.plans.create(member, requireKey(requestKey), body);
   }
 
   @Get()
@@ -143,6 +150,51 @@ export class TripPlanController {
     @Body(new ZodPipe(tripApplySchema)) body: z.infer<typeof tripApplySchema>,
   ) {
     return this.plans.apply(member, tripPlanId, body.newCalendarMemberIds);
+  }
+
+  @Post(":tripPlanId/revisions")
+  @HttpCode(202)
+  @Roles("MEMBER")
+  @ApiOperation({
+    summary: "AI에게 초안 고쳐 달라고 하기 (READY일 때)",
+    description:
+      "\"둘째 날 오후는 쉬게 해줘\"처럼 말로 고친다. 크레딧을 선차감하고 요청을 PENDING으로 기록한 뒤(한 트랜잭션) AI 작업을 큐에 넣는다. AI는 고친 초안 전체를 돌려주고, 생성 때와 같은 검사를 통과하면 PROPOSED — 초안은 아직 그대로이고 `accept`해야 바뀐다. 실패하면 전액 환불(FAILED). 기간·함께 가는 사람은 바꾸지 않는다. 아직 결정하지 않은 제안이 있으면 버려지고(DISCARDED), 만드는 중인 요청이 있으면 409. 같은 `Idempotency-Key`는 같은 요청.",
+  })
+  @ApiHeader({ name: "idempotency-key", required: true, description: "8~128자. 보내기를 누를 때마다 새로 만든다" })
+  @ApiZodBody(tripRevisionSchema, { request: "둘째 날 오후는 쉬게 해줘" })
+  @ApiAcceptedResponse({ example: { ...PLAN_EXAMPLE, revisions: [{ ...PLAN_EXAMPLE.revisions[0], status: "PENDING", credits: 0, decidedAt: null }] } })
+  @ApiErrors(ErrorCode.VALIDATION_FAILED, ErrorCode.CONFLICT, ErrorCode.INSUFFICIENT_CREDITS, ErrorCode.AI_MONTHLY_LIMIT, ErrorCode.IDEMPOTENCY_CONFLICT)
+  revise(
+    @CurrentMember() member: WorkspaceMember,
+    @Param("tripPlanId") tripPlanId: string,
+    @Headers("idempotency-key") requestKey: string | undefined,
+    @Body(new ZodPipe(tripRevisionSchema)) body: z.infer<typeof tripRevisionSchema>,
+  ) {
+    return this.plans.requestRevision(member, tripPlanId, requireKey(requestKey), body.request);
+  }
+
+  @Post(":tripPlanId/revisions/:revisionId/accept")
+  @HttpCode(200)
+  @Roles("MEMBER")
+  @ApiOperation({
+    summary: "AI가 고친 초안 반영",
+    description:
+      "PROPOSED인 제안을 초안에 넣는다. 요청한 뒤 초안이 바뀌었으면(손으로 고침 등) 409 `TRIP_DRAFT_CHANGED`이고 아무것도 바뀌지 않는다 — 손으로 고친 내용을 덮어쓰지 않게. 두 번 눌러도 한 번, 이미 버린 제안은 409.",
+  })
+  @ApiOkResponse({ example: PLAN_EXAMPLE })
+  @ApiErrors(ErrorCode.CONFLICT, ErrorCode.TRIP_DRAFT_CHANGED)
+  accept(@CurrentMember() member: WorkspaceMember, @Param("tripPlanId") tripPlanId: string, @Param("revisionId") revisionId: string) {
+    return this.plans.decideRevision(member, tripPlanId, revisionId, true);
+  }
+
+  @Post(":tripPlanId/revisions/:revisionId/discard")
+  @HttpCode(200)
+  @Roles("MEMBER")
+  @ApiOperation({ summary: "AI가 고친 초안 버리기", description: "초안은 그대로 둔다. 쓴 크레딧은 돌아오지 않는다(AI가 일을 했으므로). 이미 반영한 제안은 409." })
+  @ApiOkResponse({ example: PLAN_EXAMPLE })
+  @ApiErrors(ErrorCode.CONFLICT)
+  discard(@CurrentMember() member: WorkspaceMember, @Param("tripPlanId") tripPlanId: string, @Param("revisionId") revisionId: string) {
+    return this.plans.decideRevision(member, tripPlanId, revisionId, false);
   }
 
   @Delete(":tripPlanId/events")

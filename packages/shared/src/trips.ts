@@ -108,3 +108,38 @@ export const tripPlanUpdateSchema = z
 export const tripApplySchema = z.object({
   newCalendarMemberIds: z.array(z.string().min(1)).max(TRIP_MAX_ATTENDEES).default([]),
 });
+
+/** "둘째 날 오후는 쉬게 해줘" (PLANDIT-27): free text for the model, passed as data */
+export const TRIP_REVISION_MAX = 300;
+export const tripRevisionSchema = z.object({
+  request: z.string().trim().min(1).max(TRIP_REVISION_MAX),
+});
+
+export type TripItemChange = "same" | "added" | "changed";
+
+/**
+ * What a proposed draft changes, day by day, for the preview: each new item marked same / added / changed (same title,
+ * other details), plus the items it drops. Items are matched by title within a day.
+ */
+export function diffTripDraft(base: Pick<TripDraft, "days">, next: Pick<TripDraft, "days">) {
+  const same = (a: TripItem, b: TripItem) =>
+    a.title === b.title &&
+    a.startTime === b.startTime &&
+    a.endTime === b.endTime &&
+    a.location === b.location &&
+    a.description === b.description &&
+    a.category === b.category;
+  const dates = [...new Set([...base.days, ...next.days].map((d) => d.date))].sort();
+  return dates.map((date) => {
+    const before = base.days.find((d) => d.date === date)?.items ?? [];
+    const after = next.days.find((d) => d.date === date)?.items ?? [];
+    return {
+      date,
+      items: after.map((item) => ({
+        ...item,
+        change: (before.some((b) => same(b, item)) ? "same" : before.some((b) => b.title === item.title) ? "changed" : "added") as TripItemChange,
+      })),
+      removed: before.filter((b) => !after.some((a) => a.title === b.title)),
+    };
+  });
+}

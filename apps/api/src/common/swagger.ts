@@ -36,6 +36,7 @@ const DESCRIPTIONS: Record<ErrorCode, string> = {
   [ErrorCode.CALENDAR_MEMBERS_CHANGED]: "캘린더에 새로 추가될 사람이 확인한 목록과 다름. details.newCalendarMemberIds로 다시 확인",
   [ErrorCode.AI_MONTHLY_LIMIT]: "이번 호출의 선차감액을 더하면 워크스페이스의 AI 월 한도를 넘음. details에 limit·used·requested·resetsAt",
   [ErrorCode.DOCUMENT_UNREADABLE]: "PDF·TXT·MD가 아니거나, 글자를 읽을 수 없음(스캔한 PDF, 깨진 파일, 빈 파일). details.reason",
+  [ErrorCode.TRIP_DRAFT_CHANGED]: "AI에게 고쳐 달라고 한 뒤 초안이 바뀌었음(손으로 고침 등). 제안을 버리고 다시 요청",
 };
 
 const MESSAGES: Record<ErrorCode, string> = {
@@ -58,6 +59,7 @@ const MESSAGES: Record<ErrorCode, string> = {
   [ErrorCode.CALENDAR_MEMBERS_CHANGED]: "The people to add to the calendar changed.",
   [ErrorCode.AI_MONTHLY_LIMIT]: "This call would go over the workspace's monthly AI credit limit.",
   [ErrorCode.DOCUMENT_UNREADABLE]: "No readable text in this file.",
+  [ErrorCode.TRIP_DRAFT_CHANGED]: "The draft changed after this revision was requested.",
 };
 
 const TRACE_ID = "0d85ad5d-c5b6-4cf3-ba9f-b27e7906d209";
