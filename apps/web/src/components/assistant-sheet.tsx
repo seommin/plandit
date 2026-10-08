@@ -20,13 +20,15 @@ type Step = {
   status: "PENDING" | "WAITING_APPROVAL" | "DONE" | "ERROR" | "REJECTED";
   count: number | null;
   preview: Preview | null;
+  /** search_memory: where the answer comes from */
+  sources: Array<{ event: string; date: string; file: string | null }> | null;
 };
 type Thread = { id: string; status: "IDLE" | "RUNNING" | "WAITING_APPROVAL"; stopCode: string | null; credits: number; items: Array<Said | Step> };
 
 const threadsPath = (workspaceId: string) => `/workspaces/${workspaceId}/assistant/threads`;
 const RESUME_KEY = "plandit-assistant-threads";
-const SUGGESTIONS = ["내일 오후에 1시간 회의 잡아줘", "이번 주 일정 알려줘", "다음 주에 1시간 비는 시간 찾아줘"];
-const COUNT_UNITS: Record<string, string> = { list_events: "개", find_free_slots: "곳", list_calendars: "개", list_members: "명" };
+const SUGGESTIONS = ["내일 오후에 1시간 회의 잡아줘", "지난 회의에서 뭐 정했지?", "다음 주에 1시간 비는 시간 찾아줘"];
+const COUNT_UNITS: Record<string, string> = { list_events: "개", find_free_slots: "곳", list_calendars: "개", list_members: "명", search_memory: "건" };
 const STOPPED: Record<string, string> = {
   STEP_LIMIT: "단계가 길어져 여기서 멈췄어요. 이어서 말해 주세요.",
   INSUFFICIENT_CREDITS: "크레딧이 부족해 멈췄어요.",
@@ -254,16 +256,28 @@ function AssistantChat({ workspaces, defaultWorkspaceId, onClose, onChanged }: O
   );
 }
 
-/** One read step, quietly: "일정 확인 · 3개" */
+/** One read step, quietly: "일정 확인 · 3개"; a note search also lists where it looked ("근거"). */
 function ToolRow({ step }: { step: Step }) {
   const label = ASSISTANT_TOOL_LABELS[step.name] ?? step.name;
+  const sources = step.sources?.slice(0, 3) ?? [];
   return (
-    <p className={cn("flex items-center gap-1.5 text-[13px]", step.status === "ERROR" ? "text-danger" : "text-fg-3")}>
-      {step.status === "PENDING" ? <Spinner className="size-3" /> : step.status === "DONE" ? <Check size={14} /> : null}
-      {label}
-      {step.status === "DONE" && step.count !== null ? ` · ${step.count}${COUNT_UNITS[step.name] ?? "개"}` : ""}
-      {step.status === "ERROR" ? " · 실패" : step.status === "REJECTED" ? " · 취소" : ""}
-    </p>
+    <div className={cn("text-[13px]", step.status === "ERROR" ? "text-danger" : "text-fg-3")}>
+      <p className="flex items-center gap-1.5">
+        {step.status === "PENDING" ? <Spinner className="size-3" /> : step.status === "DONE" ? <Check size={14} /> : null}
+        {label}
+        {step.status === "DONE" && step.count !== null ? ` · ${step.count}${COUNT_UNITS[step.name] ?? "개"}` : ""}
+        {step.status === "ERROR" ? " · 실패" : step.status === "REJECTED" ? " · 취소" : ""}
+      </p>
+      {sources.length ? (
+        <ul className="mt-1 space-y-0.5 border-l border-line pl-3">
+          {sources.map((s, i) => (
+            <li className="truncate" key={i}>
+              {s.event} · {Number(s.date.slice(5, 7))}월 {Number(s.date.slice(8, 10))}일{s.file ? ` · ${s.file}` : ""}
+            </li>
+          ))}
+        </ul>
+      ) : null}
+    </div>
   );
 }
 

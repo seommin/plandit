@@ -8,6 +8,7 @@ import type { ApiKeyScope } from "@plandit/shared/api-keys";
 
 import { toLlmJsonSchema } from "../ai/llm-client";
 import { ASSISTANT_TOOLS, type Tool, type ToolContext, ToolError } from "../assistant/assistant-tools";
+import { MemoryService } from "../memory/memory.service";
 import type { ApiKeyPrincipal } from "./api-key.service";
 
 const scopeOf = (tool: Tool<unknown>): ApiKeyScope => (tool.write ? "events:write" : "events:read");
@@ -24,6 +25,8 @@ const text = (value: unknown, isError = false): CallToolResult => ({
  */
 @Injectable()
 export class McpService {
+  constructor(private readonly memory: MemoryService) {}
+
   async serverFor(key: ApiKeyPrincipal) {
     const { timezone } = await prisma.user.findUniqueOrThrow({ where: { id: key.userId }, select: { timezone: true } });
     const tools = ASSISTANT_TOOLS.filter((tool) => key.scopes.includes(scopeOf(tool)));
@@ -49,7 +52,14 @@ export class McpService {
         const known = ASSISTANT_TOOLS.find((t) => t.name === params.name);
         return text(known ? `This API key needs the ${scopeOf(known)} scope for ${known.name}.` : `Unknown tool: ${params.name}`, true);
       }
-      const ctx: ToolContext = { userId: key.userId, workspaceId: key.workspaceId, timezone, now: new Date(), workspaceOnly: true };
+      const ctx: ToolContext = {
+        userId: key.userId,
+        workspaceId: key.workspaceId,
+        timezone,
+        now: new Date(),
+        workspaceOnly: true,
+        searchMemory: (query, range) => this.memory.search({ userId: key.userId, workspaceId: key.workspaceId, ...range }, query),
+      };
       try {
         const parsed = tool.input.safeParse(params.arguments ?? {});
         if (!parsed.success) throw new ToolError(`Invalid input: ${z.prettifyError(parsed.error)}`);

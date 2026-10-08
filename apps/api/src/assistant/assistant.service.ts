@@ -13,6 +13,7 @@ import { AiUsageService } from "../ai/ai-usage.service";
 import { LLM_CLIENT, type LlmClient, type LlmMessage, type LlmResult } from "../ai/llm-client";
 import { MockLlmAdapter } from "../ai/mock-llm.adapter";
 import { ApiError, ErrorCode } from "../common/api-error";
+import { MemoryService } from "../memory/memory.service";
 import { type PageQuery, pageArgs, toPage } from "../common/pagination";
 import { buildAssistantRequest, isAssistantRequest, mockAssistantReply, userTurn } from "./assistant-prompt";
 import { type ToolContext, ToolError, toolNamed } from "./assistant-tools";
@@ -38,6 +39,7 @@ export class AssistantService implements OnModuleInit {
   constructor(
     private readonly usages: AiUsageService,
     private readonly queue: AssistantQueue,
+    private readonly memory: MemoryService,
     @Inject(LLM_CLIENT) private readonly llm: LlmClient,
   ) {}
 
@@ -284,7 +286,13 @@ export class AssistantService implements OnModuleInit {
 
   private async contextFor(thread: AssistantThread): Promise<ToolContext> {
     const { timezone } = await prisma.user.findUniqueOrThrow({ where: { id: thread.userId }, select: { timezone: true } });
-    return { userId: thread.userId, workspaceId: thread.workspaceId, timezone, now: new Date() };
+    return {
+      userId: thread.userId,
+      workspaceId: thread.workspaceId,
+      timezone,
+      now: new Date(),
+      searchMemory: (query, range) => this.memory.search({ userId: thread.userId, ...range }, query),
+    };
   }
 
   private async history(db: Tx | typeof prisma, threadId: string) {
@@ -349,7 +357,11 @@ function toolStep(call: AssistantToolCall) {
     id: call.id,
     name: call.name,
     status: call.status,
-    count: count("events") ?? count("freeRanges") ?? count("calendars") ?? count("members"),
+    count: count("events") ?? count("freeRanges") ?? count("calendars") ?? count("members") ?? count("results"),
+    /** search_memory: where each hit came from, for the "근거" list under the answer */
+    sources: Array.isArray(output.results)
+      ? (output.results as Array<{ event: string; date: string; file?: string }>).map((r) => ({ event: r.event, date: r.date, file: r.file ?? null }))
+      : null,
     preview: call.preview,
     error: typeof output.error === "string" ? output.error : null,
     eventId: typeof output.eventId === "string" ? output.eventId : null,

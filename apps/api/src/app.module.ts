@@ -3,6 +3,7 @@ import { APP_FILTER, APP_GUARD } from "@nestjs/core";
 
 import { AiModule } from "./ai/ai.module";
 import { AssistantModule } from "./assistant/assistant.module";
+import { MemoryModule } from "./memory/memory.module";
 import { ApiKeyModule } from "./apikey/api-key.module";
 import { AuditModule } from "./audit/audit.module";
 import { AuthController } from "./auth/auth.controller";
@@ -25,7 +26,7 @@ import { RolesGuard } from "./workspace/roles";
 import { WorkspaceModule } from "./workspace/workspace.module";
 
 @Module({
-  imports: [loggerModule, AuditModule, WorkspaceModule, CreditModule, PaymentModule, ReminderModule, ApiKeyModule, AiModule, TripModule, AssistantModule, MetricsModule],
+  imports: [loggerModule, AuditModule, WorkspaceModule, CreditModule, PaymentModule, ReminderModule, ApiKeyModule, AiModule, TripModule, AssistantModule, MemoryModule, MetricsModule],
   controllers: [
     AuthController,
     CalendarController,

@@ -26,6 +26,9 @@ erDiagram
     assistant_threads ||--o{ assistant_messages : "append-only"
     assistant_messages ||--o{ assistant_tool_calls : "도구 호출"
     assistant_messages |o--o| ai_usages : "답 하나 = 호출 하나"
+    events ||--o{ documents : "회의록"
+    documents ||--o{ document_chunks : "조각 + vector"
+    events ||--o| event_embeddings : "vector"
 ```
 
 ## ★ 변경되는 기존 테이블
@@ -275,12 +278,35 @@ UPDATE·DELETE는 트리거로 차단(원장과 같은 방식). 변경과 같은
 |---|---|---|
 | trip_plan_id | FK trip_plans null | 여행 초안으로 만든 일정. "되돌리기"는 이 값으로 지운다 |
 
-### documents / document_chunks — 회의록 파일 RAG (PLANDIT-22)
-documents: workspace_id, calendar_id null, event_id null, uploaded_by, filename, mime_type, size_bytes, storage_path, status(UPLOADED/PROCESSING/READY/FAILED), error, created_at.
-document_chunks: document_id, seq, content, embedding vector, token_count. 검색은 요청자가 볼 수 있는 캘린더·일정에 연결된 문서만.
+### documents — 일정에 붙인 회의록 (PLANDIT-22)
+| 컬럼 | 타입 | 비고 |
+|---|---|---|
+| id | cuid PK | |
+| event_id | FK events (cascade) | 그 일정을 볼 수 있는 사람만 검색(일정 목록과 같은 공개 범위). 일정이 지워지면 함께 |
+| uploaded_by_id | FK users | 올린 사람. 올리기·지우기는 일정을 수정할 수 있는 사람 |
+| filename, mime_type, size_bytes, char_count | | PDF·TXT·MD, 5MB·20만 자까지. **원본 파일은 저장하지 않는다** — 뽑은 글자만 조각으로 |
+| status | enum PROCESSING / READY | 조각의 임베딩이 다 되면 READY. 글자를 읽을 수 없는 파일은 올릴 때 거절(행 없음) |
+| created_at, ready_at | | |
+
+### document_chunks
+| 컬럼 | 타입 | 비고 |
+|---|---|---|
+| id | cuid PK | |
+| document_id, seq | FK documents (cascade), int | unique(document_id, seq). 약 800자, 100자 겹침, 줄·문장 끝에서 자름 |
+| content | text | |
+| model | text null | 임베딩을 만든 모델. 지금 모델과 다르면 워커가 다시 만든다(검색은 지금 모델 것만) |
+| embedding | vector(384) null | HNSW 코사인 인덱스 |
 
 ### event_embeddings
-event_id unique, content(제목·설명·장소 합친 텍스트), embedding vector(1536), content_hash(변경 시에만 재임베딩), updated_at. 검색 시 요청자 권한으로 볼 수 있는 일정만 조인.
+| 컬럼 | 타입 | 비고 |
+|---|---|---|
+| event_id | PK, FK events (cascade) | |
+| content_hash | text | 제목·장소·설명의 sha256. 시간만 옮긴 일정은 다시 임베딩하지 않음 |
+| model | text | |
+| embedding | vector(384) | HNSW 코사인 인덱스 |
+| updated_at | | 일정의 updated_at보다 이르면 워커가 다시 확인 |
+
+임베딩은 무료(서버 CPU의 로컬 모델 `multilingual-e5-small`, 테스트는 글자 조각 해싱). pgvector 확장은 이 마이그레이션에서 켠다.
 
 ## 모의 서버 테이블 (스키마 `mock`)
 

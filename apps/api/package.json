@@ -8,8 +8,8 @@
     "start": "node -r ./register-dist.cjs dist/apps/api/src/main.js",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
-    "test": "jest",
-    "test:e2e": "node ../../scripts/with-root-env.mjs jest -c test/jest-e2e.config.js --runInBand",
+    "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js",
+    "test:e2e": "node ../../scripts/with-root-env.mjs node --experimental-vm-modules node_modules/jest/bin/jest.js -c test/jest-e2e.config.js --runInBand",
     "dev:worker": "node ../../scripts/with-root-env.mjs ts-node -r tsconfig-paths/register src/worker.ts",
     "start:worker": "node -r ./register-dist.cjs dist/apps/api/src/worker.js",
     "seed:demo:dist": "node -r ./register-dist.cjs dist/apps/api/src/scripts/seed-demo.js",
@@ -19,6 +19,7 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "0.129.0",
+    "@huggingface/transformers": "4.3.1",
     "@modelcontextprotocol/sdk": "1.32.1",
     "@nestjs/common": "11.1.9",
     "@nestjs/core": "11.1.9",
@@ -34,6 +35,7 @@
     "prom-client": "15.1.3",
     "reflect-metadata": "0.2.2",
     "rxjs": "7.8.2",
+    "unpdf": "1.8.1",
     "web-push": "3.6.7",
     "zod": "4.3.6"
   },

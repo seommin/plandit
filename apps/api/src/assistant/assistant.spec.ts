@@ -72,7 +72,7 @@ describe("assistant tools", () => {
   const parse = (name: string, input: unknown) => toolNamed(name)!.input.safeParse(input);
 
   it("exposes a fixed list with closed schemas, and only create_event changes anything", () => {
-    expect(LLM_TOOLS.map((t) => t.name)).toEqual(["list_calendars", "list_members", "list_events", "find_free_slots", "create_event"]);
+    expect(LLM_TOOLS.map((t) => t.name)).toEqual(["list_calendars", "list_members", "list_events", "find_free_slots", "search_memory", "create_event"]);
     expect(ASSISTANT_TOOLS.filter((t) => t.write).map((t) => t.name)).toEqual(["create_event"]);
     for (const tool of LLM_TOOLS) expect(tool.inputSchema).toMatchObject({ type: "object", additionalProperties: false });
     // Defaults stay optional for the model

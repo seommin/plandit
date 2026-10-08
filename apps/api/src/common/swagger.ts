@@ -35,6 +35,7 @@ const DESCRIPTIONS: Record<ErrorCode, string> = {
   [ErrorCode.ATTENDEE_NOT_ELIGIBLE]: "함께 갈 수 없는 사람(워크스페이스 멤버가 아님, 개인 캘린더). details에 userId 목록",
   [ErrorCode.CALENDAR_MEMBERS_CHANGED]: "캘린더에 새로 추가될 사람이 확인한 목록과 다름. details.newCalendarMemberIds로 다시 확인",
   [ErrorCode.AI_MONTHLY_LIMIT]: "이번 호출의 선차감액을 더하면 워크스페이스의 AI 월 한도를 넘음. details에 limit·used·requested·resetsAt",
+  [ErrorCode.DOCUMENT_UNREADABLE]: "PDF·TXT·MD가 아니거나, 글자를 읽을 수 없음(스캔한 PDF, 깨진 파일, 빈 파일). details.reason",
 };
 
 const MESSAGES: Record<ErrorCode, string> = {
@@ -56,6 +57,7 @@ const MESSAGES: Record<ErrorCode, string> = {
   [ErrorCode.ATTENDEE_NOT_ELIGIBLE]: "Some attendees cannot join this trip.",
   [ErrorCode.CALENDAR_MEMBERS_CHANGED]: "The people to add to the calendar changed.",
   [ErrorCode.AI_MONTHLY_LIMIT]: "This call would go over the workspace's monthly AI credit limit.",
+  [ErrorCode.DOCUMENT_UNREADABLE]: "No readable text in this file.",
 };
 
 const TRACE_ID = "0d85ad5d-c5b6-4cf3-ba9f-b27e7906d209";
@@ -106,6 +108,7 @@ export const TAGS: Array<[name: string, description: string]> = [
   ["AI", "LLM 호출 과금 내역. 호출 전에 최대 크레딧을 선차감하고, 끝나면 실사용만 청구하고 나머지를 돌려준다. 실패하면 전액 환불"],
   ["캘린더", "캘린더·멤버·초대. 캘린더 역할(OWNER/ADMIN/EDITOR/VIEWER)은 데이터 권한"],
   ["일정", "일정 만들기·수정·삭제·중요 표시"],
+  ["회의록", "일정에 붙이는 회의록(PDF·TXT·MD). 글자만 뽑아 조각으로 저장하고 임베딩해, 그 일정을 볼 수 있는 사람이 AI 비서에게 물으면 근거로 찾아진다"],
   ["공유", "공개 일정 링크"],
   ["푸시", "웹 푸시 구독"],
   ["API 키", "공개 API(/v1)용 키 발급·폐기. 원문은 발급 응답에만 한 번 나온다"],

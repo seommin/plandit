@@ -160,3 +160,16 @@ curl -X POST "$API/admin/jobs/ai-usage-reconcile?minAgeMs=600000" $OP -H "x-trac
 **정상화 확인**: `plandit_ai_usages_unsettled`가 진행 중인 호출만 남고, 해당 사용 건이 `FAILED`·`failureCode=STALE`·`refundLedgerId` 있음. 원장에서 그 건의 `DEBIT + REFUND = 0`.
 
 **여행 초안이 "만드는 중"에서 넘어가지 않을 때**도 같은 명령이에요. 초안(`TripPlan`)은 자기 AI 사용 건을 따라가서, 사용 건이 정리되면 같은 트랜잭션에서 `FAILED`(`STALE`)로 바뀌고 화면에는 "다시 만들기"가 나와요. 초안이 GENERATING인데 사용 건이 아직 RESERVED라면 생성 작업이 큐에 없는 것이니 `plandit_queue_jobs{queue="trip-plans"}`와 워커 로그 `Trip plan job failed`를 먼저 봐요.
+
+## H. 회의록이 "검색 준비 중"에서 넘어가지 않는다
+
+**증상**: 일정에 올린 회의록이 계속 PROCESSING이고, 비서가 그 내용을 찾지 못함. 임베딩은 워커의 `memory` 큐가 만든다(업로드할 때 한 번, 그 뒤 `EMBEDDING_SYNC_EVERY_MS`마다).
+
+**확인**
+- 워커 로그 `Embedding sync failed`와 오류. 로컬 모델은 처음 쓸 때 Hugging Face에서 받으므로, 서버가 바깥으로 나가지 못하면 여기서 막힌다(`Embedding model loaded`가 한 번도 없음)
+- `plandit_queue_jobs{queue="memory"}`에 `failed`가 쌓이는지
+- DB: `SELECT status, count(*) FROM "Document" GROUP BY 1;` / 남은 조각 `SELECT count(*) FROM "DocumentChunk" WHERE "model" IS DISTINCT FROM 'multilingual-e5-small';`
+
+**복구**: 원인(네트워크·디스크)을 고친 뒤 워커를 다시 띄우면 다음 주기에 남은 조각부터 이어서 만든다(멱등: 이미 된 조각은 건너뜀). 모델 파일이 깨졌다면 `models` 볼륨의 해당 폴더를 지우고 다시 받게 한다. 급하게 검색만 살려야 하면 `EMBEDDING_PROVIDER=hash`(다운로드 없음, 글자 조각 비교)로 바꿔 워커와 api를 다시 띄운다 — 모든 벡터가 새 방식으로 다시 만들어지고, 그동안은 다 만들어진 것만 검색된다.
+
+**정상화 확인**: 문서가 READY, 위 남은 조각 수 0, 비서에게 회의록 내용을 물으면 "회의록 찾기 · N건"에 그 파일이 근거로 나옴.

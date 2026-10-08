@@ -11,4 +11,5 @@ export const QUEUES = {
   tripPlans: "trip-plans",
   ledgerCheck: "ledger-check",
   assistant: "assistant",
+  memory: "memory",
 } as const;
