@@ -7,6 +7,7 @@ import { DEFAULT_PERSONAL_CALENDAR_NAME } from "@plandit/shared/calendar-default
 
 import { AuditService } from "../audit/audit.service";
 import { LedgerService } from "../credit/ledger.service";
+import { chunkText } from "../memory/document-text";
 import { ensurePersonalWorkspace } from "../workspace/personal-workspace";
 
 /**
@@ -44,6 +45,23 @@ async function upsertUser(user: (typeof USERS)[number]) {
   }
   return saved;
 }
+
+const KICKOFF_NOTES = [
+  "A사 킥오프 회의록",
+  "참석: 김데모, 이팀원, A사 박부장, A사 최과장",
+  "",
+  "1. 출시 일정",
+  "- 정식 출시는 11월 첫째 주로 확정했다.",
+  "- 베타는 10월 셋째 주부터 A사 직원 30명이 먼저 써 본다.",
+  "",
+  "2. 가격",
+  "- 연간 계약은 사용자당 월 8,000원으로 제안했다. A사는 다음 주 화요일까지 내부 검토 후 답을 주기로 했다.",
+  "",
+  "3. 할 일",
+  "- 이팀원: 계약서 초안을 금요일까지 A사에 보낸다.",
+  "- 김데모: 베타 계정 30개를 다음 주 월요일까지 만든다.",
+  "- A사 최과장: 사내 보안 검토 서류를 보내 준다.",
+].join("\n");
 
 function at(dayOffset: number, hour: number, minute = 0) {
   const date = new Date();
@@ -126,6 +144,27 @@ async function main() {
         },
       });
     }
+  }
+
+  // A past meeting with notes, so "A사랑 출시 언제로 정했지?" has something to find (PLANDIT-22). The worker embeds it.
+  const kickoffTitle = "A사 킥오프 미팅";
+  const kickoff =
+    (await prisma.event.findFirst({ where: { calendarId: teamCalendar.id, title: kickoffTitle } })) ??
+    (await prisma.event.create({
+      data: { calendarId: teamCalendar.id, title: kickoffTitle, startsAt: at(-7, 14), endsAt: at(-7, 15), location: "A사 본사", createdById: owner.id, visibility: "CALENDAR" },
+    }));
+  if (!(await prisma.document.count({ where: { eventId: kickoff.id } }))) {
+    await prisma.document.create({
+      data: {
+        eventId: kickoff.id,
+        uploadedById: owner.id,
+        filename: "A사 킥오프 회의록.txt",
+        mimeType: "text/plain",
+        sizeBytes: Buffer.byteLength(KICKOFF_NOTES),
+        charCount: KICKOFF_NOTES.length,
+        chunks: { create: chunkText(KICKOFF_NOTES).map((content, seq) => ({ seq, content })) },
+      },
+    });
   }
 
   console.log(`Demo ready: ${USERS.map((u) => u.email).join(", ")} / password from DEMO_PASSWORD. Team: ${TEAM_NAME}`);

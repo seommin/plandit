@@ -4,6 +4,7 @@ import { CreditModule } from "../credit/credit.module";
 import { AiUsageService } from "./ai-usage.service";
 import { AiController } from "./ai.controller";
 import { AnthropicAdapter } from "./anthropic.adapter";
+import { EMBEDDING_CLIENT, embeddingClientFromEnv } from "./embedding";
 import { LLM_CLIENT, type LlmClient } from "./llm-client";
 import { MockLlmAdapter } from "./mock-llm.adapter";
 
@@ -18,7 +19,7 @@ export function llmClientFromEnv(): LlmClient {
 @Module({
   imports: [CreditModule],
   controllers: [AiController],
-  providers: [AiUsageService, { provide: LLM_CLIENT, useFactory: llmClientFromEnv }],
-  exports: [AiUsageService, LLM_CLIENT],
+  providers: [AiUsageService, { provide: LLM_CLIENT, useFactory: llmClientFromEnv }, { provide: EMBEDDING_CLIENT, useFactory: embeddingClientFromEnv }],
+  exports: [AiUsageService, LLM_CLIENT, EMBEDDING_CLIENT],
 })
 export class AiModule {}

@@ -53,7 +53,9 @@ export async function proxyInternalApi(
   userId?: string,
 ) {
   const method = request.method;
-  const body = ["GET", "HEAD"].includes(method) ? undefined : await request.text();
+  // Bytes, not text: a file upload (multipart) would be corrupted by decoding it as UTF-8.
+  const raw = ["GET", "HEAD"].includes(method) ? undefined : await request.arrayBuffer();
+  const body = raw?.byteLength ? raw : undefined;
   const headers = new Headers();
   if (body) headers.set("content-type", request.headers.get("content-type") ?? "application/json");
   // The api records these in audit logs; without them every change would look like it came from this server.

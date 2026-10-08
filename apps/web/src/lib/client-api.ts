@@ -16,6 +16,7 @@ const MESSAGES: Record<string, string> = {
   ATTENDEE_NOT_ELIGIBLE: "함께 갈 수 없는 사람이 있어요. 워크스페이스 멤버인지 확인해주세요.",
   CALENDAR_MEMBERS_CHANGED: "캘린더에 새로 추가될 사람이 바뀌었어요. 다시 확인해주세요.",
   AI_MONTHLY_LIMIT: "이번 달 AI 사용 한도를 넘어요. 워크스페이스 관리자가 크레딧 화면에서 한도를 바꿀 수 있어요.",
+  DOCUMENT_UNREADABLE: "글자를 읽을 수 없는 파일이에요. PDF·TXT·MD만 되고, 스캔한 PDF처럼 그림뿐인 파일은 안 돼요.",
 };
 
 export class ApiRequestError extends Error {
@@ -30,10 +31,12 @@ export class ApiRequestError extends Error {
 }
 
 export async function api<T = unknown>(path: string, init: { method?: string; body?: unknown; headers?: Record<string, string> } = {}): Promise<T> {
+  // A FormData body (file upload) goes as multipart with the boundary the browser picks; anything else as JSON.
+  const form = init.body instanceof FormData;
   const response = await fetch(`/api${path}`, {
     method: init.method ?? (init.body === undefined ? "GET" : "POST"),
-    headers: { ...(init.body === undefined ? {} : { "content-type": "application/json" }), ...init.headers },
-    body: init.body === undefined ? undefined : JSON.stringify(init.body),
+    headers: { ...(init.body === undefined || form ? {} : { "content-type": "application/json" }), ...init.headers },
+    body: init.body === undefined ? undefined : form ? (init.body as FormData) : JSON.stringify(init.body),
     cache: "no-store",
   });
   if (response.status === 204) return undefined as T;

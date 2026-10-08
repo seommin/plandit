@@ -13,5 +13,6 @@ export const ASSISTANT_TOOL_LABELS: Record<string, string> = {
   list_members: "멤버 확인",
   list_events: "일정 확인",
   find_free_slots: "빈 시간 찾기",
+  search_memory: "회의록 찾기",
   create_event: "일정 만들기",
 };

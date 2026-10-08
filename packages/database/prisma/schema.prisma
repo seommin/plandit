@@ -113,6 +113,7 @@ model User {
   aiUsages       AiUsage[]
   tripPlans      TripPlan[]
   assistantThreads AssistantThread[]
+  documents      Document[]
 }
 
 model Account {
@@ -387,6 +388,8 @@ model Event {
 
   calendar  Calendar        @relation(fields: [calendarId], references: [id], onDelete: Cascade)
   tripPlan  TripPlan?       @relation(fields: [tripPlanId], references: [id], onDelete: SetNull)
+  documents Document[]
+  embedding EventEmbedding?
   creator   User            @relation("EventCreator", fields: [createdById], references: [id])
   attendees EventAttendee[]
   shares    EventShare[]
@@ -859,4 +862,58 @@ model AssistantToolCall {
 
   @@unique([threadId, toolUseId])
   @@index([messageId])
+}
+
+/// PROCESSING (text stored as chunks, embeddings pending) → READY (searchable). A file without readable text is refused at upload.
+enum DocumentStatus {
+  PROCESSING
+  READY
+}
+
+/// A meeting note attached to an event (PLANDIT-22). Only its extracted text is kept, as chunks; the file itself is not stored.
+/// Whoever can see the event can search it.
+model Document {
+  id           String         @id @default(cuid())
+  eventId      String
+  uploadedById String
+  filename     String
+  mimeType     String
+  sizeBytes    Int
+  charCount    Int
+  status       DocumentStatus @default(PROCESSING)
+  createdAt    DateTime       @default(now())
+  readyAt      DateTime?
+
+  event      Event           @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  uploadedBy User            @relation(fields: [uploadedById], references: [id], onDelete: Cascade)
+  chunks     DocumentChunk[]
+
+  @@index([eventId])
+  @@index([status])
+}
+
+/// One searchable piece of a document. The worker fills `embedding`; `model` says which embedder made it (re-done when it changes).
+model DocumentChunk {
+  id         String                     @id @default(cuid())
+  documentId String
+  seq        Int
+  content    String
+  model      String?
+  embedding  Unsupported("vector(384)")?
+
+  document Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@unique([documentId, seq])
+}
+
+/// An event's title, description and location as a vector, kept in step by the worker (PLANDIT-22).
+model EventEmbedding {
+  eventId     String                    @id
+  /// sha256 of the embedded text: a moved event keeps its vector, a renamed one gets a new one
+  contentHash String
+  model       String
+  embedding   Unsupported("vector(384)")
+  updatedAt   DateTime                  @updatedAt
+
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
 }

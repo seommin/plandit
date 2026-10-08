@@ -64,7 +64,7 @@ describe("PLANDIT-23 MCP server (e2e)", () => {
     const full = await connect((await issue(["events:read", "events:write"])).token);
     expect(full.getServerVersion()).toMatchObject({ name: "plandit" });
     const { tools } = await full.listTools();
-    expect(tools.map((t) => t.name)).toEqual(["list_calendars", "list_members", "list_events", "find_free_slots", "create_event"]);
+    expect(tools.map((t) => t.name)).toEqual(["list_calendars", "list_members", "list_events", "find_free_slots", "search_memory", "create_event"]);
     expect(tools.find((t) => t.name === "list_events")!.annotations).toMatchObject({ readOnlyHint: true });
     expect(tools.find((t) => t.name === "create_event")!.annotations).toMatchObject({ readOnlyHint: false, destructiveHint: false });
     expect(tools.find((t) => t.name === "find_free_slots")!.inputSchema.required).toEqual(["fromDate", "toDate", "durationMinutes"]);

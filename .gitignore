@@ -38,3 +38,6 @@ docker-compose.override.yml
 # Written by `next dev` (16.3+) only when an AI coding tool starts it
 apps/web/AGENTS.md
 apps/web/CLAUDE.md
+
+# Local embedding model files (PLANDIT-22), downloaded on first use
+.cache/

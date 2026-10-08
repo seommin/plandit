@@ -9,6 +9,8 @@ allowBuilds:
   "@scarf/scarf": false
   "@swc/core": true
   msgpackr-extract: false
+  onnxruntime-node: false # CPU binaries ship in the package; the script only fetches CUDA ones
   prisma: true
+  protobufjs: false
   sharp: true
   unrs-resolver: false

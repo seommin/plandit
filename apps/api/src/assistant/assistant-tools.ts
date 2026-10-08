@@ -2,7 +2,8 @@ import { type CalendarRole, Prisma, prisma } from "@plandit/database/prisma";
 import { z } from "zod";
 
 import { toLlmJsonSchema, type LlmTool } from "../ai/llm-client";
-import { toLocalIso } from "../common/zoned-time";
+import { toLocalIso, wallClockToInstant } from "../common/zoned-time";
+import type { MemoryHit } from "../memory/memory.service";
 import { freeRanges, nextHalfHour } from "./free-slots";
 
 type Db = Prisma.TransactionClient | typeof prisma;
@@ -12,7 +13,15 @@ type Db = Prisma.TransactionClient | typeof prisma;
  * `workspaceOnly`: events of this workspace's calendars only — an API key (MCP) is bound to one workspace, like /v1.
  * Without it (the in-app assistant) the person's whole schedule counts, so their personal events make them busy.
  */
-export type ToolContext = { userId: string; workspaceId: string; timezone: string; now: Date; workspaceOnly?: boolean };
+export type ToolContext = {
+  userId: string;
+  workspaceId: string;
+  timezone: string;
+  now: Date;
+  workspaceOnly?: boolean;
+  /** Meeting-note and event search (PLANDIT-22), scoped by the caller like everything else here */
+  searchMemory?: (query: string, range: { from?: Date; to?: Date }) => Promise<MemoryHit[]>;
+};
 
 /** Becomes the tool result with is_error: the model reads the message and can try again. */
 export class ToolError extends Error {}
@@ -174,6 +183,45 @@ const findFreeSlots: Tool<z.infer<typeof findFreeSlotsInput>> = {
   },
 };
 
+const searchMemoryInput = z
+  .object({
+    query: z.string().trim().min(1).max(200).describe("찾을 내용(예: 'A사 미팅에서 정한 출시 일정')"),
+    fromDate: date.optional().describe("이 날짜 이후 일정의 기록만"),
+    toDate: date.optional().describe("이 날짜까지의 일정만"),
+  })
+  .refine((i) => !i.fromDate || !i.toDate || i.toDate >= i.fromDate, { message: "toDate must not be before fromDate." });
+
+const dayStart = (date: string, timezone: string) => {
+  const [y, m, d] = date.split("-").map(Number);
+  return wallClockToInstant(y, m, d, 0, 0, timezone);
+};
+
+const searchMemory: Tool<z.infer<typeof searchMemoryInput>> = {
+  name: "search_memory",
+  description:
+    "일정에 붙은 회의록과 일정 내용(제목·장소·설명)에서 질문과 가까운 대목을 찾는다. 지난 회의에서 정한 것·논의한 것·메모를 물을 때 부른다. 사용자가 볼 수 있는 일정의 기록만 나온다. 답은 찾은 대목만 근거로 하고 일정 제목·날짜·파일 이름을 함께 밝힌다. 찾은 것이 없으면 없다고 말한다.",
+  input: searchMemoryInput,
+  write: false,
+  async run(ctx, input) {
+    if (!ctx.searchMemory) throw new ToolError("Search is not available here.");
+    const hits = await ctx.searchMemory(input.query, {
+      from: input.fromDate ? dayStart(input.fromDate, ctx.timezone) : undefined,
+      to: input.toDate ? new Date(dayStart(input.toDate, ctx.timezone).getTime() + day) : undefined,
+    });
+    return {
+      basis: "사용자가 볼 수 있는 일정의 회의록·일정만 찾음. score는 질문과의 유사도(높을수록 가까움)",
+      results: hits.map((h) => ({
+        kind: h.kind,
+        event: h.eventTitle,
+        date: toLocalIso(h.eventStart, ctx.timezone).slice(0, 10),
+        ...(h.filename ? { file: h.filename } : {}),
+        excerpt: h.excerpt.slice(0, 600),
+        score: Math.round(h.score * 1000) / 1000,
+      })),
+    };
+  },
+};
+
 const createEventInput = z
   .object({
     calendarId: z.string().min(1).describe("list_calendars에서 writable인 캘린더"),
@@ -249,7 +297,7 @@ const createEvent: Tool<CreateEventInput> = {
  * Fixed order: the list is part of the cached, thinking-bound prompt prefix, so it must not change between turns.
  * Editing a tool (name, description, schema) changes that prefix for conversations already under way too.
  */
-export const ASSISTANT_TOOLS: Tool<unknown>[] = [listCalendars, listMembers, listEvents, findFreeSlots, createEvent];
+export const ASSISTANT_TOOLS: Tool<unknown>[] = [listCalendars, listMembers, listEvents, findFreeSlots, searchMemory, createEvent];
 
 export const toolNamed = (name: string) => ASSISTANT_TOOLS.find((t) => t.name === name);
 

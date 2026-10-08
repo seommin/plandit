@@ -7,6 +7,7 @@ import { api, errorMessage } from "@/lib/client-api";
 import { addDays, atMinutes, formatMonthDay, formatTime, isSameDay, startOfDay } from "@/lib/dates";
 import { type Calendar, type CalendarEvent, canWrite } from "@/lib/types";
 
+import { MeetingNotes } from "./meeting-notes";
 import { MiniMonth } from "./mini-month";
 import { useToast } from "./toast";
 import { PlanTripButton } from "./trip-planner";
@@ -426,6 +427,7 @@ function EditorForm({ state, calendars, onClose, onSaved, onRemoved, onPlanTrip 
             />
           </Row>
         </fieldset>
+        {event ? <MeetingNotes canEdit={!readOnly} eventId={event.id} /> : null}
 
         {readOnly ? <p className="mt-3 text-[13px] text-fg-3">이 캘린더는 보기 권한만 있어요.</p> : null}
         {error ? (

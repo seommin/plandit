@@ -26,6 +26,8 @@ x-app: &app
     MOCK_RELAY_WEBHOOK_URL: http://api:4000/webhooks/relay/mock
     MOCKS_PORT: "4100"
     API_PORT: "4000"
+    # Local embedding model (PLANDIT-22): downloaded once, kept in the models volume (api and worker share it)
+    EMBEDDING_CACHE_DIR: /models
 
 x-needs-data: &needs-data
   postgres:
@@ -51,6 +53,8 @@ services:
   api:
     <<: *app
     pull_policy: never
+    volumes:
+      - models:/models
     working_dir: /app/apps/api
     command: ["node", "-r", "./register-dist.cjs", "dist/apps/api/src/main.js"]
     depends_on:
@@ -67,6 +71,8 @@ services:
   worker:
     <<: *app
     pull_policy: never
+    volumes:
+      - models:/models
     working_dir: /app/apps/api
     command: ["node", "-r", "./register-dist.cjs", "dist/apps/api/src/worker.js"]
     depends_on:
@@ -145,3 +151,4 @@ volumes:
   redis_data:
   caddy_data:
   caddy_config:
+  models:

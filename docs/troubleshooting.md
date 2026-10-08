@@ -142,3 +142,10 @@
 - **원인**: `useEffect(() => endRef.current?.scrollIntoView({ block: "end" }), [...])`처럼 화살표 함수가 호출 결과를 그대로 반환했다. 최신 Chromium은 `scrollIntoView()`가 `undefined` 대신 **Promise**를 돌려주고, React는 효과가 반환한 값을 정리 함수로 저장했다가 다음 렌더에서 호출하므로 Promise를 함수처럼 부르다 실패한다. 타입은 여전히 `void`라 `tsc`·빌드에서 잡히지 않는다
 - **해결**: 효과 본문을 중괄호로 감싸 아무것도 반환하지 않게 했다(`components/assistant-sheet.tsx`). 다른 화면에는 같은 패턴이 없음을 확인
 - **재발 방지**: 효과는 정리 함수가 아니면 반환하지 않는다. 스크롤·포커스처럼 DOM 메서드를 부르는 한 줄 효과도 `() => { … }`로 쓴다
+
+## 21. jest 안에서만 PDF 글자 추출이 실패한다 (`ERR_VM_DYNAMIC_IMPORT_CALLBACK_MISSING_FLAG`)
+
+- **증상**: 회의록 단위 테스트에서 PDF가 늘 "The PDF could not be read"로 거절됨. 같은 PDF를 `node`로 직접 읽으면 글자가 나옴(`{"totalPages":1,"text":"Company A agreed"}`)
+- **원인**: `unpdf`는 PDF.js 묶음을 동적 `import()`로 불러온다. jest는 테스트 파일을 자체 가상 모듈 환경(vm)에서 돌리는데, 그 안의 동적 `import()`는 Node 플래그 `--experimental-vm-modules` 없이는 막힌다. 실제 실행(ts-node·빌드본)은 vm이 아니라 상관없음
+- **해결**: api의 `test`·`test:e2e` 스크립트를 `node --experimental-vm-modules node_modules/jest/bin/jest.js …`로 실행(윈도·CI 리눅스 모두 같은 명령). jest 워커는 이 플래그를 물려받는다. `ExperimentalWarning` 한 줄은 정상
+- **버린 방법**: 테스트에서 `unpdf`를 가짜로 바꾸기 — PDF 처리가 테스트되지 않는다. PDF.js를 직접 쓰기 — 지금은 ESM 전용이라 같은 문제
