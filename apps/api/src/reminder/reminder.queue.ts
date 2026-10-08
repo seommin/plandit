@@ -16,6 +16,8 @@ export type SendJob = { deliveryId: string; traceId?: string };
 @Injectable()
 export class ReminderQueue implements OnModuleDestroy {
   readonly queue = new Queue(QUEUES.reminders, { connection: redisConnection() });
+  /** Paid sends (SMS/알림톡) only: the worker drains it at the carrier's rate (RELAY_SEND_RPS). */
+  readonly paidSends = new Queue(QUEUES.reminderSends, { connection: redisConnection() });
 
   async scheduleFire(reminderId: string, fireAt: Date) {
     const delay = fireAt.getTime() - Date.now();
@@ -30,8 +32,8 @@ export class ReminderQueue implements OnModuleDestroy {
     return true;
   }
 
-  async enqueueSends(deliveryIds: string[], traceId?: string) {
-    await this.queue.addBulk(
+  async enqueueSends(deliveryIds: string[], traceId: string | undefined, paid: boolean) {
+    await (paid ? this.paidSends : this.queue).addBulk(
       deliveryIds.map((deliveryId) => ({
         name: "send",
         data: { deliveryId, traceId } satisfies SendJob,
@@ -49,6 +51,6 @@ export class ReminderQueue implements OnModuleDestroy {
   }
 
   async onModuleDestroy() {
-    await this.queue.close();
+    await Promise.all([this.queue.close(), this.paidSends.close()]);
   }
 }

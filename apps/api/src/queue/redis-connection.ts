@@ -7,6 +7,7 @@ export const redisConnection = () => ({
 export const QUEUES = {
   paymentReconcile: "payment-reconcile",
   reminders: "reminders",
+  reminderSends: "reminder-sends",
   aiUsageReconcile: "ai-usage-reconcile",
   tripPlans: "trip-plans",
   ledgerCheck: "ledger-check",

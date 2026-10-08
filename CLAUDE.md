@@ -4,7 +4,7 @@
 **워크스페이스 권한, 크레딧 원장, 결제, 큐 기반 리마인더 발송, LLM Tool Calling·RAG**를 얹는다.
 **실제 결제와 실제 문자 발송은 없다.** 모의 외부 서버(`apps/mocks`)가 PG·문자 중계사 역할을 하며 진짜처럼 HTTP 콜백을 보낸다.
 
-설계 문서: `docs/ERD.md`(추가·변경 데이터 모델), `docs/PLAN.md`(이슈 목록·설계 결정), `docs/PRODUCT_MODEL.md`(캘린더 도메인). 운영: `docs/runbook.md`(장애 대응), `docs/troubleshooting.md`(겪은 문제 기록 — 새로 겪으면 추가).
+설계 문서: `docs/ERD.md`(추가·변경 데이터 모델), `docs/PLAN.md`(이슈 목록·설계 결정), `docs/PRODUCT_MODEL.md`(캘린더 도메인). 운영: `docs/runbook.md`(장애 대응), `docs/troubleshooting.md`(겪은 문제 기록 — 새로 겪으면 추가), `docs/perf.md`(부하 측정 — `pnpm perf:reminders`).
 작업 전에 해당 이슈의 완료 조건을 읽는다.
 
 ## 스택·실행

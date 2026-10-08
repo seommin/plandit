@@ -6,7 +6,7 @@
 실제 결제와 실제 문자 발송은 없습니다. 모의 외부 서버(`apps/mocks`)가 PG와 문자 중계사 역할을 하며, 진짜처럼 **비동기 웹훅을 늦게, 두 번, 혹은 아예 안** 보냅니다.
 
 - 돈: 추가만 되는 원장, 멱등키, 행 잠금, 외부 호출 전 선기록, 재조회로 확정 → [설계 결정](#설계-결정)
-- 큐: BullMQ 지연 작업, 일정이 옮겨져도 한 번만 발송, 초당 제한(429) 재시도, 실패 시 자동 환불
+- 큐: BullMQ 지연 작업, 일정이 옮겨져도 한 번만 발송, 중계사 초당 한도에 맞춘 발송(문자 1,000통 한 번에: 실패 40% → 0, [부하 측정](docs/perf.md)), 실패 시 자동 환불
 - 권한: 워크스페이스 역할(결제·멤버) + 캘린더 역할(데이터), 감사 로그, 공개 API 키(스코프·요청 수 제한)
 - AI: 토큰 기준 크레딧 과금(선차감 → 정산), 도구 호출 에이전트(일정 변경은 승인 뒤에만), 회의록 RAG(pgvector, 무료 로컬 임베딩), 같은 도구를 내보내는 MCP 서버
 - 운영: 요청마다 추적 id(로그 → 작업 → 감사 기록까지), Prometheus 지표, 매일 원장 정합성 검사(`pnpm check:ledger`), [장애 대응 런북](docs/runbook.md), [겪은 문제 기록](docs/troubleshooting.md)
@@ -146,7 +146,7 @@ pnpm dev
 | 동시 차감 | 잔액 30에 1크레딧 차감 50개 동시 | 정확히 30개 성공, `balanceAfter` 29→0 | `credits.e2e-spec.ts` |
 | 원장 정합성 검사 | `pnpm check:ledger`(워커는 매일 05:00) | 원장 합계 = 잔액, 행마다 잔액이 누계와 같음. 어긋나면 그 계정·행을 짚고 종료 코드 1 | `ledger-check.e2e-spec.ts` |
 | 문자 발송 | 문자 알림 | 차감 1 → 전달, 수신함 도착 | `reminders.e2e-spec.ts` |
-| 대량 발송·실패 | 100명 중 30명 실패, 초당 제한 | 429 재시도 발생, `차감 = 성공 + 환불`, 이중 환불 0 | `reminders.e2e-spec.ts` |
+| 대량 발송·실패 | 100명 중 30명 실패, 중계사 초당 25건 | 초당 20건으로 맞춰 보내 429 재시도 5건 이하(한도 없이는 72건), `차감 = 성공 + 환불`, 이중 환불 0 | `reminders.e2e-spec.ts` |
 | 결과 웹훅 재전송 | 같은 결과 두 번 | 환불 1행 | `reminders.e2e-spec.ts` |
 | 일정 이동 | 알림 있는 일정 시간 변경 | 옛 시각 0건, 새 시각 작업 존재 | `reminders.e2e-spec.ts` |
 | 잔액 부족 | 잔액 0에서 문자 알림 | 건너뜀, 차감 없음, 푸시 대체 | `reminders.e2e-spec.ts` |
@@ -195,6 +195,7 @@ pnpm lint && pnpm typecheck && pnpm test && pnpm test:e2e
 | 권한 | **워크스페이스 역할**(OWNER > ADMIN > MEMBER: 결제·크레딧·멤버 관리) + **캘린더 역할**(OWNER·ADMIN·EDITOR·VIEWER: 일정 데이터). 둘을 섞지 않습니다 |
 | 크레딧·결제 | 원장([0001](docs/adr/0001-ledger-append-only.md)), 모의 PG 충전·웹훅·재조회([0002](docs/adr/0002-reserve-before-external-call.md), [0003](docs/adr/0003-webhook-idempotency.md)) |
 | Redis/Queue | BullMQ 리마인더 발송·재조회 작업([0004](docs/adr/0004-reminder-job-versioning.md)) |
+| 성능 개선 | 리마인더 대량 발송 부하 측정(`pnpm perf:reminders`): 문자 1,000통 중 40%가 429 재시도를 다 써 실패하던 원인을 찾아, 유료 발송만 중계사 초당 한도에 맞춰 꺼내는 큐로 → 실패 0, 중계사 호출 4,924 → 1,008([docs/perf.md](docs/perf.md)) |
 | LLM · RAG · Tool Calling · MCP | `LlmClient` + Claude 어댑터와 토큰 기준 크레딧 과금(선차감 → 정산, 실패 환불, [0005](docs/adr/0005-ai-credit-reserve-settle.md)). AI 여행 일정: 목적지·기간·함께 갈 멤버로 초안을 만들고 확인 후 캘린더에 한 번에 넣기(구조화 출력, 참석자 캘린더 권한 자동 추가). AI 일정 비서: 도구 호출 루프(캘린더·일정 조회, 빈 시간 찾기, 일정 만들기)를 한 단계씩 DB에 남기며 워커가 진행하고, 일정 변경은 사용자 승인 뒤에만 실행([0006](docs/adr/0006-assistant-persisted-tool-loop.md)). 같은 도구를 MCP 서버(`/v1/mcp`, API 키·스코프)로도 내보냄. 워크스페이스별 AI 월 한도(동시 요청으로도 넘지 않음). 여행 초안을 "둘째 날 오후는 쉬게 해줘"처럼 말로 고치면 AI의 제안을 미리보기로 보고 반영. 회의록 RAG: 일정에 PDF·TXT를 붙이면 글자만 조각으로 저장해 임베딩(pgvector, 서버 CPU의 무료 다국어 모델)하고, 비서의 `search_memory`가 볼 수 있는 일정의 회의록만 찾아 근거와 함께 답함 → [PLAN.md](docs/PLAN.md#2주차--ai-일정-비서-개요) |
 
 ## AI 개발 도구로 일한 방식

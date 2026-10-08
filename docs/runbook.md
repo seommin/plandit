@@ -87,13 +87,14 @@ PG가 승인한 건은 웹훅과 **같은 멱등키**(`PAYMENT:{id}:CHARGE`)로 
 
 ## D. 리마인더가 늦게 가거나 쌓인다
 
-**증상**: `plandit_reminder_deliveries_pending{status="QUEUED"}` 또는 `plandit_queue_jobs{queue="reminders",state="waiting"}` 증가.
+**증상**: `plandit_reminder_deliveries_pending{status="QUEUED"}` 또는 `plandit_queue_jobs{queue="reminder-sends",state="waiting"}`(유료 문자·알림톡) / `{queue="reminders"}`(예약·푸시) 증가.
 
 **원인 후보**
-1. 중계사 초당 제한(429) → `plandit_jobs_total{name="send",outcome="failed"}` 증가, 로그 `Carrier answered 429`. 재시도는 지수 백오프 + 지터로 자동 진행
-2. 워커 중단 또는 처리량 부족
+1. 대량 발송이 중계사 속도로 줄 서 있음(정상). 유료 발송은 `RELAY_SEND_RPS`(초당, 워커 전체 합)에 맞춰 나가므로 대기 건수 ÷ `RELAY_SEND_RPS` 초면 비워집니다. 예: 3,000건 ÷ 20 = 150초([perf.md](perf.md))
+2. 중계사 초당 제한(429)이 계속 남 → `plandit_jobs_total{queue="reminder-sends",name="send",outcome="failed"}` 증가, 로그 `Carrier answered 429`. `RELAY_SEND_RPS`가 계약 한도보다 큰지 확인. 재시도는 지수 백오프 + 지터로 자동 진행
+3. 워커 중단
 
-**복구**: 워커 재시작·추가(여러 대를 띄워도 발송 건은 1회만 처리), `REMINDER_SEND_CONCURRENCY` 조정. 최종 실패한 건은 자동으로 FAILED + 환불됩니다.
+**복구**: 워커 재시작(여러 대를 띄워도 발송 건은 1회만 처리, 초당 한도도 함께 지킴). 중계사 한도를 올렸다면 `RELAY_SEND_RPS`도 올립니다 — `REMINDER_SEND_CONCURRENCY`만 올리면 429만 늘어납니다. 최종 실패한 건은 자동으로 FAILED + 환불됩니다.
 
 **결과가 안 오는 발송(SENT 적체)**: 중계사 결과 웹훅이 유실된 경우입니다.
 ```bash
