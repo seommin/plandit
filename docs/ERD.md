@@ -22,6 +22,7 @@ erDiagram
     workspaces ||--o{ ai_usages : ""
     workspaces ||--o{ trip_plans : "AI 여행 초안"
     trip_plans ||--o{ events : "적용 시 생성"
+    trip_plans ||--o{ trip_plan_revisions : "말로 고치기"
     workspaces ||--o{ assistant_threads : "AI 비서 대화"
     assistant_threads ||--o{ assistant_messages : "append-only"
     assistant_messages ||--o{ assistant_tool_calls : "도구 호출"
@@ -272,6 +273,20 @@ UPDATE·DELETE는 트리거로 차단(원장과 같은 방식). 변경과 같은
 | ai_usage_id | FK ai_usages unique | 원장 멱등키 `"AI_USAGE:{ai_usage_id}:DEBIT / ADJUST / REFUND"`. 초안과 선차감은 한 트랜잭션에서 생긴다 |
 | added_calendar_member_ids | text[] | 적용 때 캘린더에 VIEWER로 자동 추가한 사용자. 되돌리기 안내용(되돌려도 멤버는 남음) |
 | created_at, updated_at, applied_at | | |
+
+### trip_plan_revisions — 여행 초안을 말로 고치기 (PLANDIT-27)
+| 컬럼 | 타입 | 비고 |
+|---|---|---|
+| id | cuid PK | |
+| trip_plan_id | FK trip_plans (cascade) | |
+| request_key | text | `Idempotency-Key`. unique(trip_plan_id, request_key) — 두 번 눌러도 1건 |
+| request | text | 사용자가 쓴 요청(300자까지). LLM에는 데이터로만 |
+| base_draft | jsonb | AI에게 준 초안. 반영할 때 초안이 이것과 같아야 함(손으로 고친 것을 덮어쓰지 않게) |
+| proposed_draft | jsonb null | AI가 고친 초안 전체(검사 통과분) |
+| status | enum PENDING / PROPOSED / ACCEPTED / DISCARDED / FAILED | 반영해야 초안이 바뀜. 실패는 전액 환불 |
+| failure_code | text null | AI 사용 건의 실패 코드 |
+| ai_usage_id | FK ai_usages unique | 원장 멱등키 `"AI_USAGE:{ai_usage_id}:…"` |
+| created_at, decided_at | | |
 
 ### events (변경)
 | 추가 컬럼 | 타입 | 비고 |

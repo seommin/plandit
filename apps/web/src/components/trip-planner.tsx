@@ -20,6 +20,7 @@ import { addDays, toDateInput, WEEKDAYS } from "@/lib/dates";
 import type { Calendar } from "@/lib/types";
 
 import { useToast } from "./toast";
+import { type Revision, RevisionChat, RevisionPreview } from "./trip-revisions";
 import { Button, cn, Field, Notice, Picker, Segmented, Sheet, Spinner, TextArea, TextInput } from "./ui";
 
 type Pace = (typeof TRIP_PACES)[number];
@@ -38,6 +39,7 @@ type Plan = {
   newCalendarMemberIds: string[];
   addedCalendarMemberIds: string[];
   eventCount: number;
+  revisions: Revision[];
 };
 type EditItem = TripItem & { key: string; off: boolean };
 type EditDay = { date: string; items: EditItem[] };
@@ -168,6 +170,18 @@ function TripPlannerSheet({ calendars, defaultDate, onClose, onApplied }: Omit<P
     return () => clearInterval(timer);
   }, [step, plan, planWorkspaceId, showPlan]);
 
+  // While the AI rewrites the draft: ask every 2 seconds until its proposal (or failure) is there.
+  const revising = plan?.revisions?.some((r) => r.status === "PENDING");
+  useEffect(() => {
+    if (!revising || !plan || !planWorkspaceId) return;
+    const timer = setInterval(() => {
+      api<Plan>(`${plansPath(planWorkspaceId)}/${plan.id}`)
+        .then(setPlan)
+        .catch(() => undefined);
+    }, 2_000);
+    return () => clearInterval(timer);
+  }, [revising, plan?.id, planWorkspaceId]); // eslint-disable-line react-hooks/exhaustive-deps
+
   async function create() {
     if (!calendar) return;
     setBusy(true);
@@ -191,10 +205,54 @@ function TripPlannerSheet({ calendars, defaultDate, onClose, onApplied }: Omit<P
   const keptCount = kept.reduce((n, day) => n + day.items.length, 0);
   const badTimes = days.some((day) => day.items.some((item) => !item.off && item.endTime <= item.startTime));
   const newcomers = plan ? plan.attendees.filter((a) => plan.newCalendarMemberIds.includes(a.id)) : [];
+  const proposal = plan?.revisions?.find((r) => r.status === "PROPOSED");
 
   function editItem(key: string, change: Partial<EditItem>) {
     setDays((current) => current.map((day) => ({ ...day, items: day.items.map((item) => (item.key === key ? { ...item, ...change } : item)) })));
     setDirty(true);
+  }
+
+  /** Edits made by hand go to the server first, so the AI rewrites (and apply uses) what is on the screen. */
+  async function saveEdits(workspaceId: string, planId: string) {
+    if (!dirty) return;
+    const strip = kept.map((day) => ({ date: day.date, items: day.items.map(({ key: _key, off: _off, ...item }) => item) }));
+    await api(`${plansPath(workspaceId)}/${planId}`, { method: "PATCH", body: { days: strip } });
+    setDirty(false);
+  }
+
+  /** "둘째 날 오후는 쉬게 해줘" → the worker rewrites, the preview below shows what would change (PLANDIT-27). */
+  async function revise(request: string) {
+    const workspaceId = planWorkspaceId;
+    if (!plan || !workspaceId) return false;
+    setBusy(true);
+    setError(null);
+    try {
+      await saveEdits(workspaceId, plan.id);
+      setPlan(await api<Plan>(`${plansPath(workspaceId)}/${plan.id}/revisions`, { body: { request }, headers: { "idempotency-key": newKey() } }));
+      return true;
+    } catch (e) {
+      setError(errorMessage(e));
+      return false;
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function decide(accept: boolean) {
+    const workspaceId = planWorkspaceId;
+    if (!plan || !workspaceId || !proposal) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const next = await api<Plan>(`${plansPath(workspaceId)}/${plan.id}/revisions/${proposal.id}/${accept ? "accept" : "discard"}`, { method: "POST" });
+      if (accept) showPlan(next);
+      else setPlan(next);
+    } catch (e) {
+      setError(errorMessage(e));
+      api<Plan>(`${plansPath(workspaceId)}/${plan.id}`).then(setPlan).catch(() => undefined);
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function apply() {
@@ -204,10 +262,7 @@ function TripPlannerSheet({ calendars, defaultDate, onClose, onApplied }: Omit<P
     setBusy(true);
     setError(null);
     try {
-      if (dirty) {
-        const strip = kept.map((day) => ({ date: day.date, items: day.items.map(({ key: _key, off: _off, ...item }) => item) }));
-        await api(`${plansPath(workspaceId)}/${plan.id}`, { method: "PATCH", body: { days: strip } });
-      }
+      await saveEdits(workspaceId, plan.id);
       const applied = await api<Plan>(`${plansPath(workspaceId)}/${plan.id}/apply`, { body: { newCalendarMemberIds: plan.newCalendarMemberIds } });
       remember(null);
       onApplied();
@@ -254,7 +309,9 @@ function TripPlannerSheet({ calendars, defaultDate, onClose, onApplied }: Omit<P
         </Button>
       </div>
     ) : step === "review" ? (
-      confirming ? (
+      revising || proposal ? (
+        <p className="text-center text-sm text-fg-3">{revising ? "AI가 초안을 고치는 중이에요" : "고친 초안을 반영하거나 안 하면 캘린더에 넣을 수 있어요"}</p>
+      ) : confirming ? (
         <div className="space-y-3">
           <p className="text-[14px] leading-relaxed text-fg-2">
             {newcomers.map((a) => `${a.name ?? "알 수 없음"}님`).join(", ")}이 &lsquo;{plan?.calendar.name}&rsquo; 캘린더에 보기 권한으로 추가돼요. 이 캘린더의 다른 일정도 볼 수 있어요.
@@ -394,6 +451,10 @@ function TripPlannerSheet({ calendars, defaultDate, onClose, onApplied }: Omit<P
           <>
             <Notice tone="info">AI가 만든 초안이에요. 영업시간·휴무일은 한 번 더 확인해주세요. 넣지 않을 항목은 체크를 풀어주세요.</Notice>
             {plan.draft.notes ? <p className="px-1 text-sm leading-relaxed text-fg-2">{plan.draft.notes}</p> : null}
+            {proposal ? (
+              <RevisionPreview busy={busy} onDecide={(accept) => void decide(accept)} revision={proposal} />
+            ) : (
+              <fieldset className="space-y-5 disabled:opacity-60" disabled={revising}>
             {days.map((day) => (
               <section key={day.date}>
                 <h3 className="mb-1 px-1 text-[13px] font-semibold text-fg-3">{dayLabel(day.date)}</h3>
@@ -445,6 +506,9 @@ function TripPlannerSheet({ calendars, defaultDate, onClose, onApplied }: Omit<P
                 </ul>
               </section>
             ))}
+              </fieldset>
+            )}
+            <RevisionChat busy={busy} locked={Boolean(revising)} onSend={revise} revisions={plan.revisions ?? []} />
             <div className="flex items-center justify-between px-1 text-sm text-fg-3">
               <span>
                 {plan.attendees.length ? `함께 가는 사람 ${plan.attendees.map((a) => a.name ?? "알 수 없음").join(", ")}` : "혼자 가는 일정"}

@@ -4,10 +4,10 @@ import { Worker } from "bullmq";
 import { requestContext } from "../common/request-context";
 import { jobRuns } from "../metrics/metrics";
 import { QUEUES, redisConnection } from "../queue/redis-connection";
-import type { GenerateJob } from "../trip/trip-plan.queue";
+import type { GenerateJob, ReviseJob } from "../trip/trip-plan.queue";
 import { TripPlanService } from "../trip/trip-plan.service";
 
-/** Consumes "generate" jobs: one model call per trip plan, inside the trace id of the request that created it. */
+/** Consumes "generate" (one model call per trip plan) and "revise" (one per "고쳐 줘" request) jobs, inside the trace id of the request. */
 @Injectable()
 export class TripPlanProcessor implements OnApplicationBootstrap, OnApplicationShutdown {
   private readonly logger = new Logger(TripPlanProcessor.name);
@@ -19,8 +19,10 @@ export class TripPlanProcessor implements OnApplicationBootstrap, OnApplicationS
     this.worker = new Worker(
       QUEUES.tripPlans,
       (job) => {
-        const { tripPlanId, traceId } = job.data as GenerateJob;
-        return requestContext.run({ traceId: traceId ?? `job-${job.id}` }, () => this.plans.generate(tripPlanId));
+        const traceId = (job.data as { traceId?: string }).traceId ?? `job-${job.id}`;
+        return requestContext.run({ traceId }, () =>
+          job.name === "revise" ? this.plans.revise((job.data as ReviseJob).revisionId) : this.plans.generate((job.data as GenerateJob).tripPlanId),
+        );
       },
       // Model calls take tens of seconds; a few at a time per process keeps the provider's rate limits in reach.
       { connection: redisConnection(), concurrency: Number(process.env.TRIP_PLAN_CONCURRENCY ?? 2) },

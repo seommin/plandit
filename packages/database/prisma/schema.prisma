@@ -729,6 +729,7 @@ model AiUsage {
   refundLedger CreditLedger? @relation("AiUsageRefund", fields: [refundLedgerId], references: [id], onDelete: Restrict)
   tripPlan     TripPlan?
   assistantMessage AssistantMessage?
+  tripPlanRevision TripPlanRevision?
 
   @@index([workspaceId, createdAt])
   @@index([status, createdAt])
@@ -768,6 +769,7 @@ model TripPlan {
   createdBy User      @relation(fields: [createdById], references: [id], onDelete: Cascade)
   aiUsage   AiUsage   @relation(fields: [aiUsageId], references: [id], onDelete: Restrict)
   events    Event[]
+  revisions TripPlanRevision[]
 
   @@unique([createdById, requestKey])
   @@index([workspaceId, createdById, createdAt])
@@ -916,4 +918,37 @@ model EventEmbedding {
   updatedAt   DateTime                  @updatedAt
 
   event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+}
+
+/// PENDING (credits reserved, the model is rewriting) → PROPOSED (a new draft to review) → ACCEPTED | DISCARDED. PENDING → FAILED (refunded).
+enum TripRevisionStatus {
+  PENDING
+  PROPOSED
+  ACCEPTED
+  DISCARDED
+  FAILED
+}
+
+/// "둘째 날 오후는 쉬게 해줘" on a READY trip plan (PLANDIT-27). The model's whole new draft is only a proposal until accepted.
+model TripPlanRevision {
+  id            String             @id @default(cuid())
+  tripPlanId    String
+  /// Idempotency-Key of the request: pressing send twice makes one revision and one reservation
+  requestKey    String
+  /// What the person asked, as typed
+  request       String
+  /// The draft the model was given. Accepting requires the plan to still hold it (no edits in between).
+  baseDraft     Json
+  proposedDraft Json?
+  status        TripRevisionStatus @default(PENDING)
+  failureCode   String?
+  aiUsageId     String             @unique
+  createdAt     DateTime           @default(now())
+  decidedAt     DateTime?
+
+  tripPlan TripPlan @relation(fields: [tripPlanId], references: [id], onDelete: Cascade)
+  aiUsage  AiUsage  @relation(fields: [aiUsageId], references: [id], onDelete: Restrict)
+
+  @@unique([tripPlanId, requestKey])
+  @@index([tripPlanId, createdAt])
 }
