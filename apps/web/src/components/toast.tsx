@@ -27,7 +27,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
       {children}
       <div
         aria-live="polite"
-        className="pointer-events-none fixed inset-x-0 bottom-[calc(var(--tabbar-h)+env(safe-area-inset-bottom)+12px)] z-[60] flex justify-center px-4 lg:bottom-6"
+        className="pointer-events-none fixed inset-x-0 bottom-[calc(var(--tabbar-h)+env(safe-area-inset-bottom)+24px)] z-[60] flex justify-center px-4 lg:bottom-6"
       >
         {toast ? (
           <div className="animate-toast pointer-events-auto flex min-h-12 max-w-md items-center gap-4 rounded-2xl bg-fg py-2 pl-4 pr-2 text-[14px] font-medium text-bg shadow-float" key={toast.id} role="status">
