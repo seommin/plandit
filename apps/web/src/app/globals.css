@@ -106,6 +106,8 @@ html[data-theme="dark"] {
     color: var(--fg);
     -webkit-text-size-adjust: 100%;
     text-size-adjust: 100%;
+    /* Pages that scroll and pages that don't keep the same width, so the bottom bar doesn't shift between tabs */
+    scrollbar-gutter: stable;
   }
 
   body {

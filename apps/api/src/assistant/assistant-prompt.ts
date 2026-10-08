@@ -85,16 +85,19 @@ export function mockAssistantReply(request: LlmRequest): MockReply {
     return { text: `${where}에서 찾았어요.\n“${top.excerpt.replace(/\s+/g, " ").slice(0, 160)}”` };
   }
   if ("calendars" in output) {
-    const asked = [...request.messages].reverse().find((m) => m.role === "user" && m.content.startsWith("[지금]"));
     const today = asked?.content.slice(5, 15) ?? new Date().toISOString().slice(0, 10);
-    const toDate = new Date(Date.parse(`${today}T00:00:00Z`) + 6 * 86_400_000).toISOString().slice(0, 10);
-    return { text: "앞으로 일주일 중 1시간 비는 때를 찾아볼게요.", toolCalls: [{ name: "find_free_slots", input: { fromDate: today, toDate, durationMinutes: 60 } }] };
+    const plusDays = (n: number) => new Date(Date.parse(`${today}T00:00:00Z`) + n * 86_400_000).toISOString().slice(0, 10);
+    // "내일" and "오후" are the only words the stand-in reads; anything else searches the coming week all day
+    const tomorrow = question.includes("내일");
+    const afternoon = question.includes("오후");
+    const input = { fromDate: plusDays(tomorrow ? 1 : 0), toDate: plusDays(tomorrow ? 1 : 6), durationMinutes: 60, ...(afternoon && { dayStart: "13:00" }) };
+    return { text: `${tomorrow ? "내일" : "앞으로 일주일"}${afternoon ? " 오후" : ""} 중 1시간 비는 때를 찾아볼게요.`, toolCalls: [{ name: "find_free_slots", input }] };
   }
   if ("freeRanges" in output) {
     const [range] = output.freeRanges as Array<{ start: string }>;
     const calendars = (latestOutput(request.messages, "calendars")?.calendars ?? []) as Array<{ id: string; writable: boolean }>;
     const calendar = calendars.find((c) => c.writable);
-    if (!range || !calendar) return { text: "앞으로 일주일 안에 1시간 비는 때가 없거나, 일정을 넣을 수 있는 캘린더가 없어요." };
+    if (!range || !calendar) return { text: "찾아본 때에는 1시간 비는 때가 없거나, 일정을 넣을 수 있는 캘린더가 없어요." };
     const endsAt = new Date(Date.parse(range.start) + 3_600_000).toISOString();
     return {
       text: `${localLabel(range.start)}이 비어 있어요(내가 볼 수 있는 일정 기준). 이때 회의를 잡을까요?`,
