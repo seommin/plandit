@@ -54,7 +54,7 @@ describe("PLANDIT-7 reminder delivery queue (e2e: api + BullMQ worker + mock car
     Object.assign(process.env, { RELAY_BACKOFF_MS: "100", RELAY_SEND_ATTEMPTS: "10", RELAY_RECONCILE_EVERY_MS: "3600000" });
     app = await createTestApp();
     mocks = await startMocksFor(app, 4197, { RELAY_FAIL_RATE: "0", RELAY_DELAY_MS: "50", RELAY_RPS: "25" });
-    await app.get(ReminderQueue).queue.obliterate({ force: true }); // leftovers from earlier runs
+    await Promise.all([app.get(ReminderQueue).queue.obliterate({ force: true }), app.get(ReminderQueue).paidSends.obliterate({ force: true })]); // leftovers from earlier runs
     worker = await NestFactory.createApplicationContext(WorkerModule, { logger: false });
 
     await resetDatabase();
@@ -152,10 +152,11 @@ describe("PLANDIT-7 reminder delivery queue (e2e: api + BullMQ worker + mock car
       expect(await balanceOf(ownerWorkspaceId)).toBe(balanceBefore - delivered);
     });
 
-    it("the carrier's rate limit really kicked in: sends were retried with back-off", async () => {
-      const completed = await app.get(ReminderQueue).queue.getCompleted(0, 1_000);
-      const retried = completed.filter((job) => job.name === "send" && job.attemptsMade > 1);
-      expect(retried.length).toBeGreaterThan(0);
+    it("paid sends are paced under the carrier's limit (RELAY_SEND_RPS 20 < 25/s): next to no 429 retries", async () => {
+      const sends = (await app.get(ReminderQueue).paidSends.getCompleted(0, 1_000)).filter((job) => job.name === "send");
+      expect(sends.length).toBeGreaterThanOrEqual(101);
+      // Unpaced, this burst drew dozens of 429 retries; the edges of the two one-second windows may still cost a few.
+      expect(sends.filter((job) => job.attemptsMade > 1).length).toBeLessThanOrEqual(5);
     });
 
     it("a repeated result webhook refunds nothing more", async () => {

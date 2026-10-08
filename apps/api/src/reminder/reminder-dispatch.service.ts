@@ -72,7 +72,7 @@ export class ReminderDispatchService {
       where: { reminderId, fireAt, status: "QUEUED" },
       select: { id: true },
     });
-    await this.queue.enqueueSends(queued.map((d) => d.id), traceId);
+    await this.queue.enqueueSends(queued.map((d) => d.id), traceId, reminder.channel !== "PUSH");
     return { status: "fired" as const, deliveries: queued.length };
   }
 
